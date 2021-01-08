@@ -5,5 +5,7 @@
 /obj
 /.vs
 /bin
-/script
 /packages
+/script/geoma.js.map
+/script/geoma.tsbuildinfo
+/Geoma.csproj.user
