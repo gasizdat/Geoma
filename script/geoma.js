@@ -4752,9 +4752,9 @@ var Geoma;
                     var ret = {};
                     if (d > 0) {
                         var k2_1 = k2 + 1;
-                        var w_1 = -kb + ky0 + x0;
+                        var w = -kb + ky0 + x0;
                         {
-                            var x = (Math.sqrt(d) + w_1) / k2_1;
+                            var x = (Math.sqrt(d) + w) / k2_1;
                             var y = Tools.ActiveLineBase.getY(x, coeff);
                             var p1 = Point.make(x, y);
                             if (PointLine.intersected(p1, line.startPoint, line.endPoint, Tools.CurrentTheme.ActiveLineCaclThickness)) {
@@ -4762,7 +4762,7 @@ var Geoma;
                             }
                         }
                         {
-                            var x = (w_1 - Math.sqrt(d)) / k2_1;
+                            var x = (w - Math.sqrt(d)) / k2_1;
                             var y = Tools.ActiveLineBase.getY(x, coeff);
                             var p2 = Point.make(x, y);
                             if (PointLine.intersected(p2, line.startPoint, line.endPoint, Tools.CurrentTheme.ActiveLineCaclThickness)) {
@@ -6716,121 +6716,19 @@ var Geoma;
         Tools.Document = Document;
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
 })(Geoma || (Geoma = {}));
-var DrawLiner = (function () {
-    function DrawLiner(ground) {
-        this.ground = ground;
-        this.ground.onMouseMove.bind(this, this.onMouseMove);
-        this.ground.onMouseDown.bind(this, this.onMouseDown);
-        this.ground.onMouseUp.bind(this, this.onMouseUp);
-    }
-    DrawLiner.prototype.onMouseMove = function (event) {
-        this.ground.context2d.fillStyle = "#f7f800";
-        this.ground.context2d.fillRect(event.x, event.y, 1, 1);
-        return true;
-    };
-    DrawLiner.prototype.onMouseDown = function (event) {
-        return true;
-    };
-    DrawLiner.prototype.onMouseUp = function (event) {
-        return true;
-    };
-    return DrawLiner;
-}());
-var framesCount;
-var fps;
-var lastTime;
-var play_ground;
-var sprites;
-var drawingSprites;
-var poly;
-var w = 0;
-var dw = -1;
-var InfoStyle = {
-    font: "18px Arial", textBaseline: "top", direction: "inherit", textAlign: "left"
-};
-function test(sprites) {
-    var draw_liner = new DrawLiner(play_ground);
-    var background = new Geoma.Sprite.Rectangle(0, 0, function () { return play_ground.w; }, function () { return play_ground.h; }, "SteelBlue");
-    sprites.push(background);
-    var sprite;
-    var custom_sprite = new Geoma.Sprite.Container();
-    sprite = new Geoma.Sprite.Rectangle(100, 600, 100, 50, "Gainsboro");
-    custom_sprite.push(sprite);
-    sprite = new Geoma.Sprite.Text(100, 600, 300, 50, "#ffff00", InfoStyle, "custom text", true);
-    sprite.addX(function (value) {
-        return value + w;
-    });
-    custom_sprite.push(sprite);
-    var drag_sprite = new Geoma.Sprite.Dragable(play_ground, custom_sprite);
-    drag_sprite.selectStyle = "#ccee55";
-    sprites.push(drag_sprite);
-    poly = new Geoma.Sprite.Polyline(200, 200, 1, "#ee1111");
-    poly.lineWidth.addModifier(function () { return w; });
-    poly.addPolygon(new Geoma.Polygon.Rectangle(new Geoma.Utils.Box(5, 5, 15, 35)));
-    poly.addPolygon(new Geoma.Polygon.Arc(Geoma.Utils.Point.make(70, 70), 35, Geoma.Utils.toRad(10), Geoma.Utils.toRad(300)));
-    poly.addPolygon(new Geoma.Polygon.Rectangle(new Geoma.Utils.Box(40, 70, 44, 77)));
-    poly.addPolygon(new Geoma.Polygon.Ellipse(Geoma.Utils.Point.make(10, 10), 25, 50, 0, 2 * Math.PI));
-    var drag_sprite2 = new Geoma.Sprite.Dragable(play_ground, poly);
-    drag_sprite2.selectStyle = "#ccee55";
-    sprites.push(drag_sprite2);
-    var ellipse = new Geoma.Polygon.Ellipse(Geoma.Utils.Point.make(30, 35), 30, 35, 0, 2 * Math.PI);
-    var poly1 = new Geoma.Sprite.Polyline(400, 100, 4, "#ef00ef");
-    poly1.addPolygon(ellipse);
-    poly1.addPolygon(new Geoma.Polygon.Line(Geoma.Utils.Point.make(45, 45), Geoma.Utils.Point.make(65, 65)));
-    var poly2 = new Geoma.Sprite.Polyshape(400, 100, 3, "#1122ee");
-    poly2.addPolygon(ellipse);
-    custom_sprite = new Geoma.Sprite.Container();
-    custom_sprite.push(poly2);
-    custom_sprite.push(poly1);
-    sprites.push(custom_sprite);
-    var custom_sprite2 = new Geoma.Sprite.Container();
-    for (var i = 0; i < 10000; i++) {
-        sprite = new Geoma.Sprite.Rectangle(100 + i * 1.001, 100 + i * 1.002, 30, 20, "#00ff00");
-        sprite.addX(function (value) { return value + w; });
-        sprite.addY(function (value) { return value + w; });
-        custom_sprite2.push(sprite);
-    }
-    drag_sprite = new Geoma.Sprite.Dragable(play_ground, custom_sprite2);
-    drag_sprite.selectStyle = "#ccee55";
-    sprites.push(drag_sprite);
-}
+var playGround;
+var mainDocument;
 window.onload = function () {
-    framesCount = 0;
-    fps = 0;
-    lastTime = 0;
     var canvas = document.getElementById('playArea');
-    play_ground = new Geoma.PlayGround(canvas);
-    sprites = new Geoma.Sprite.Container();
-    var doc = new Geoma.Tools.Document(play_ground);
-    sprites.push(doc);
-    var debug_info = new Geoma.Sprite.Text(0, 0, undefined, 25, "#00ffff", InfoStyle, function () { return "width: " + play_ground.w + ", height: " + play_ground.h + ", draws: " + drawingSprites + ", " +
-        ("(x: " + play_ground.mousePoint.x + ", y: " + play_ground.mousePoint.y + "),\tfps: " + fps); });
-    var info = debug_info;
-    debug_info.addX(function () { return play_ground.right - info.w - 20; });
-    sprites.push(debug_info);
+    playGround = new Geoma.PlayGround(canvas);
+    mainDocument = new Geoma.Tools.Document(playGround);
     window.requestAnimationFrame(drawAll);
 };
 window.onresize = function () {
-    Geoma.Utils.assert(play_ground);
-    play_ground.invalidate();
+    playGround.invalidate();
 };
-function foo() {
-    return function () { return 42; };
-}
 function drawAll(time) {
-    if (w > 10 || w < 0) {
-        dw = -dw;
-    }
-    w += 0.1 * dw;
-    framesCount++;
-    if ((time - lastTime) >= 1000) {
-        fps = framesCount;
-        framesCount = 0;
-        lastTime = time;
-    }
-    drawingSprites = Geoma.PlayGround.drawingSprites;
-    Geoma.PlayGround.drawingSprites = 0;
-    sprites.draw(play_ground);
+    mainDocument.draw(playGround);
     window.requestAnimationFrame(drawAll);
 }
 var Geoma;
