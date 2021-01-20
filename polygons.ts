@@ -38,23 +38,54 @@ module Geoma.Polygon
         }
     }
 
+    export class CustomPath implements IPolygon
+    {
+        path: Path2D = new Path2D();
+        box: Box;
+
+        constructor(pivote: IPoint, path_string: string)
+        {
+            assert(pivote);
+            this.path = new Path2D(path_string);
+            this.box = new Box(pivote.x, pivote.y);
+        }
+    }
+
     export class Line implements IPolygon
     {
         path: Path2D = new Path2D();
         box: Box;
 
-        constructor(start: IPoint, end: IPoint)
+        constructor(...points: IPoint[])
         {
-            assert(start);
-            assert(end);
-            this.path.moveTo(start.x, start.y);
-            this.path.lineTo(end.x, end.y);
-            this.box = new Box(
-                Math.min(start.x, end.x),
-                Math.min(start.y, start.y),
-                Math.abs(end.x - start.x),
-                Math.abs(end.y - start.y)
-            );
+            assert(points.length >= 2);
+
+            this.path.moveTo(points[0].x, points[0].y);
+            this.box = new Box(points[0].x, points[0].y);
+
+            for (const point of points)
+            {
+                this.path.lineTo(point.x, point.y);
+                if (this.box.x > point.x)
+                {
+                    this.box.x = point.x;
+                }
+                if (this.box.y > point.y)
+                {
+                    this.box.y = point.y;
+                }
+
+                const w = point.x - this.box.x;
+                const h = point.y - this.box.y;
+                if (this.box.w < w)
+                {
+                    this.box.w = w;
+                }
+                if (this.box.h < h)
+                {
+                    this.box.h = h;
+                }
+            }
         }
     }
 

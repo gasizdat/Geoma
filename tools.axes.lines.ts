@@ -4,6 +4,7 @@
 /// <reference path="interfaces.ts" />
 /// <reference path="play_ground.ts" />
 /// <reference path="tools.document.ts" />
+/// <reference path="tools.resources.ts" />
 /// <reference path="tools.core.ts" />
 /// <reference path="tools.menu.ts" />
 /// <reference path="tools.tools.ts" />
@@ -181,7 +182,7 @@ module Geoma.Tools
                     scale = toInt(scale);
                 }
             }
-            const new_scale = this.document.promptNumber(`Масштаб по осям x/y, %`, scale);
+            const new_scale = this.document.promptNumber(Resources.string("Масштаб по осям x/y, %"), scale);
             if (new_scale != undefined)
             {
                 this.kX = 1 / new_scale;
@@ -296,13 +297,47 @@ module Geoma.Tools
                     play_ground.context2d.textBaseline = style.textBaseline;
                 }
                 const scale_bar_size = 10;
+                const get_digits = (normalize_value: { value: number, mantiss: number }): number =>
+                {
+                    if (normalize_value.mantiss > 0)
+                    {
+                        return 0;
+                    }
+                    else if ((-normalize_value.mantiss) <= 4)
+                    {
+                        return -normalize_value.mantiss;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                }
+                const is_exponential = (normalize_value: { value: number, mantiss: number }): boolean =>
+                {
+                    if (normalize_value.mantiss > 0)
+                    {
+                        if (normalize_value.value > 9999)
+                        {
+                            return true;
+                        }
+                        else 
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        return (-normalize_value.mantiss) > 4;
+                    }
+                }
                 const bar_text_margin = 2;
                 {
                     let x_coord = -toInt(this.x / dx);
                     const start_x = this.x + x_coord * dx;
                     x_coord *= grade_x.value;
                     const end_x = play_ground.w + 1;
-                    const digits = Math.abs(grade_x.mantiss);
+                    const digits = get_digits(grade_x);
+                    const exponential = is_exponential(grade_x);
                     let y1: number, y2: number, y3: number;
                     if (this.y >= 0)
                     {
@@ -330,7 +365,7 @@ module Geoma.Tools
                     {
                         play_ground.context2d.moveTo(x, y1);
                         play_ground.context2d.lineTo(x, y2);
-                        play_ground.context2d.fillText(x_coord.toFixed(digits), x, y3);
+                        play_ground.context2d.fillText(exponential ? x_coord.toExponential(digits) : x_coord.toFixed(digits), x, y3);
                         x_coord += grade_x.value;
                     }
                 }
@@ -339,7 +374,8 @@ module Geoma.Tools
                     const start_y = this.y - y_coord * dy;
                     y_coord *= grade_y.value;
                     const end_y = play_ground.h + 1;
-                    const digits = Math.abs(grade_y.mantiss);
+                    const digits = get_digits(grade_y);
+                    const exponential = is_exponential(grade_y);
                     let x1: number, x2: number, x3: number;
                     if (this.x >= 0)
                     {
@@ -366,7 +402,7 @@ module Geoma.Tools
                     {
                         if (Math.abs(y - this.y) > dy / 2)
                         {
-                            const y_text = y_coord.toFixed(digits);
+                            const y_text = exponential ? y_coord.toExponential(digits) : y_coord.toFixed(digits);
                             play_ground.context2d.moveTo(x1, y);
                             play_ground.context2d.lineTo(x2, y);
                             if (isNaN(x3))
@@ -488,22 +524,22 @@ module Geoma.Tools
                     const y = doc.mouseArea.mousePoint.y;
                     const menu = new Menu(doc, x, y);
 
-                    let menu_item = menu.addMenuItem("Масштаб по осям x/y...");
+                    let menu_item = menu.addMenuItem(Resources.string("Масштаб по осям x/y..."));
                     menu_item.onChecked.bind(this, this.scaleDialog);
 
-                    menu_item = menu.addMenuItem("Создать функцию...");
+                    menu_item = menu.addMenuItem(Resources.string("Создать функцию..."));
                     menu_item.onChecked.bind(this, () => this.document.addParametricLine(Point.make(x, y), this));
 
                     const lines = this.document.getParametricLines(this);
                     if (lines.length == 1)
                     {
                         const line = lines[0];
-                        menu_item = menu.addMenuItem(`Редактировать функцию f = ${line.code.text} ...`);
+                        menu_item = menu.addMenuItem(Resources.string("Редактировать функцию f = {0} ...", line.code.text));
                         menu_item.onChecked.bind(line, line.showExpressionEditor);
                     }
                     else if (lines.length > 1)
                     {
-                        const group = menu.addMenuGroup("Редактировать функцию");
+                        const group = menu.addMenuGroup(Resources.string("Редактировать функцию"));
                         for (const line of lines)
                         {
                             menu_item = group.addMenuItem(`f = ${line.code.text} ...`);
@@ -511,7 +547,7 @@ module Geoma.Tools
                         }
                     }
 
-                    menu_item = menu.addMenuItem(`Удалить координатную плоскость`);
+                    menu_item = menu.addMenuItem(Resources.string("Удалить координатную плоскость"));
                     menu_item.onChecked.bind(this, () => doc.removeAxes(this));
 
                     menu.show();

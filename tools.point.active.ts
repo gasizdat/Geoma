@@ -8,6 +8,7 @@
 /// <reference path="tools.menu.ts" />
 /// <reference path="tools.tools.ts" />
 /// <reference path="tools.styles.ts" />
+/// <reference path="tools.resources.ts" />
 /// <reference path="tools.point.base.ts" />
 /// <reference path="tools.line.base.ts" />
 
@@ -117,16 +118,16 @@ module Geoma.Tools
                     const y = doc.mouseArea.mousePoint.y;
                     const menu = new Menu(doc, x, y);
 
-                    let menu_item = menu.addMenuItem("Провести отрезок...");
+                    let menu_item = menu.addMenuItem(Resources.string("Создать отрезок..."));
                     menu_item.onChecked.bind(this, () => doc.setLineSegmentState(this));
 
-                    menu_item = menu.addMenuItem("Провести окружность из центра...");
+                    menu_item = menu.addMenuItem(Resources.string("Создать окружность из центра..."));
                     menu_item.onChecked.bind(this, () => doc.setCirclRadiusState(this));
 
-                    menu_item = menu.addMenuItem("Провести окружность на диаметре...");
+                    menu_item = menu.addMenuItem(Resources.string("Создать окружность на диаметре..."));
                     menu_item.onChecked.bind(this, () => doc.setCirclDiameterState(this));
 
-                    menu_item = menu.addMenuItem("Удалить точку");
+                    menu_item = menu.addMenuItem(Resources.string("Удалить точку"));
                     menu_item.onChecked.bind(this, () => doc.removePoint(this));
 
                     menu.show();

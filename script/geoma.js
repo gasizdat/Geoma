@@ -12,6 +12,13 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+var __spreadArrays = (this && this.__spreadArrays) || function () {
+    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+    for (var r = Array(s), k = 0, i = 0; i < il; i++)
+        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+            r[k] = a[j];
+    return r;
+};
 var __assign = (this && this.__assign) || function () {
     __assign = Object.assign || function(t) {
         for (var s, i = 1, n = arguments.length; i < n; i++) {
@@ -509,7 +516,7 @@ var Geoma;
                 return toInt(+value);
             }
             else {
-                return ~~value;
+                return Math.trunc(value);
             }
         }
         Utils.toInt = toInt;
@@ -534,6 +541,14 @@ var Geoma;
             return evaluate(context, "(function() { \"use strict\"; return " + code + "; }).bind(this)");
         }
         Utils.makeEvaluator = makeEvaluator;
+        function formatString(format) {
+            var args = [];
+            for (var _i = 1; _i < arguments.length; _i++) {
+                args[_i - 1] = arguments[_i];
+            }
+            return format.replace(/{(\d+)}/g, function (match, number) { return args[number] != undefined ? args[number] : match; });
+        }
+        Utils.formatString = formatString;
     })(Utils = Geoma.Utils || (Geoma.Utils = {}));
 })(Geoma || (Geoma = {}));
 var Geoma;
@@ -556,6 +571,16 @@ var Geoma;
             _this._canvas.onmousemove = _this.onMouseMove.connect();
             _this._canvas.onmousedown = _this.onMouseDown.connect();
             _this._canvas.onmouseup = _this.onMouseUp.connect();
+            _this._canvas.ontouchmove = function (event) {
+                var _a;
+                var document = _this._canvas.ownerDocument;
+                for (var i = 0; i < event.targetTouches.length; i++) {
+                    var touch = event.touches[i];
+                    var mouse_event = document.createEvent('MouseEvents');
+                    mouse_event.initMouseEvent("mousemove", true, true, (_a = event.view) !== null && _a !== void 0 ? _a : window, event.detail, touch.screenX, touch.screenY, touch.clientX, touch.clientY, event.ctrlKey, event.altKey, event.shiftKey, event.metaKey, 0, touch.target);
+                    _this.onMouseMove.emitEvent(mouse_event);
+                }
+            };
             _this.invalidate();
             _this.addW(function () { return _this._canvas.width; });
             _this.addH(function () { return _this._canvas.height; });
@@ -586,11 +611,20 @@ var Geoma;
             enumerable: false,
             configurable: true
         });
+        Object.defineProperty(PlayGround.prototype, "ratio", {
+            get: function () {
+                var _a;
+                return (_a = window.devicePixelRatio) !== null && _a !== void 0 ? _a : 1;
+            },
+            enumerable: false,
+            configurable: true
+        });
         PlayGround.prototype.invalidate = function () {
             var parent = this._canvas.parentElement;
             if (parent) {
-                this._canvas.width = parent.clientWidth;
-                this._canvas.height = parent.clientHeight;
+                var ratio = this.ratio;
+                this._canvas.width = parent.clientWidth * ratio;
+                this._canvas.height = parent.clientHeight * ratio;
             }
         };
         PlayGround.prototype.getPosition = function (el) {
@@ -637,14 +671,44 @@ var Geoma;
             return Arc;
         }());
         Polygon.Arc = Arc;
-        var Line = (function () {
-            function Line(start, end) {
+        var CustomPath = (function () {
+            function CustomPath(pivote, path_string) {
                 this.path = new Path2D();
-                assert(start);
-                assert(end);
-                this.path.moveTo(start.x, start.y);
-                this.path.lineTo(end.x, end.y);
-                this.box = new Box(Math.min(start.x, end.x), Math.min(start.y, start.y), Math.abs(end.x - start.x), Math.abs(end.y - start.y));
+                assert(pivote);
+                this.path = new Path2D(path_string);
+                this.box = new Box(pivote.x, pivote.y);
+            }
+            return CustomPath;
+        }());
+        Polygon.CustomPath = CustomPath;
+        var Line = (function () {
+            function Line() {
+                var points = [];
+                for (var _i = 0; _i < arguments.length; _i++) {
+                    points[_i] = arguments[_i];
+                }
+                this.path = new Path2D();
+                assert(points.length >= 2);
+                this.path.moveTo(points[0].x, points[0].y);
+                this.box = new Box(points[0].x, points[0].y);
+                for (var _a = 0, points_1 = points; _a < points_1.length; _a++) {
+                    var point = points_1[_a];
+                    this.path.lineTo(point.x, point.y);
+                    if (this.box.x > point.x) {
+                        this.box.x = point.x;
+                    }
+                    if (this.box.y > point.y) {
+                        this.box.y = point.y;
+                    }
+                    var w = point.x - this.box.x;
+                    var h = point.y - this.box.y;
+                    if (this.box.w < w) {
+                        this.box.w = w;
+                    }
+                    if (this.box.h < h) {
+                        this.box.h = h;
+                    }
+                }
             }
             return Line;
         }());
@@ -1161,10 +1225,11 @@ var Geoma;
         Sprite_1.Text = Text;
         var PolySprite = (function (_super) {
             __extends(PolySprite, _super);
-            function PolySprite(x, y, line_width, brush) {
+            function PolySprite(x, y, line_width, brush, scale) {
                 var _this = _super.call(this, x, y) || this;
                 _this.lineWidth = makeProp(line_width, 1);
                 _this.brush = makeProp(brush, DefaultBrush);
+                _this.scale = makeProp(scale, 1);
                 return _this;
             }
             PolySprite.prototype.addPolygon = function (polygon) {
@@ -1180,7 +1245,7 @@ var Geoma;
                 assert(this._path);
                 play_ground.context2d.beginPath();
                 var current_transform = play_ground.context2d.getTransform();
-                play_ground.context2d.setTransform(current_transform.a, current_transform.b, current_transform.c, current_transform.d, current_transform.e + this.x, current_transform.f + this.y);
+                play_ground.context2d.setTransform(current_transform.a * this.scale.value, current_transform.b, current_transform.c, current_transform.d * this.scale.value, current_transform.e + this.x, current_transform.f + this.y);
                 var ret = play_ground.context2d.isPointInPath(this._path, point.x, point.y);
                 play_ground.context2d.setTransform(current_transform);
                 return ret;
@@ -1191,7 +1256,7 @@ var Geoma;
                 play_ground.context2d.beginPath();
                 var current_transform = play_ground.context2d.getTransform();
                 var dw = this.deltaLineWidth;
-                play_ground.context2d.setTransform(current_transform.a, current_transform.b, current_transform.c, current_transform.d, toInt(current_transform.e + this.x + dw), toInt(current_transform.f + this.y + dw));
+                play_ground.context2d.setTransform(current_transform.a * this.scale.value, current_transform.b, current_transform.c, current_transform.d * this.scale.value, toInt(current_transform.e + (this.x + dw) * play_ground.ratio), toInt(current_transform.f + (this.y + dw) * play_ground.ratio));
                 this.onDraw(play_ground, this._path);
                 play_ground.context2d.setTransform(current_transform);
             };
@@ -1616,12 +1681,19 @@ var Geoma;
                 bg.addPolygon(ellipse);
                 var line_brush_prop = makeProp(line_brush, "BlacK");
                 var select_line_brush_prop = makeProp(select_line_brush, "Black");
-                _this._line = new Geoma.Sprite.Polyline(x - radius, y - radius, line_width, makeMod(_this, function () { return _this.selected ? select_line_brush_prop.value : line_brush_prop.value; }));
+                _this._line = new Geoma.Sprite.Polyline(x - radius - line_width / 2, y - radius - line_width / 2, line_width, makeMod(_this, function () { return _this.selected ? select_line_brush_prop.value : line_brush_prop.value; }));
                 _this._line.addPolygon(ellipse);
                 _this.item.push(bg);
                 _this.item.push(_this._line);
                 return _this;
             }
+            Object.defineProperty(ActivePointBase.prototype, "lineBrush", {
+                get: function () {
+                    return this._line.brush.value;
+                },
+                enumerable: false,
+                configurable: true
+            });
             Object.defineProperty(ActivePointBase.prototype, "x", {
                 get: function () {
                     return this._line.middleX;
@@ -1638,24 +1710,23 @@ var Geoma;
             });
             Object.defineProperty(ActivePointBase.prototype, "right", {
                 get: function () {
-                    return this.item.last.right;
+                    return this._line.x + this.item.w;
                 },
                 enumerable: false,
                 configurable: true
             });
             Object.defineProperty(ActivePointBase.prototype, "bottom", {
                 get: function () {
-                    return this._line.bottom;
+                    return this._line.y + this.item.h;
                 },
                 enumerable: false,
                 configurable: true
             });
             ActivePointBase.prototype.setName = function (value, brush, style) {
                 assert(!this.name);
-                assert(value);
-                var name_text = new Geoma.Sprite.Text(this.right + 5, this.y, 0, 0, brush, style, value);
+                var name_text = new Geoma.Sprite.Text(this._line.right + 5, this.y, 0, 0, brush, style, value);
                 this.item.push(name_text);
-                this.item.name = value;
+                this.item.name = name_text.text.value;
             };
             ActivePointBase.prototype.serialize = function (context) {
                 assert(false);
@@ -1739,6 +1810,13 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
+            Object.defineProperty(MenuItem.prototype, "menu", {
+                get: function () {
+                    return this._menu;
+                },
+                enumerable: false,
+                configurable: true
+            });
             MenuItem.prototype.mouseClick = function (event) {
                 if (this.visible && this.enabled.value && this.mouseHit(event)) {
                     event.cancelBubble = true;
@@ -1766,12 +1844,35 @@ var Geoma;
                 var _this = _super.call(this, menu, x, y, width, text) || this;
                 var tooltip = _this.last;
                 var expander = new Geoma.Sprite.Text(0, function () { return tooltip.y; }, 0, 20, function () { return tooltip.brush.value; }, function () { return tooltip.style.value; }, "►");
-                expander.addX(function () { return _this.first.right - expander.w - 5; });
+                expander.addX(function () { return _this.first.right - expander.w - MenuGroup._innerMargin; });
                 _this.item.push(expander);
-                _this._subMenu = new Menu(_this.document, makeMod(_this, function () { return _this.right; }), makeMod(_this, function () { return _this.top - _this._subMenu.padding; }));
-                _this._subMenu.addVisible(makeMod(_this, function () { return _this.selected; }));
+                _this._subMenuVisible = false;
+                _this._subMenuAboutToHide = 0;
+                _this._subMenuAboutToShow = 0;
+                _this._subMenu = new Menu(_this.document, makeMod(_this, function () { return _this.right; }), makeMod(_this, function () { return _this.top - _this._subMenu.padding; }), menu.rootMenu, _this);
+                _this._subMenu.addVisible(makeMod(_this, function () { return _this._subMenuVisible; }));
+                _this._beforeDrawListener = _this.document.onBeforeDraw.bind(_this, function () {
+                    if (_this._subMenuVisible) {
+                        if (_this._subMenuAboutToHide && _this._subMenuAboutToHide <= Tools.Document.getTicks()) {
+                            _this._subMenuAboutToHide = 0;
+                            _this._subMenuVisible = _this.selected;
+                        }
+                    }
+                    else if (_this._subMenuAboutToShow && _this._subMenuAboutToShow <= Tools.Document.getTicks()) {
+                        _this._subMenuAboutToShow = 0;
+                        _this._subMenuVisible = _this.selected;
+                    }
+                });
                 return _this;
             }
+            Object.defineProperty(MenuGroup.prototype, "clientW", {
+                get: function () {
+                    var text = this.item.item(this.item.length - 2);
+                    return text.w + this.last.w + MenuGroup._innerMargin + this.menu.padding * 2;
+                },
+                enumerable: false,
+                configurable: true
+            });
             MenuGroup.prototype.addMenuItem = function (text) {
                 return this._subMenu.addMenuItem(text);
             };
@@ -1784,6 +1885,7 @@ var Geoma;
             MenuGroup.prototype.dispose = function () {
                 if (!this.disposed) {
                     this._subMenu.dispose();
+                    this._beforeDrawListener.dispose();
                     _super.prototype.dispose.call(this);
                 }
             };
@@ -1793,14 +1895,36 @@ var Geoma;
             };
             MenuGroup.prototype.mouseClick = function (event) {
                 this.mouseMove(event);
-                _super.prototype.mouseClick.call(this, event);
+                if (this.visible && this.enabled.value && this.mouseHit(event)) {
+                    event.cancelBubble = true;
+                    this.enabled.value = false;
+                }
             };
             MenuGroup.prototype.mouseMove = function (event) {
                 _super.prototype.mouseMove.call(this, event);
                 if (this.enabled.value) {
                     this.selected = this.selected || (this._subMenu.visible && this._subMenu.mouseHit(event));
+                    if (this._subMenu.visible) {
+                        if (!this.selected) {
+                            this._subMenuAboutToShow = 0;
+                            if (!this._subMenuAboutToHide) {
+                                this._subMenuAboutToHide = Tools.Document.getTicks() + MenuGroup._subMenuVisibilityChangeTimeOut;
+                            }
+                        }
+                        else {
+                            this._subMenuAboutToHide = 0;
+                        }
+                    }
+                    else if (this.selected) {
+                        this._subMenuAboutToHide = 0;
+                        if (!this._subMenuAboutToShow) {
+                            this._subMenuAboutToShow = Tools.Document.getTicks() + MenuGroup._subMenuVisibilityChangeTimeOut;
+                        }
+                    }
                 }
             };
+            MenuGroup._innerMargin = 5;
+            MenuGroup._subMenuVisibilityChangeTimeOut = 300;
             return MenuGroup;
         }(MenuItem));
         var MenuStrip = (function (_super) {
@@ -1831,12 +1955,14 @@ var Geoma;
         Tools.MenuStrip = MenuStrip;
         var Menu = (function (_super) {
             __extends(Menu, _super);
-            function Menu(document, x, y) {
+            function Menu(document, x, y, root_menu, parent_group) {
                 var _this = _super.call(this, document, new Tools.Container()) || this;
                 _this.padding = 3;
                 _this._hasGroupExpander = false;
                 _this._dx = 0;
                 _this._dy = 0;
+                _this._rootMenu = root_menu;
+                _this._parentGroup = parent_group;
                 _this.item.push(new Geoma.Sprite.Rectangle(x, y, makeMod(_this, function () {
                     if (_this.item.length > 1) {
                         return _this._clientWidth.value + _this.padding * 2;
@@ -1857,6 +1983,14 @@ var Geoma;
                 _this._clientWidth = makeProp(makeMod(_this, _this.maxClientWidth), 0);
                 return _this;
             }
+            Object.defineProperty(Menu.prototype, "rootMenu", {
+                get: function () {
+                    var _a;
+                    return (_a = this._rootMenu) !== null && _a !== void 0 ? _a : this;
+                },
+                enumerable: false,
+                configurable: true
+            });
             Object.defineProperty(Menu.prototype, "clientW", {
                 get: function () {
                     assert(false, "Logical error");
@@ -1891,11 +2025,12 @@ var Geoma;
                 this.document.showMenu(this);
             };
             Menu.prototype.close = function () {
-                this.document.closeMenu(this);
+                this.document.closeMenu(this.rootMenu);
             };
             Menu.prototype.mouseClick = function (event) {
+                var _a;
                 if (this.visible) {
-                    if (this.mouseHit(event)) {
+                    if (this.mouseHit(event) || ((_a = this._parentGroup) === null || _a === void 0 ? void 0 : _a.mouseHit(event))) {
                         event.cancelBubble = true;
                     }
                     else {
@@ -1915,6 +2050,11 @@ var Geoma;
             };
             Menu.prototype.mouseMove = function (event) {
                 if (this.visible && this.mouseHit(event)) {
+                    if (this._parentGroup) {
+                        if (!this._parentGroup.selected) {
+                            this._parentGroup.selected = true;
+                        }
+                    }
                     event.cancelBubble = true;
                 }
                 _super.prototype.mouseMove.call(this, event);
@@ -1948,6 +2088,109 @@ var Geoma;
 (function (Geoma) {
     var Tools;
     (function (Tools) {
+        var UiLanguage;
+        (function (UiLanguage) {
+            UiLanguage[UiLanguage["ruRu"] = 0] = "ruRu";
+            UiLanguage[UiLanguage["enUs"] = 1] = "enUs";
+        })(UiLanguage = Tools.UiLanguage || (Tools.UiLanguage = {}));
+        var Resources = (function () {
+            function Resources() {
+            }
+            Resources.collator = function () {
+                switch (Resources.language) {
+                    case UiLanguage.enUs:
+                        return new Intl.Collator("en-US", { numeric: true });
+                    case UiLanguage.ruRu:
+                        return new Intl.Collator("ru-RU", { numeric: true });
+                }
+            };
+            Resources.string = function (resource_id) {
+                var _a;
+                var args = [];
+                for (var _i = 1; _i < arguments.length; _i++) {
+                    args[_i - 1] = arguments[_i];
+                }
+                switch (Resources.language) {
+                    case UiLanguage.enUs:
+                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArrays([(_a = Resources.enEnStrings[resource_id]) !== null && _a !== void 0 ? _a : resource_id], args));
+                    case UiLanguage.ruRu:
+                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArrays([resource_id], args));
+                }
+            };
+            Resources.language = UiLanguage.ruRu;
+            Resources.enEnStrings = {
+                "Создать": "Create",
+                "Создать точку": "Create a point",
+                "Создать отрезок...": "Create a line segment...",
+                "Создать функцию...": "Create a function graph...",
+                "Файл": "File",
+                "Новый": "New",
+                "Открыть": "Open",
+                "Копировать": "Copy",
+                "Удалить": "Delete",
+                "Сохранить...": "Save...",
+                "Файла {0} больше нет": "There is not exists file {0}",
+                "Введите имя документа": "Please enter document name",
+                "Постоянная ссылка на документ": "Permanent document link",
+                "Настройки": "Settings",
+                "Светлая": "Light theme",
+                "Тёмная": "Dark theme",
+                "Тема": "Theme",
+                "Показать биссектрисы углов": "Show angles bisectors",
+                "Имя по умолчанию ({0})": "Set default name ({0})",
+                "Настраиваемое имя": "Custom name",
+                "Удалить индикатор угла {0}": "Delete angle indicator",
+                "Масштаб по осям x/y, %": "Scale by x/y axes (%)",
+                "Масштаб по осям x/y...": "Scale by x/y axes...",
+                "Редактировать функцию f = {0} ...": "Edit function f = {0} ...",
+                "Редактировать функцию": "Edit function",
+                "Удалить координатную плоскость": "Delete coordinate plane",
+                "Выберите вторую точку": "Please select second point",
+                "Выберите вторую прямую": "Please select second line segment",
+                "Выберите || прямую": "Please select line segment to be parallel",
+                "Выберите ⟂ прямую": "Please select line segment to be orthogonal",
+                "Невозможно восстановить данные": "Unable to restore document data",
+                "{0}\r\nВведите число": "{0}\r\nPlease, enter a number",
+                "Значение '{0}' не является числом": "The '{0}' is not a number",
+                "Нельзя провести линию к той же точке!": "Unable to make line segment with one point.",
+                "Линия {0} уже проведена!": "Line segment is already exists.",
+                "Угол может быть обозначен только между различными прямыми, имеющими одну общую точку.": "The angle can be set between two different lines segments with one common point.",
+                "Угол между прямыми {0} и {1} уже обозначен.": "The angle is already exists between lines segments {0} and {1}.",
+                "Отрезки {0} и {1} не содержат общих точек": "The {0} and {1} lines segments have not common points.",
+                "Биссектриса угла {0} уже проведена.": "Bisector of {0} angle is already exists.",
+                "Отрезки {0} и {1} имеют общую точку и не могут стать ||.": "The {0} and {1} lines segments have one common point and cannot be parallel.",
+                "Отрезки {0} и {1} не имеют общей точки и не могут стать ⟂.": "The {0} and {1} lines segments have not common points and cannot by orthogonal.",
+                "Окружность {0} уже проведена!": "The {0} circle is already exists.",
+                "Нельзя провести окружность к той же точке!": "Unable to make circle containing one point.",
+                "Удалить биссектрису": "Delete angle bisector",
+                "Добавить точку": "Add point",
+                "Удалить окружность {0}": "Delete {0} circle",
+                "Введен недопустимый размер {0}": "The value {0} is the invalid size",
+                "Введите размер в пикселях": "Please enter the size in pixels",
+                "Задать размер...": "Set the size...",
+                "Изменяемый размер": "Resizable",
+                "Фиксированный размер": "Fixed size",
+                "Обозначить угол...": "Add the angle indicator...",
+                "Показать биссектрису угла...": "Add the angle bisector...",
+                "Сделать ||...": "Make it parallel...",
+                "Сделать ⟂...": "Make it orthogonal...",
+                "Удалить прямую {0}": "Delete the {0} line segment",
+                "Приращение аргумента x функции {0}": "dx value of the function {0}",
+                "Точность...": "Accuracy...",
+                "Создать окружность из центра...": "Create a circle with point as center...",
+                "Создать окружность на диаметре...": "Create a circle with point as one of diameter point...",
+                "Удалить точку": "Delete point",
+                "Выберите место": "Please select a starting location"
+            };
+            return Resources;
+        }());
+        Tools.Resources = Resources;
+    })(Tools = Geoma.Tools || (Geoma.Tools = {}));
+})(Geoma || (Geoma = {}));
+var Geoma;
+(function (Geoma) {
+    var Tools;
+    (function (Tools) {
         var makeMod = Geoma.Utils.makeMod;
         var Point = Geoma.Utils.Point;
         var ToolBase = (function (_super) {
@@ -1964,8 +2207,15 @@ var Geoma;
             function PointTool(document, x, y, radius, line_width) {
                 if (radius === void 0) { radius = 5; }
                 if (line_width === void 0) { line_width = 2; }
-                var _this = _super.call(this, document, x, y, radius, line_width, "Создать") || this;
+                var _this = _super.call(this, document, x, y, radius, line_width, function () { return Tools.Resources.string("Создать"); }) || this;
                 _this._picked = false;
+                var icon_line_width = 2;
+                var ds = ((radius * 5) / 6) - icon_line_width - (line_width / 2);
+                var dsw = ds / 3;
+                var plus_line = new Geoma.Polygon.Line(Point.make(-ds, -dsw), Point.make(-dsw, -dsw), Point.make(-dsw, -ds), Point.make(dsw, -ds), Point.make(dsw, -dsw), Point.make(ds, -dsw), Point.make(ds, dsw), Point.make(dsw, dsw), Point.make(dsw, ds), Point.make(-dsw, ds), Point.make(-dsw, dsw), Point.make(-ds, dsw), Point.make(-ds, -dsw - (icon_line_width / 2)));
+                var plus = new Geoma.Sprite.Polyline(x - icon_line_width / 2, y - icon_line_width / 2, icon_line_width, makeMod(_this, function () { return _this.lineBrush; }));
+                plus.addPolygon(plus_line);
+                _this.item.push(plus);
                 return _this;
             }
             Object.defineProperty(PointTool.prototype, "picked", {
@@ -1979,12 +2229,15 @@ var Geoma;
                 var x = document.mouseArea.mousePoint.x;
                 var y = document.mouseArea.mousePoint.y;
                 var menu = new Tools.Menu(document, x, y);
-                var menu_item = menu.addMenuItem("Создать точку");
+                var menu_item = menu.addMenuItem(Tools.Resources.string("Создать точку"));
                 menu_item.onChecked.bind(this, function () { return document.addPoint(Point.make(x, y)); });
-                menu_item = menu.addMenuItem("Создать отрезок...");
+                menu_item = menu.addMenuItem(Tools.Resources.string("Создать отрезок..."));
                 menu_item.onChecked.bind(this, function () { return document.setLineSegmentState(new Tools.ActivePoint(document, x, y)); });
-                menu_item.enabled.addModifier(makeMod(this, function () { return document.points.length > 0; }));
-                menu_item = menu.addMenuItem("Создать функцию...");
+                menu_item = menu.addMenuItem(Tools.Resources.string("Создать окружность из центра..."));
+                menu_item.onChecked.bind(this, function () { return document.setCirclRadiusState(new Tools.ActivePoint(document, x, y)); });
+                menu_item = menu.addMenuItem(Tools.Resources.string("Создать окружность на диаметре..."));
+                menu_item.onChecked.bind(this, function () { return document.setCirclDiameterState(new Tools.ActivePoint(document, x, y)); });
+                menu_item = menu.addMenuItem(Tools.Resources.string("Создать функцию..."));
                 menu_item.onChecked.bind(this, function () { return document.addParametricLine(Point.make(x, y)); });
                 menu.show();
             };
@@ -1997,6 +2250,9 @@ var Geoma;
                 }
                 else {
                     this._picked = this.selected && this.mouseHit(event);
+                    if (this.picked) {
+                        this.document.addToolTip(Tools.Resources.string("Выберите место"));
+                    }
                 }
             };
             PointTool.prototype.mouseMove = function (event) {
@@ -2011,7 +2267,17 @@ var Geoma;
             function FileTool(document, x, y, radius, line_width) {
                 if (radius === void 0) { radius = 5; }
                 if (line_width === void 0) { line_width = 2; }
-                return _super.call(this, document, x, y, radius, line_width, "Файл") || this;
+                var _this = _super.call(this, document, x, y, radius, line_width, function () { return Tools.Resources.string("Файл"); }) || this;
+                var icon_line_width = 2;
+                var file_point = Point.make(x - radius + icon_line_width + line_width / 2, y - radius + icon_line_width + line_width / 2);
+                var file = new Geoma.Sprite.Polyshape(file_point.x, file_point.y, icon_line_width, makeMod(_this, function () { return _this.lineBrush; }), 0.3);
+                file.addPolygon(new Geoma.Polygon.CustomPath(file_point, "M83.012,17.5c0-0.527-0.271-0.99-0.682-1.258L66.477,2.637c-0.15-0.129-0.324-0.211-0.505-0.271C65.709,2.141,65.373,2,65,2 H18.5C17.671,2,17,2.671,17,3.5v93c0,0.828,0.671,1.5,1.5,1.5h63c0.828,0,1.5-0.672,1.5-1.5V18c0-0.067-0.011-0.13-0.02-0.195 C83.001,17.707,83.012,17.604,83.012,17.5z M20,95V5h44v12.5c0,0.829,0.672,1.5,1.5,1.5H80v76H20z"));
+                file.addPolygon(new Geoma.Polygon.CustomPath(file_point, "M69,31H31c-0.552,0-1-0.448-1-1s0.448-1,1-1h38c0.553,0,1,0.448,1,1S69.553,31,69,31z"));
+                file.addPolygon(new Geoma.Polygon.CustomPath(file_point, "M69,45H31c-0.552,0-1-0.448-1-1s0.448-1,1-1h38c0.553,0,1,0.448,1,1S69.553,45,69,45z"));
+                file.addPolygon(new Geoma.Polygon.CustomPath(file_point, "M69,57H31c-0.552,0-1-0.447-1-1s0.448-1,1-1h38c0.553,0,1,0.447,1,1S69.553,57,69,57z"));
+                file.addPolygon(new Geoma.Polygon.CustomPath(file_point, "M69,71H31c-0.552,0-1-0.447-1-1s0.448-1,1-1h38c0.553,0,1,0.447,1,1S69.553,71,69,71z"));
+                _this.item.push(file);
+                return _this;
             }
             Object.defineProperty(FileTool, "LocalStorageKeys", {
                 get: function () {
@@ -2033,12 +2299,14 @@ var Geoma;
                     var x = this.boundingBox.right;
                     var y = this.boundingBox.bottom;
                     var menu = new Tools.Menu(this.document, x, y);
-                    var open_group = menu.addMenuGroup("Открыть");
-                    var menu_item = menu.addMenuItem("Сохранить...");
+                    var menu_item = menu.addMenuItem(Tools.Resources.string("Новый"));
+                    menu_item.onChecked.bind(this.document, this.document.newDocument);
+                    var open_group = menu.addMenuGroup(Tools.Resources.string("Открыть"));
+                    menu_item = menu.addMenuItem(Tools.Resources.string("Сохранить..."));
                     menu_item.onChecked.bind(this, this.saveCommand);
-                    menu_item = menu.addMenuItem("Копировать");
+                    menu_item = menu.addMenuItem(Tools.Resources.string("Копировать"));
                     menu_item.onChecked.bind(this, this.copyCommand);
-                    var delete_group = menu.addMenuGroup("Удалить");
+                    var delete_group = menu.addMenuGroup(Tools.Resources.string("Удалить"));
                     for (var _i = 0, _a = FileTool.LocalStorageKeys; _i < _a.length; _i++) {
                         var name_1 = _a[_i];
                         if (name_1 == SettingsTool.settingsKey) {
@@ -2059,7 +2327,7 @@ var Geoma;
                     this.document.name = event.detail.tooltip;
                 }
                 else {
-                    this.document.alert("\u0424\u0430\u0439\u043B\u0430 " + event.detail.tooltip + " \u0431\u043E\u043B\u044C\u0448\u0435 \u043D\u0435\u0442");
+                    this.document.alert(Tools.Resources.string("Файла {0} больше нет", event.detail.tooltip));
                     this.removeCommand(event);
                 }
             };
@@ -2068,7 +2336,7 @@ var Geoma;
             };
             FileTool.prototype.saveCommand = function () {
                 var data = this.document.save();
-                var save_name = this.document.prompt("\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u043C\u044F \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430");
+                var save_name = this.document.prompt(Tools.Resources.string("Введите имя документа"));
                 if (save_name != null) {
                     window.localStorage.setItem(save_name, data);
                 }
@@ -2082,7 +2350,7 @@ var Geoma;
                     href = href.substr(0, index);
                 }
                 data = encodeURI(href + "#" + data);
-                if (window.prompt("\u0421\u043A\u043E\u043F\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u0435\u043A\u0441\u0442 \u0441\u0441\u044B\u043B\u043A\u0438", data) != null) {
+                if (window.prompt(Tools.Resources.string("Постоянная ссылка на документ"), data) != null) {
                     this.document.copyToClipboard(data).catch(function (error) {
                         _this.document.alert(error.message);
                     });
@@ -2096,7 +2364,8 @@ var Geoma;
             function SettingsTool(document, x, y, radius, line_width) {
                 if (radius === void 0) { radius = 5; }
                 if (line_width === void 0) { line_width = 2; }
-                var _this = _super.call(this, document, x, y, radius, line_width, "Настройки") || this;
+                var _a;
+                var _this = _super.call(this, document, x, y, radius, line_width, function () { return Tools.Resources.string("Настройки"); }) || this;
                 var settings = _this.settings;
                 if (settings.version == SettingsTool._settingsVersion) {
                     switch (settings.themeName) {
@@ -2110,7 +2379,14 @@ var Geoma;
                             Tools.CurrentTheme = Tools.DefaultTheme;
                             break;
                     }
+                    Tools.Resources.language = (_a = settings.languageId) !== null && _a !== void 0 ? _a : Tools.UiLanguage.enUs;
                 }
+                var icon_line_width = 2;
+                var gear_point = Point.make(x - radius + icon_line_width + line_width / 2, y - radius + icon_line_width + line_width / 2);
+                var gear = new Geoma.Sprite.Polyshape(gear_point.x, gear_point.y, icon_line_width, makeMod(_this, function () { return _this.lineBrush; }), 0.1);
+                gear.addPolygon(new Geoma.Polygon.CustomPath(gear_point, "m297.365,183.342l-25.458,-22.983l0,-20.608l25.457,-22.981c2.614,-2.361 3.461,-6.112 2.112,-9.366l-13.605,-32.846c-1.348,-3.253 -4.588,-5.305 -8.115,-5.128l-34.252,1.749l-14.571,-14.571l1.749,-34.251c0.18,-3.518 -1.874,-6.769 -5.128,-8.116l-32.847,-13.606c-3.253,-1.35 -7.005,-0.501 -9.365,2.111l-22.984,25.458l-20.606,0l-22.982,-25.458c-2.361,-2.613 -6.112,-3.458 -9.365,-2.111l-32.846,13.605c-3.255,1.348 -5.308,4.599 -5.128,8.116l1.75,34.251l-14.572,14.571l-34.252,-1.749c-3.506,-0.188 -6.768,1.874 -8.115,5.128l-13.607,32.846c-1.348,3.255 -0.502,7.005 2.112,9.366l25.457,22.981l0,20.608l-25.455,22.983c-2.614,2.361 -3.461,6.112 -2.112,9.366l13.605,32.846c1.348,3.255 4.603,5.321 8.115,5.128l34.252,-1.749l14.572,14.571l-1.75,34.251c-0.18,3.518 1.874,6.769 5.128,8.116l32.846,13.606c3.255,1.352 7.005,0.502 9.365,-2.111l22.984,-25.458l20.606,0l22.984,25.458c1.613,1.785 3.873,2.746 6.182,2.746c1.071,0 2.152,-0.208 3.183,-0.634l32.846,-13.606c3.255,-1.348 5.308,-4.599 5.128,-8.116l-1.749,-34.251l14.571,-14.571l34.252,1.749c3.506,0.178 6.768,-1.874 8.115,-5.128l13.605,-32.846c1.348,-3.255 0.502,-7.005 -2.112,-9.366zm-24.628,30.412l-32.079,-1.639c-2.351,-0.127 -4.646,0.764 -6.311,2.428l-19.804,19.804c-1.666,1.666 -2.547,3.958 -2.428,6.311l1.638,32.079l-21.99,9.109l-21.525,-23.843c-1.578,-1.747 -3.824,-2.746 -6.179,-2.746l-28.006,0c-2.355,0 -4.601,0.998 -6.179,2.746l-21.525,23.843l-21.99,-9.109l1.639,-32.079c0.12,-2.353 -0.763,-4.646 -2.429,-6.311l-19.803,-19.804c-1.665,-1.665 -3.955,-2.55 -6.311,-2.428l-32.079,1.639l-9.109,-21.99l23.842,-21.525c1.748,-1.58 2.746,-3.824 2.746,-6.179l0,-28.008c0,-2.355 -0.998,-4.601 -2.746,-6.179l-23.842,-21.525l9.109,-21.99l32.079,1.639c2.354,0.124 4.646,-0.763 6.311,-2.428l19.803,-19.803c1.666,-1.666 2.549,-3.958 2.429,-6.313l-1.639,-32.079l21.99,-9.109l21.525,23.842c1.578,1.747 3.824,2.746 6.179,2.746l28.006,0c2.355,0 4.601,-0.998 6.179,-2.746l21.525,-23.842l21.99,9.109l-1.638,32.079c-0.12,2.353 0.761,4.645 2.428,6.313l19.804,19.803c1.666,1.665 3.959,2.564 6.311,2.428l32.079,-1.639l9.109,21.99l-23.843,21.525c-1.748,1.58 -2.746,3.824 -2.746,6.179l0,28.008c0,2.355 0.998,4.601 2.746,6.179l23.843,21.525l-9.109,21.99z"));
+                gear.addPolygon(new Geoma.Polygon.CustomPath(gear_point, "m150.057,71.357c-43.394,0 -78.698,35.305 -78.698,78.698c0,43.394 35.304,78.698 78.698,78.698c43.394,0 78.698,-35.305 78.698,-78.698c-0.001,-43.394 -35.305,-78.698 -78.698,-78.698zm0,140.746c-34.214,0 -62.048,-27.834 -62.048,-62.048c0,-34.214 27.834,-62.048 62.048,-62.048c34.214,0 62.048,27.834 62.048,62.048c0,34.214 -27.836,62.048 -62.048,62.048z"));
+                _this.item.push(gear);
                 return _this;
             }
             Object.defineProperty(SettingsTool.prototype, "settings", {
@@ -2137,10 +2413,15 @@ var Geoma;
                     var x = this.boundingBox.right;
                     var y = this.boundingBox.bottom;
                     var menu = new Tools.Menu(this.document, x, y);
-                    var menu_group = menu.addMenuGroup("Тема");
-                    var menu_item = menu_group.addMenuItem("Голубая");
+                    var language_group = menu.addMenuGroup("Язык (Language)");
+                    var menu_item = language_group.addMenuItem("Русский");
+                    menu_item.onChecked.bind(this, function () { return Tools.Resources.language = Tools.UiLanguage.ruRu; });
+                    menu_item = language_group.addMenuItem("English (US)");
+                    menu_item.onChecked.bind(this, function () { return Tools.Resources.language = Tools.UiLanguage.enUs; });
+                    var theme_group = menu.addMenuGroup(Tools.Resources.string("Тема"));
+                    menu_item = theme_group.addMenuItem(Tools.Resources.string("Светлая"));
                     menu_item.onChecked.bind(this, function () { return _this.setTheme(Tools.BlueTheme); });
-                    menu_item = menu_group.addMenuItem("По умолчанию");
+                    menu_item = theme_group.addMenuItem(Tools.Resources.string("Тёмная"));
                     menu_item.onChecked.bind(this, function () { return _this.setTheme(Tools.DefaultTheme); });
                     menu.show();
                 }
@@ -2152,6 +2433,12 @@ var Geoma;
                 settings.themeName = theme.name;
                 this.settings = settings;
                 this.document.open(data);
+            };
+            SettingsTool.prototype.setLanguage = function (language) {
+                Tools.Resources.language = language;
+                var settings = this.settings;
+                settings.languageId = language;
+                this.settings = settings;
             };
             SettingsTool.settingsKey = "{7EB35B62-34AA-4F82-A0EC-283197A8E04E}";
             SettingsTool._settingsVersion = 1;
@@ -2534,13 +2821,13 @@ var Geoma;
                         var x = doc_1.mouseArea.mousePoint.x;
                         var y = doc_1.mouseArea.mousePoint.y;
                         var menu = new Tools.Menu(doc_1, x, y);
-                        var menu_item = menu.addMenuItem("Провести отрезок...");
+                        var menu_item = menu.addMenuItem(Tools.Resources.string("Создать отрезок..."));
                         menu_item.onChecked.bind(this, function () { return doc_1.setLineSegmentState(_this); });
-                        menu_item = menu.addMenuItem("Провести окружность из центра...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Создать окружность из центра..."));
                         menu_item.onChecked.bind(this, function () { return doc_1.setCirclRadiusState(_this); });
-                        menu_item = menu.addMenuItem("Провести окружность на диаметре...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Создать окружность на диаметре..."));
                         menu_item.onChecked.bind(this, function () { return doc_1.setCirclDiameterState(_this); });
-                        menu_item = menu.addMenuItem("Удалить точку");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить точку"));
                         menu_item.onChecked.bind(this, function () { return doc_1.removePoint(_this); });
                         menu.show();
                     }
@@ -3103,37 +3390,39 @@ var Geoma;
                         var y_1 = doc_2.mouseArea.mousePoint.y;
                         var menu = new Tools.Menu(doc_2, x_1, y_1);
                         var exists_other_segments = makeMod(this, function () { return doc_2.lineSegments.length > 1; });
-                        var menu_item = menu.addMenuItem("Обозначить угол...");
+                        var menu_item = menu.addMenuItem(Tools.Resources.string("Обозначить угол..."));
                         menu_item.onChecked.bind(this, function () { return doc_2.setAngleIndicatorState(_this, event); });
                         menu_item.enabled.addModifier(exists_other_segments);
-                        menu_item = menu.addMenuItem("Показать биссектрису угла...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Показать биссектрису угла..."));
                         menu_item.onChecked.bind(this, function () { return doc_2.setBisectorState(_this, event); });
                         menu_item.enabled.addModifier(exists_other_segments);
-                        menu_item = menu.addMenuItem("Задать размер...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Задать размер..."));
                         menu_item.onChecked.bind(this, function () {
-                            var value = _this.document.prompt("\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0440\u0430\u0437\u043C\u0435\u0440 \u0432 \u043F\u0438\u043A\u0441\u0435\u043B\u044F\u0445", Geoma.Utils.toInt(_this.length).toString());
+                            var value = _this.document.prompt(Tools.Resources.string("Введите размер в пикселях"), Geoma.Utils.toInt(_this.length).toString());
                             if (value != null) {
                                 var length_1 = Geoma.Utils.toInt(toInt(value));
                                 if (length_1) {
                                     _this.setLength(length_1);
                                 }
                                 else {
-                                    _this.document.alert("\u0412\u0432\u0435\u0434\u0435\u043D \u043D\u0435\u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0439 \u0440\u0430\u0437\u043C\u0435\u0440 " + value);
+                                    _this.document.alert(Tools.Resources.string("Введен недопустимый размер {0}", value));
                                 }
                             }
                         });
                         menu_item.enabled.addModifier(makeMod(this, function () { return !_this.fixedLength; }));
-                        menu_item = menu.addMenuItem(makeMod(this, function () { return _this.fixedLength ? "\u0418\u0437\u043C\u0435\u043D\u044F\u0435\u043C\u044B\u0439 \u0440\u0430\u0437\u043C\u0435\u0440" : "\u0424\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0440\u0430\u0437\u043C\u0435\u0440"; }));
+                        menu_item = menu.addMenuItem(makeMod(this, function () {
+                            return _this.fixedLength ? Tools.Resources.string("Изменяемый размер") : Tools.Resources.string("Фиксированный размер");
+                        }));
                         menu_item.onChecked.bind(this, this.fixedLength ? this.makeFree : this.makeFixed);
-                        menu_item = menu.addMenuItem("Сделать ||...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Сделать ||..."));
                         menu_item.onChecked.bind(this, function () { return doc_2.setParallelLineState(_this); });
                         menu_item.enabled.addModifier(exists_other_segments);
-                        menu_item = menu.addMenuItem("Сделать ⟂...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Сделать ⟂..."));
                         menu_item.onChecked.bind(this, function () { return doc_2.setPerpendicularLineState(_this); });
                         menu_item.enabled.addModifier(exists_other_segments);
-                        menu_item = menu.addMenuItem("Добавить точку");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Добавить точку"));
                         menu_item.onChecked.bind(this, function () { return doc_2.addPoint(Point.make(x_1, y_1)); });
-                        menu_item = menu.addMenuItem("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u0440\u044F\u043C\u0443\u044E " + this.name);
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить прямую {0}", this.name));
                         menu_item.onChecked.bind(this, function () { return doc_2.removeLineSegment(_this); });
                         menu.show();
                     }
@@ -3270,7 +3559,7 @@ var Geoma;
                         var x = doc.mouseArea.mousePoint.x;
                         var y = doc.mouseArea.mousePoint.y;
                         var menu = new Tools.Menu(doc, x, y);
-                        var menu_item = menu.addMenuItem("Удалить биссектрису");
+                        var menu_item = menu.addMenuItem(Tools.Resources.string("Удалить биссектрису"));
                         menu_item.onChecked.bind(this, function () { return _this._angleIndicator.removeBisector(_this); });
                         menu.show();
                     }
@@ -3538,9 +3827,9 @@ var Geoma;
                         var x_2 = doc_3.mouseArea.mousePoint.x;
                         var y_2 = doc_3.mouseArea.mousePoint.y;
                         var menu = new Tools.Menu(doc_3, x_2, y_2);
-                        var menu_item = menu.addMenuItem("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0442\u043E\u0447\u043A\u0443");
+                        var menu_item = menu.addMenuItem(Tools.Resources.string("Добавить точку"));
                         menu_item.onChecked.bind(this, function () { return doc_3.addPoint(Point.make(x_2, y_2)); });
-                        menu_item = menu.addMenuItem("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043E\u043A\u0440\u0443\u0436\u043D\u043E\u0441\u0442\u044C " + this.name);
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить окружность {0}", this.name));
                         menu_item.onChecked.bind(this, function () { return doc_3.removeCircleLine(_this); });
                         menu.show();
                     }
@@ -3686,7 +3975,7 @@ var Geoma;
                         throw CodeElement.error;
                 }
             };
-            CodeElement.error = new Error("Невозможно восстановить данные");
+            CodeElement.error = new Error(Tools.Resources.string("Невозможно восстановить данные"));
             return CodeElement;
         }());
         Tools.CodeElement = CodeElement;
@@ -4174,8 +4463,8 @@ var Geoma;
                     }
                     if (points.length) {
                         line.updateSamples(context.document.mouseArea.h);
-                        for (var _i = 0, points_1 = points; _i < points_1.length; _i++) {
-                            var point = points_1[_i];
+                        for (var _i = 0, points_2 = points; _i < points_2.length; _i++) {
+                            var point = points_2[_i];
                             point.addSegment(line);
                             line.addPoint(point);
                         }
@@ -4392,20 +4681,20 @@ var Geoma;
                         var x_3 = doc_4.mouseArea.mousePoint.x;
                         var y_3 = doc_4.mouseArea.mousePoint.y;
                         var menu = new Tools.Menu(doc_4, x_3, y_3);
-                        var menu_item = menu.addMenuItem("\u0422\u043E\u0447\u043D\u043E\u0441\u0442\u044C...");
+                        var menu_item = menu.addMenuItem(Tools.Resources.string("Точность..."));
                         menu_item.onChecked.bind(this, function () {
-                            var dx = _this.document.promptNumber("\u041F\u0440\u0438\u0440\u0430\u0449\u0435\u043D\u0438\u0435 \u0430\u0440\u0433\u0443\u043C\u0435\u043D\u0442\u0430 x \u0444\u0443\u043D\u043A\u0446\u0438\u0438 " + _this.code.text, _this.dx);
+                            var dx = _this.document.promptNumber(Tools.Resources.string("Приращение аргумента x функции {0}", _this.code.text), _this.dx);
                             if (dx != undefined && dx != null) {
                                 _this.dx = dx;
                             }
                         });
-                        menu_item = menu.addMenuItem("Масштаб по осям x/y...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Масштаб по осям x/y..."));
                         menu_item.onChecked.bind(this.axes, this.axes.scaleDialog);
-                        menu_item = menu.addMenuItem("\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0444\u0443\u043D\u043A\u0446\u0438\u044E f = " + this.code.text + " ...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Редактировать функцию f = {0} ...", this.code.text));
                         menu_item.onChecked.bind(this, this.showExpressionEditor);
-                        menu_item = menu.addMenuItem("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0442\u043E\u0447\u043A\u0443");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Добавить точку"));
                         menu_item.onChecked.bind(this, function () { return doc_4.addPoint(Point.make(x_3, y_3)); });
-                        menu_item = menu.addMenuItem("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043F\u0440\u044F\u043C\u0443\u044E " + this.name);
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить прямую {0}", this.name));
                         menu_item.onChecked.bind(this, function () { return doc_4.removeParametricLine(_this); });
                         menu.show();
                     }
@@ -5045,7 +5334,7 @@ var Geoma;
                         scale = toInt(scale);
                     }
                 }
-                var new_scale = this.document.promptNumber("\u041C\u0430\u0441\u0448\u0442\u0430\u0431 \u043F\u043E \u043E\u0441\u044F\u043C x/y, %", scale);
+                var new_scale = this.document.promptNumber(Tools.Resources.string("Масштаб по осям x/y, %"), scale);
                 if (new_scale != undefined) {
                     this.kX = 1 / new_scale;
                     this.kY = 1 / new_scale;
@@ -5129,13 +5418,38 @@ var Geoma;
                         play_ground.context2d.textBaseline = style.textBaseline;
                     }
                     var scale_bar_size = 10;
+                    var get_digits = function (normalize_value) {
+                        if (normalize_value.mantiss > 0) {
+                            return 0;
+                        }
+                        else if ((-normalize_value.mantiss) <= 4) {
+                            return -normalize_value.mantiss;
+                        }
+                        else {
+                            return 0;
+                        }
+                    };
+                    var is_exponential = function (normalize_value) {
+                        if (normalize_value.mantiss > 0) {
+                            if (normalize_value.value > 9999) {
+                                return true;
+                            }
+                            else {
+                                return false;
+                            }
+                        }
+                        else {
+                            return (-normalize_value.mantiss) > 4;
+                        }
+                    };
                     var bar_text_margin = 2;
                     {
                         var x_coord = -toInt(this.x / dx);
                         var start_x = this.x + x_coord * dx;
                         x_coord *= grade_x.value;
                         var end_x = play_ground.w + 1;
-                        var digits = Math.abs(grade_x.mantiss);
+                        var digits = get_digits(grade_x);
+                        var exponential = is_exponential(grade_x);
                         var y1 = void 0, y2 = void 0, y3 = void 0;
                         if (this.y >= 0) {
                             if (this.y < (play_ground.h - 2 * scale_bar_size)) {
@@ -5157,7 +5471,7 @@ var Geoma;
                         for (var x = start_x; x <= end_x; x += dx) {
                             play_ground.context2d.moveTo(x, y1);
                             play_ground.context2d.lineTo(x, y2);
-                            play_ground.context2d.fillText(x_coord.toFixed(digits), x, y3);
+                            play_ground.context2d.fillText(exponential ? x_coord.toExponential(digits) : x_coord.toFixed(digits), x, y3);
                             x_coord += grade_x.value;
                         }
                     }
@@ -5166,7 +5480,8 @@ var Geoma;
                         var start_y = this.y - y_coord * dy;
                         y_coord *= grade_y.value;
                         var end_y = play_ground.h + 1;
-                        var digits = Math.abs(grade_y.mantiss);
+                        var digits = get_digits(grade_y);
+                        var exponential = is_exponential(grade_y);
                         var x1 = void 0, x2 = void 0, x3 = void 0;
                         if (this.x >= 0) {
                             if (this.x < (play_ground.w - 2 * scale_bar_size)) {
@@ -5187,7 +5502,7 @@ var Geoma;
                         }
                         for (var y = start_y; y <= end_y; y += dy) {
                             if (Math.abs(y - this.y) > dy / 2) {
-                                var y_text = y_coord.toFixed(digits);
+                                var y_text = exponential ? y_coord.toExponential(digits) : y_coord.toFixed(digits);
                                 play_ground.context2d.moveTo(x1, y);
                                 play_ground.context2d.lineTo(x2, y);
                                 if (isNaN(x3)) {
@@ -5278,25 +5593,25 @@ var Geoma;
                         var x_5 = doc_5.mouseArea.mousePoint.x;
                         var y_5 = doc_5.mouseArea.mousePoint.y;
                         var menu = new Tools.Menu(doc_5, x_5, y_5);
-                        var menu_item = menu.addMenuItem("Масштаб по осям x/y...");
+                        var menu_item = menu.addMenuItem(Tools.Resources.string("Масштаб по осям x/y..."));
                         menu_item.onChecked.bind(this, this.scaleDialog);
-                        menu_item = menu.addMenuItem("Создать функцию...");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Создать функцию..."));
                         menu_item.onChecked.bind(this, function () { return _this.document.addParametricLine(Point.make(x_5, y_5), _this); });
                         var lines = this.document.getParametricLines(this);
                         if (lines.length == 1) {
                             var line = lines[0];
-                            menu_item = menu.addMenuItem("\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0444\u0443\u043D\u043A\u0446\u0438\u044E f = " + line.code.text + " ...");
+                            menu_item = menu.addMenuItem(Tools.Resources.string("Редактировать функцию f = {0} ...", line.code.text));
                             menu_item.onChecked.bind(line, line.showExpressionEditor);
                         }
                         else if (lines.length > 1) {
-                            var group = menu.addMenuGroup("Редактировать функцию");
+                            var group = menu.addMenuGroup(Tools.Resources.string("Редактировать функцию"));
                             for (var _i = 0, lines_1 = lines; _i < lines_1.length; _i++) {
                                 var line = lines_1[_i];
                                 menu_item = group.addMenuItem("f = " + line.code.text + " ...");
                                 menu_item.onChecked.bind(line, line.showExpressionEditor);
                             }
                         }
-                        menu_item = menu.addMenuItem("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u043A\u043E\u043E\u0440\u0434\u0438\u043D\u0430\u0442\u043D\u0443\u044E \u043F\u043B\u043E\u0441\u043A\u043E\u0441\u0442\u044C");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить координатную плоскость"));
                         menu_item.onChecked.bind(this, function () { return doc_5.removeAxes(_this); });
                         menu.show();
                     }
@@ -5390,7 +5705,7 @@ var Geoma;
                         item.onChecked.bind(this, function () { return _this._owner._codeElement = new Tools.CodeArgumentX(); });
                         item = menu.addMenuItem("123");
                         item.onChecked.bind(this, function () {
-                            var number = _this.document.promptNumber("\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0447\u0438\u0441\u043B\u043E");
+                            var number = _this.document.promptNumber("");
                             if (number) {
                                 _this._owner._codeElement = new Tools.CodeLiteral(number);
                             }
@@ -5785,7 +6100,7 @@ var Geoma;
                 _this._tools = new Geoma.Sprite.Container();
                 _this._data = new DocumentData();
                 _this._groupNo = 0;
-                _this.push(new Tools.Background(_this));
+                _this._background = new Tools.Background(_this);
                 _this._data.initialize(_this);
                 _this.push(_this._tools);
                 var tool_radius = 20;
@@ -5856,6 +6171,14 @@ var Geoma;
             });
             Document.prototype.alert = function (message) {
                 window.alert(message);
+            };
+            Document.prototype.addToolTip = function (message) {
+                var _this = this;
+                if (this._tooltip) {
+                    this._tooltip.dispose();
+                    delete this._tooltip;
+                }
+                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, message);
             };
             Document.prototype.mouseClick = function (event) {
                 var _a, _b;
@@ -5948,7 +6271,7 @@ var Geoma;
                 this._contextMenu = menu;
             };
             Document.prototype.closeMenu = function (menu) {
-                if (this._contextMenu) {
+                if (this._contextMenu == menu) {
                     this._contextMenu.dispose();
                     delete this._contextMenu;
                 }
@@ -6023,6 +6346,14 @@ var Geoma;
                     }
                 }
                 return ret;
+            };
+            Document.prototype.newDocument = function () {
+                this._data.dispose(this);
+                this.remove(this._tools);
+                this._data = new DocumentData();
+                this._data.initialize(this);
+                this.push(this._tools);
+                this.name = "";
             };
             Document.prototype.removePoint = function (point) {
                 if (!point.disposed) {
@@ -6103,38 +6434,33 @@ var Geoma;
                 }
             };
             Document.prototype.setLineSegmentState = function (point) {
-                var _this = this;
-                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, "Выберите вторую точку");
+                this.addToolTip(Tools.Resources.string("Выберите вторую точку"));
                 this._state = { action: "line segment", activeItem: point, pitchPoint: point };
             };
             Document.prototype.setAngleIndicatorState = function (segment, pitch_point) {
                 var _this = this;
-                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, "Выберите вторую прямую");
+                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, Tools.Resources.string("Выберите вторую прямую"));
                 this._state = { action: "angle indicator", activeItem: segment, pitchPoint: pitch_point };
             };
             Document.prototype.setBisectorState = function (segment, pitch_point) {
                 var _this = this;
-                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, "Выберите вторую прямую");
+                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, Tools.Resources.string("Выберите вторую прямую"));
                 this._state = { action: "bisector", activeItem: segment, pitchPoint: pitch_point };
             };
             Document.prototype.setParallelLineState = function (segment) {
-                var _this = this;
-                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, "Выберите || прямую");
+                this.addToolTip(Tools.Resources.string("Выберите || прямую"));
                 this._state = { action: "parallel", activeItem: segment };
             };
             Document.prototype.setPerpendicularLineState = function (segment) {
-                var _this = this;
-                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, "Выберите ⟂ прямую");
+                this.addToolTip(Tools.Resources.string("Выберите ⟂ прямую"));
                 this._state = { action: "perpendicular", activeItem: segment };
             };
             Document.prototype.setCirclRadiusState = function (point) {
-                var _this = this;
-                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, "Выберите вторую точку");
+                this.addToolTip(Tools.Resources.string("Выберите вторую точку"));
                 this._state = { action: "circle radius", activeItem: point, pitchPoint: point };
             };
             Document.prototype.setCirclDiameterState = function (point) {
-                var _this = this;
-                this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, "Выберите вторую точку");
+                this.addToolTip(Tools.Resources.string("Выберите вторую точку"));
                 this._state = { action: "circle diameter", activeItem: point, pitchPoint: point };
             };
             Document.prototype.addParametricLine = function (point, axes) {
@@ -6255,7 +6581,12 @@ var Geoma;
                     var line = this._data.parametric.item(i);
                     ret.push("pl" + info_separator + join_data(line.serialize(context)));
                 }
-                return Geoma.Utils.SerializeHelper.joinData(ret, Document._chunkSeparator);
+                if (ret.length > 1) {
+                    return Geoma.Utils.SerializeHelper.joinData(ret, Document._chunkSeparator);
+                }
+                else {
+                    return "";
+                }
             };
             Document.prototype.open = function (data) {
                 var groups = {};
@@ -6271,6 +6602,9 @@ var Geoma;
                         data = data.substr(end_version_index + 1);
                     }
                 }
+                else if (data.length == 0) {
+                    return;
+                }
                 var context = {
                     document: this,
                     data: new DocumentData(),
@@ -6279,7 +6613,7 @@ var Geoma;
                 this._data = context.data;
                 try {
                     var chunks = Geoma.Utils.SerializeHelper.splitData(data, Document._chunkSeparator);
-                    var error = new Error("Невозможно восстановить данные");
+                    var error = new Error(Tools.Resources.string("Невозможно восстановить данные"));
                     for (var _i = 0, chunks_1 = chunks; _i < chunks_1.length; _i++) {
                         var chunk = chunks_1[_i];
                         var info = Geoma.Utils.SerializeHelper.splitData(chunk, info_separator);
@@ -6406,14 +6740,14 @@ var Geoma;
                 return window.prompt(message, default_value);
             };
             Document.prototype.promptNumber = function (message, default_value) {
-                var number_text = this.prompt(message + "\r\n\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0447\u0438\u0441\u043B\u043E", default_value === null || default_value === void 0 ? void 0 : default_value.toString());
+                var number_text = this.prompt(Tools.Resources.string("{0}\r\nВведите число", message), default_value === null || default_value === void 0 ? void 0 : default_value.toString());
                 if (number_text) {
                     var number = parseFloat(number_text);
                     if (number_text == "" + number) {
                         return number;
                     }
                     else {
-                        this.alert("\u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 '" + number_text + "' \u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0447\u0438\u0441\u043B\u043E\u043C");
+                        this.alert(Tools.Resources.string("Значение '{0}' не является числом", number_text));
                     }
                 }
                 return default_value == undefined ? null : default_value;
@@ -6436,6 +6770,9 @@ var Geoma;
                 if (this._onBeforeDraw) {
                     this._onBeforeDraw.emitEvent(new CustomEvent("BeforeDrawEvent"));
                 }
+                this._background.draw(play_ground);
+                var current_transform = play_ground.context2d.getTransform();
+                play_ground.context2d.setTransform(current_transform.a * play_ground.ratio, current_transform.b, current_transform.c, current_transform.d * play_ground.ratio, current_transform.e, current_transform.f);
                 _super.prototype.innerDraw.call(this, play_ground);
                 if (this._contextMenu) {
                     this._contextMenu.draw(play_ground);
@@ -6452,6 +6789,7 @@ var Geoma;
                     delete this._tapTool;
                     Tools.PointTool.showMenu(this);
                 }
+                play_ground.context2d.setTransform(current_transform);
             };
             Document.prototype.execLineSegmentState = function (end_point) {
                 assert(this._state && this._state.activeItem instanceof Tools.ActivePoint);
@@ -6463,14 +6801,14 @@ var Geoma;
                 }
                 var can_add_line = true;
                 if (start_point == end_point) {
-                    this.alert("Нельзя провести линию к той же точке!");
+                    this.alert(Tools.Resources.string("Нельзя провести линию к той же точке!"));
                     can_add_line = false;
                 }
                 else {
                     for (var i = 0; i < this._data.lines.length; i++) {
                         var line = this._data.lines.item(i);
                         if (line.belongs(start_point) && line.belongs(end_point)) {
-                            this.alert("\u041B\u0438\u043D\u0438\u044F " + line.name + " \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430!");
+                            this.alert(Tools.Resources.string("Линия {0} уже проведена!", line.name));
                             can_add_line = false;
                             break;
                         }
@@ -6494,7 +6832,7 @@ var Geoma;
                 }
                 if (common_point) {
                     if (segment == other_segment) {
-                        this.alert("\u0423\u0433\u043E\u043B \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043E\u0431\u043E\u0437\u043D\u0430\u0447\u0435\u043D \u0442\u043E\u043B\u044C\u043A\u043E \u043C\u0435\u0436\u0434\u0443 \u0440\u0430\u0437\u043B\u0438\u0447\u043D\u044B\u043C\u0438 \u043F\u0440\u044F\u043C\u044B\u043C\u0438, \u0438\u043C\u0435\u044E\u0449\u0438\u043C\u0438 \u043E\u0434\u043D\u0443 \u043E\u0431\u0449\u0443\u044E \u0442\u043E\u0447\u043A\u0443.");
+                        this.alert(Tools.Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
                     }
                     else {
                         for (var i = 0; i < this._data.angles.length; i++) {
@@ -6506,7 +6844,7 @@ var Geoma;
                                     return angle;
                                 }
                                 else {
-                                    this.alert("\u0423\u0433\u043E\u043B \u043C\u0435\u0436\u0434\u0443 \u043F\u0440\u044F\u043C\u044B\u043C\u0438 " + segment.name + " \u0438 " + other_segment.name + " \u0443\u0436\u0435 \u043E\u0431\u043E\u0437\u043D\u0430\u0447\u0435\u043D.");
+                                    this.alert(Tools.Resources.string("Угол между прямыми {0} и {1} уже обозначен.", segment.name, other_segment.name));
                                     return null;
                                 }
                             }
@@ -6544,7 +6882,7 @@ var Geoma;
                     }
                 }
                 else {
-                    this.alert("\u041E\u0442\u0440\u0435\u0437\u043A\u0438 " + segment.name + " \u0438 " + other_segment.name + " \u043D\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0430\u0442 \u043E\u0431\u0449\u0438\u0445 \u0442\u043E\u0447\u0435\u043A");
+                    this.alert(Tools.Resources.string("Отрезки {0} и {1} не содержат общих точек", segment.name, other_segment.name));
                 }
                 return null;
             };
@@ -6555,7 +6893,7 @@ var Geoma;
                     var angle_1 = this._data.angles.item(i);
                     if (angle_1.isRelated(segment) && angle_1.isRelated(other_segment)) {
                         if (angle_1.hasBisector) {
-                            this.alert("\u0411\u0438\u0441\u0441\u0435\u043A\u0442\u0440\u0438\u0441\u0430 \u0443\u0433\u043B\u0430 " + angle_1.name + " \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430.");
+                            this.alert(Tools.Resources.string("Биссектриса угла {0} уже проведена.", angle_1.name));
                         }
                         else {
                             angle_1.addBisector();
@@ -6573,7 +6911,7 @@ var Geoma;
                 assert(this._state && this._state.activeItem instanceof Tools.ActiveLineSegment);
                 var segment = this._state.activeItem;
                 if (segment.belongs(other_segment.start) || segment.belongs(other_segment.end)) {
-                    this.alert("\u041E\u0442\u0440\u0435\u0437\u043A\u0438 " + segment.name + " \u0438 " + other_segment.name + " \u0438\u043C\u0435\u044E\u0442 \u043E\u0431\u0449\u0443\u044E \u0442\u043E\u0447\u043A\u0443 \u0438 \u043D\u0435 \u043C\u043E\u0433\u0443\u0442 \u0441\u0442\u0430\u0442\u044C ||.");
+                    this.alert(Tools.Resources.string("Отрезки {0} и {1} имеют общую точку и не могут стать ||.", segment.name, other_segment.name));
                 }
                 else {
                     segment.setParallelTo(other_segment);
@@ -6583,7 +6921,7 @@ var Geoma;
                 assert(this._state && this._state.activeItem instanceof Tools.ActiveLineSegment);
                 var segment = this._state.activeItem;
                 if (!segment.belongs(other_segment.start) && !segment.belongs(other_segment.end)) {
-                    this.alert("\u041E\u0442\u0440\u0435\u0437\u043A\u0438 " + segment.name + " \u0438 " + other_segment.name + " \u043D\u0435 \u0438\u043C\u0435\u044E\u0442 \u043E\u0431\u0449\u0435\u0439 \u0442\u043E\u0447\u043A\u0438 \u0438 \u043D\u0435 \u043C\u043E\u0433\u0443\u0442 \u0441\u0442\u0430\u0442\u044C \u27C2.");
+                    this.alert(Tools.Resources.string("Отрезки {0} и {1} не имеют общей точки и не могут стать ⟂.", segment.name, other_segment.name));
                 }
                 else {
                     segment.setPerpendicularTo(other_segment);
@@ -6599,14 +6937,14 @@ var Geoma;
                 }
                 var can_add_circle = true;
                 if (center_point == pivot_point) {
-                    this.alert("Нельзя провести окружность к той же точке!");
+                    this.alert(Tools.Resources.string("Нельзя провести окружность к той же точке!"));
                     can_add_circle = false;
                 }
                 else {
                     for (var i = 0; i < this._data.circles.length; i++) {
                         var circle = this._data.circles.item(i);
                         if (circle.kind == kind && circle.point1 == center_point && circle.point2 == pivot_point) {
-                            this.alert("\u041E\u043A\u0440\u0443\u0436\u043D\u043E\u0441\u0442\u044C " + circle.name + " \u0443\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0434\u0435\u043D\u0430!");
+                            this.alert(Tools.Resources.string("Окружность {0} уже проведена!", circle.name));
                             can_add_circle = false;
                             break;
                         }
@@ -7021,15 +7359,15 @@ var Geoma;
                     var x = doc.mouseArea.mousePoint.x;
                     var y = doc.mouseArea.mousePoint.y;
                     var menu = new Tools.Menu(doc, x, y);
-                    var menu_item = menu.addMenuItem("\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0431\u0438\u0441\u0441\u0435\u043A\u0442\u0440\u0438\u0441\u044B \u0443\u0433\u043B\u043E\u0432");
+                    var menu_item = menu.addMenuItem(Tools.Resources.string("Показать биссектрисы углов"));
                     menu_item.onChecked.bind(this, this.addBisector);
                     menu_item.enabled.addModifier(makeMod(this, function () { return !_this._bisector; }));
                     var set_name_1 = function (index) { return _this._angleName = AngleIndicator._anglesNames.charAt(index); };
                     if (this._angleName) {
-                        menu_item = menu.addMenuItem("\u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E (" + this.realName + ")");
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Имя по умолчанию ({0})", this.realName));
                         menu_item.onChecked.bind(this, function () { return _this._angleName = undefined; });
                     }
-                    var custom_name = menu.addMenuGroup("Настраиваемое имя");
+                    var custom_name = menu.addMenuGroup(Tools.Resources.string("Настраиваемое имя"));
                     var stripe = void 0;
                     var _loop_4 = function (i) {
                         if (i % 6 == 0) {
@@ -7043,7 +7381,7 @@ var Geoma;
                     for (var i = 0; i < AngleIndicator._anglesNames.length; i++) {
                         _loop_4(i);
                     }
-                    menu_item = menu.addMenuItem("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0438\u043D\u0434\u0438\u043A\u0430\u0442\u043E\u0440 \u0443\u0433\u043B\u0430 " + this.name);
+                    menu_item = menu.addMenuItem(Tools.Resources.string("Удалить индикатор угла {0}", this.name));
                     menu_item.onChecked.bind(this, function () { return doc.removeAngle(_this); });
                     menu.show();
                 }

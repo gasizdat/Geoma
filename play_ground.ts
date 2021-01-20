@@ -17,6 +17,34 @@ module Geoma
             this._canvas.onmousemove = this.onMouseMove.connect();
             this._canvas.onmousedown = this.onMouseDown.connect();
             this._canvas.onmouseup = this.onMouseUp.connect();
+            this._canvas.ontouchmove = (event: TouchEvent) =>
+            {
+                const document = this._canvas.ownerDocument;
+                for (let i = 0; i < event.targetTouches.length; i++)
+                {
+                    const touch = event.touches[i];
+                    const mouse_event = document.createEvent('MouseEvents');
+                    mouse_event.initMouseEvent(
+                        "mousemove",
+                        true,
+                        true,
+                        event.view ?? window,
+                        event.detail,
+                        touch.screenX,
+                        touch.screenY,
+                        touch.clientX,
+                        touch.clientY,
+                        event.ctrlKey,
+                        event.altKey,
+                        event.shiftKey,
+                        event.metaKey,
+                        0,//Main button
+                        touch.target
+                    );
+                    this.onMouseMove.emitEvent(mouse_event);
+                }
+            };
+
             this.invalidate();
             this.addW(() => this._canvas.width);
             this.addH(() => this._canvas.height);
@@ -45,6 +73,10 @@ module Geoma
         {
             return this._context2d;
         }
+        public get ratio(): number
+        {
+            return window.devicePixelRatio ?? 1;
+        }
 
         public readonly onMouseMove = new MulticastEvent<MouseEvent>();
         public readonly onMouseDown = new MulticastEvent<MouseEvent>();
@@ -52,14 +84,14 @@ module Geoma
         public readonly onMouseClick = new MulticastEvent<MouseEvent>();
         public static drawingSprites: number = 0;
 
-
         public invalidate(): void
         {
             const parent = this._canvas.parentElement;
             if (parent)
             {
-                this._canvas.width = parent.clientWidth;
-                this._canvas.height = parent.clientHeight;
+                const ratio = this.ratio;
+                this._canvas.width = parent.clientWidth * ratio;
+                this._canvas.height = parent.clientHeight * ratio;
             }
         }
         public getPosition(el: HTMLElement): IPoint

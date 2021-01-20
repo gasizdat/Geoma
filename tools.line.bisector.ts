@@ -4,6 +4,7 @@
 /// <reference path="interfaces.ts" />
 /// <reference path="play_ground.ts" />
 /// <reference path="tools.document.ts" />
+/// <reference path="tools.resources.ts" />
 /// <reference path="tools.core.ts" />
 /// <reference path="tools.menu.ts" />
 /// <reference path="tools.tools.ts" />
@@ -105,7 +106,7 @@ module Geoma.Tools
                     const y = doc.mouseArea.mousePoint.y;
                     const menu = new Menu(doc, x, y);
 
-                    const menu_item = menu.addMenuItem("Удалить биссектрису");
+                    const menu_item = menu.addMenuItem(Resources.string("Удалить биссектрису"));
                     menu_item.onChecked.bind(this, () => this._angleIndicator.removeBisector(this));
                     menu.show();
                 }

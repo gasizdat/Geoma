@@ -564,15 +564,17 @@ module Geoma.Sprite
     abstract class PolySprite extends Sprite
     {
         /** optional params: x, y, line_width, brush*/
-        constructor(x?: binding<number>, y?: binding<number>, line_width?: binding<number>, brush?: binding<Brush>)
+        constructor(x?: binding<number>, y?: binding<number>, line_width?: binding<number>, brush?: binding<Brush>, scale?: binding<number>)
         {
             super(x, y);
             this.lineWidth = makeProp<number>(line_width, 1);
             this.brush = makeProp<Brush>(brush, DefaultBrush);
+            this.scale = makeProp<number>(scale, 1);
         }
 
         public readonly lineWidth: property<number>;
         public readonly brush: property<Brush>;
+        public readonly scale: property<number>;
 
         public addPolygon(polygon: IPolygon): void
         {
@@ -591,10 +593,10 @@ module Geoma.Sprite
             play_ground.context2d.beginPath();
             const current_transform = play_ground.context2d.getTransform();
             play_ground.context2d.setTransform(
-                current_transform.a,
+                current_transform.a * this.scale.value,
                 current_transform.b,
                 current_transform.c,
-                current_transform.d,
+                current_transform.d * this.scale.value,
                 current_transform.e + this.x,
                 current_transform.f + this.y);
             const ret = play_ground.context2d.isPointInPath(this._path, point.x, point.y);
@@ -610,12 +612,12 @@ module Geoma.Sprite
             const current_transform = play_ground.context2d.getTransform();
             const dw = this.deltaLineWidth;
             play_ground.context2d.setTransform(
-                current_transform.a,
+                current_transform.a * this.scale.value,
                 current_transform.b,
                 current_transform.c,
-                current_transform.d,
-                toInt(current_transform.e + this.x + dw),
-                toInt(current_transform.f + this.y + dw)
+                current_transform.d * this.scale.value,
+                toInt(current_transform.e + (this.x + dw) * play_ground.ratio),
+                toInt(current_transform.f + (this.y + dw) * play_ground.ratio)
             );
             this.onDraw(play_ground, this._path);
             play_ground.context2d.setTransform(current_transform);

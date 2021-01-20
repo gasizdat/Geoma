@@ -123,7 +123,7 @@ module Geoma.Tools
                     item = menu.addMenuItem(`123`);
                     item.onChecked.bind(this, () =>
                     {
-                        const number = this.document.promptNumber(`Введите число`);
+                        const number = this.document.promptNumber(``);
                         if (number)
                         {
                             this._owner._codeElement = new CodeLiteral(number);

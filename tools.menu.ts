@@ -95,6 +95,10 @@ module Geoma.Tools
         {
             return (this.item.last as Sprite.Text).text.value;
         }
+        public get menu(): Menu
+        {
+            return this._menu;
+        }
 
         protected mouseClick(event: MouseEvent): void
         {
@@ -138,10 +142,38 @@ module Geoma.Tools
                 () => tooltip.style.value,
                 "►"
             );
-            expander.addX(() => this.first.right - expander.w - 5);
+            expander.addX(() => this.first.right - expander.w - MenuGroup._innerMargin);
             this.item.push(expander);
-            this._subMenu = new Menu(this.document, makeMod(this, () => this.right), makeMod(this, () => this.top - this._subMenu.padding));
-            this._subMenu.addVisible(makeMod(this, () => this.selected));
+            this._subMenuVisible = false;
+            this._subMenuAboutToHide = 0;
+            this._subMenuAboutToShow = 0;
+            this._subMenu = new Menu(this.document, makeMod(this, () => this.right), makeMod(this, () => this.top - this._subMenu.padding), menu.rootMenu, this);
+            this._subMenu.addVisible(makeMod(this, () => this._subMenuVisible));
+            this._beforeDrawListener = this.document.onBeforeDraw.bind(
+                this,
+                () =>
+                {
+                    if (this._subMenuVisible)
+                    {
+                        if (this._subMenuAboutToHide && this._subMenuAboutToHide <= Document.getTicks())
+                        {
+                            this._subMenuAboutToHide = 0;
+                            this._subMenuVisible = this.selected;
+                        }
+                    }
+                    else if (this._subMenuAboutToShow && this._subMenuAboutToShow <= Document.getTicks())
+                    {
+                        this._subMenuAboutToShow = 0;
+                        this._subMenuVisible = this.selected;
+                    }
+                }
+            );
+        }
+
+        public get clientW(): number
+        {
+            const text = this.item.item(this.item.length - 2);
+            return text.w + this.last.w + MenuGroup._innerMargin + this.menu.padding * 2;
         }
 
         public addMenuItem(text: binding<string>): MenuItem
@@ -161,6 +193,7 @@ module Geoma.Tools
             if (!this.disposed)
             {
                 this._subMenu.dispose();
+                this._beforeDrawListener.dispose();
                 super.dispose();
             }
         }
@@ -173,7 +206,11 @@ module Geoma.Tools
         protected mouseClick(event: MouseEvent): void
         {
             this.mouseMove(event);
-            super.mouseClick(event);
+            if (this.visible && this.enabled.value && this.mouseHit(event))
+            {
+                event.cancelBubble = true;
+                this.enabled.value = false;                
+            }
         }
         protected mouseMove(event: MouseEvent): void
         {
@@ -181,10 +218,40 @@ module Geoma.Tools
             if (this.enabled.value)
             {
                 this.selected = this.selected || (this._subMenu.visible && this._subMenu.mouseHit(event));
+                if (this._subMenu.visible)
+                {
+                    if (!this.selected)
+                    {
+                        this._subMenuAboutToShow = 0;
+                        if (!this._subMenuAboutToHide)
+                        {
+                            this._subMenuAboutToHide = Document.getTicks() + MenuGroup._subMenuVisibilityChangeTimeOut;
+                        }
+                    }
+                    else
+                    {
+                        this._subMenuAboutToHide = 0;
+                    }
+                }
+                else if (this.selected)
+                {
+                    this._subMenuAboutToHide = 0;
+                    if (!this._subMenuAboutToShow)
+                    {
+                        this._subMenuAboutToShow = Document.getTicks() + MenuGroup._subMenuVisibilityChangeTimeOut;
+                    }
+                }
             }
         }
 
         private _subMenu: Menu;
+        private _subMenuVisible: boolean;
+        private _subMenuAboutToHide: number;
+        private _subMenuAboutToShow: number;
+        private _beforeDrawListener: IEventListener<BeforeDrawEvent>;
+
+        private static _innerMargin: number = 5;
+        private static _subMenuVisibilityChangeTimeOut: number = 300; //milliseconds
     }
 
     export class MenuStrip extends MenuElementBase<Sprite.Container>
@@ -223,9 +290,11 @@ module Geoma.Tools
 
     export class Menu extends MenuElementBase<Container<MenuElementBase<Sprite.Container>>> implements IMenuGroup
     {
-        constructor(document: Document, x: binding<number>, y: binding<number>)
+        constructor(document: Document, x: binding<number>, y: binding<number>, root_menu?: Menu, parent_group?: MenuGroup)
         {
             super(document, new Container<MenuItem>());
+            this._rootMenu = root_menu;
+            this._parentGroup = parent_group;
             this.item.push(new Sprite.Rectangle(
                 x,
                 y,
@@ -258,6 +327,10 @@ module Geoma.Tools
             this._clientWidth = makeProp(makeMod(this, this.maxClientWidth), 0);
         }
 
+        public get rootMenu(): Menu
+        {
+            return this._rootMenu ?? this;
+        }
         public get clientW(): number
         {
             assert(false, "Logical error");
@@ -309,14 +382,14 @@ module Geoma.Tools
         }
         public close(): void
         {
-            this.document.closeMenu(this);
+            this.document.closeMenu(this.rootMenu);
         }
 
         protected mouseClick(event: MouseEvent): void
         {
             if (this.visible)
             {
-                if (this.mouseHit(event))
+                if (this.mouseHit(event) || this._parentGroup?.mouseHit(event))
                 {
                     event.cancelBubble = true;
                 }
@@ -343,6 +416,13 @@ module Geoma.Tools
         {
             if (this.visible && this.mouseHit(event))
             {
+                if (this._parentGroup)
+                {
+                    if (!this._parentGroup.selected)
+                    {
+                        this._parentGroup.selected = true;
+                    }
+                }
                 event.cancelBubble = true;
             }
             super.mouseMove(event);
@@ -378,5 +458,7 @@ module Geoma.Tools
         private _dx: number = 0;
         private _dy: number = 0;
         private _clientWidth: property<number>;
+        private _rootMenu?: Menu;
+        private _parentGroup?: MenuGroup;
     }
 }

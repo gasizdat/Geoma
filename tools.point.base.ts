@@ -44,8 +44,8 @@ module Geoma.Tools
             const line_brush_prop: property<Brush> = makeProp(line_brush, "BlacK");
             const select_line_brush_prop: property<Brush> = makeProp(select_line_brush, "Black");
             this._line = new Sprite.Polyline(
-                x - radius,
-                y - radius,
+                x - radius - line_width / 2,
+                y - radius - line_width / 2,
                 line_width,
                 makeMod(this, () => this.selected ? select_line_brush_prop.value : line_brush_prop.value)
             );
@@ -54,6 +54,10 @@ module Geoma.Tools
             this.item.push(this._line);
         }
 
+        public get lineBrush(): Brush
+        {
+            return this._line.brush.value;
+        }
         public get x(): number
         {
             return this._line.middleX;
@@ -64,20 +68,19 @@ module Geoma.Tools
         }
         public get right(): number
         {
-            return this.item.last!.right;
+            return this._line.x + this.item.w;
         }
         public get bottom(): number
         {
-            return this._line.bottom;
+            return this._line.y + this.item.h;
         }
 
-        public setName(value: string, brush: binding<Brush>, style: binding<CanvasTextDrawingStyles>): void
+        public setName(value: binding<string>, brush: binding<Brush>, style: binding<CanvasTextDrawingStyles>): void
         {
             assert(!this.name);
-            assert(value);
-            const name_text = new Sprite.Text(this.right + 5, this.y, 0, 0, brush, style, value);
+            const name_text = new Sprite.Text(this._line.right + 5, this.y, 0, 0, brush, style, value);
             this.item.push(name_text);
-            this.item.name = value;
+            this.item.name = name_text.text.value;
         }
         public serialize(context: SerializationContext): Array<string>
         {

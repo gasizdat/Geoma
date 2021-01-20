@@ -292,7 +292,7 @@ module Geoma.Utils
                 default:
                     assert(false);
             }
-            
+
             if (ModifiablePropertyCalcRevision != undefined)
             {
                 this._calcRevision = InitiaizeRevision;
@@ -587,7 +587,7 @@ module Geoma.Utils
         }
         else
         {
-            return ~~value;
+            return Math.trunc(value);
         }
     }
 
@@ -617,5 +617,11 @@ module Geoma.Utils
     export function makeEvaluator<TThis>(context: TThis, code: string): Function
     {
         return evaluate<TThis, Function>(context, `(function() { "use strict"; return ${code}; }).bind(this)`);
+    }
+
+    export function formatString(format: string, ...args: string[]): string
+    {
+        //Conception: https://stackoverflow.com/a/4673436
+        return format.replace(/{(\d+)}/g, (match, number): string => args[number] != undefined ? args[number] : match);
     }
 }

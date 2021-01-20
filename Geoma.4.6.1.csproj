@@ -107,6 +107,7 @@
     <TypeScriptCompile Include="tools.menu.ts" />
     <TypeScriptCompile Include="tools.backgroud.ts" />
     <TypeScriptCompile Include="tools.formula.editor.ts" />
+    <TypeScriptCompile Include="tools.resources.ts" />
     <TypeScriptCompile Include="tools.tools.ts" />
     <TypeScriptCompile Include="tools.point.base.ts" />
     <TypeScriptCompile Include="tools.core.ts" />

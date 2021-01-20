@@ -7,7 +7,8 @@
 /// <reference path="tools.menu.ts" />
 /// <reference path="tools.tools.ts" />
 /// <reference path="tools.styles.ts" />
-/// <reference path="tools.axes.lines.ts"/>
+/// <reference path="tools.resources.ts" />
+/// <reference path="tools.axes.lines.ts" />
 /// <reference path="tools.point.active.ts" />
 /// <reference path="tools.point.common.ts" />
 /// <reference path="tools.line.segment.ts" />
@@ -107,8 +108,8 @@ module Geoma.Tools
             this._tools = new Sprite.Container();
             this._data = new DocumentData();
             this._groupNo = 0;
+            this._background = new Background(this);
 
-            this.push(new Background(this));
             this._data.initialize(this);
             this.push(this._tools);
 
@@ -175,6 +176,15 @@ module Geoma.Tools
         public alert(message: string): void
         {
             window.alert(message);
+        }
+        public addToolTip(message: binding<string>): void
+        {
+            if (this._tooltip)
+            {
+                this._tooltip.dispose();
+                delete this._tooltip;
+            }
+            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, message);
         }
         public mouseClick(event: MouseEvent): void
         {
@@ -286,7 +296,7 @@ module Geoma.Tools
         }
         public closeMenu(menu: Menu): void
         {
-            if (this._contextMenu)
+            if (this._contextMenu == menu)
             {
                 this._contextMenu.dispose();
                 delete this._contextMenu;
@@ -380,6 +390,15 @@ module Geoma.Tools
                 }
             }
             return ret;
+        }
+        public newDocument(): void
+        {
+            this._data.dispose(this);
+            this.remove(this._tools);
+            this._data = new DocumentData();
+            this._data.initialize(this);
+            this.push(this._tools);
+            this.name = "";
         }
         public removePoint(point: ActivePoint): void
         {
@@ -486,37 +505,37 @@ module Geoma.Tools
         }
         public setLineSegmentState(point: ActivePoint): void
         {
-            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, "Выберите вторую точку");
+            this.addToolTip(Resources.string("Выберите вторую точку"));
             this._state = { action: "line segment", activeItem: point, pitchPoint: point };
         }
         public setAngleIndicatorState(segment: ActiveLineSegment, pitch_point: IPoint): void
         {
-            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, "Выберите вторую прямую");
+            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, Resources.string("Выберите вторую прямую"));
             this._state = { action: "angle indicator", activeItem: segment, pitchPoint: pitch_point };
         }
         public setBisectorState(segment: ActiveLineSegment, pitch_point: IPoint): void
         {
-            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, "Выберите вторую прямую");
+            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, Resources.string("Выберите вторую прямую"));
             this._state = { action: "bisector", activeItem: segment, pitchPoint: pitch_point };
         }
         public setParallelLineState(segment: ActiveLineSegment): void
         {
-            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, "Выберите || прямую");
+            this.addToolTip(Resources.string("Выберите || прямую"));
             this._state = { action: "parallel", activeItem: segment };
         }
         public setPerpendicularLineState(segment: ActiveLineSegment): void
         {
-            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, "Выберите ⟂ прямую");
+            this.addToolTip(Resources.string("Выберите ⟂ прямую"));
             this._state = { action: "perpendicular", activeItem: segment };
         }
         public setCirclRadiusState(point: ActivePoint): void
         {
-            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, "Выберите вторую точку");
+            this.addToolTip(Resources.string("Выберите вторую точку"));
             this._state = { action: "circle radius", activeItem: point, pitchPoint: point };
         }
         public setCirclDiameterState(point: ActivePoint): void
         {
-            this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, "Выберите вторую точку");
+            this.addToolTip(Resources.string("Выберите вторую точку"));
             this._state = { action: "circle diameter", activeItem: point, pitchPoint: point };
         }
         public addParametricLine(point: IPoint, axes?: AxesLines): void
@@ -680,7 +699,14 @@ module Geoma.Tools
                 const line = this._data.parametric.item(i);
                 ret.push(`pl${info_separator}${join_data(line.serialize(context))}`);
             }
-            return Utils.SerializeHelper.joinData(ret, Document._chunkSeparator);
+            if (ret.length > 1)
+            {
+                return Utils.SerializeHelper.joinData(ret, Document._chunkSeparator);
+            }
+            else
+            {
+                return "";
+            }
         }
         public open(data: string): void
         {
@@ -699,6 +725,10 @@ module Geoma.Tools
                     data = data.substr(end_version_index + 1);
                 }
             }
+            else if (data.length == 0)
+            {
+                return;
+            }
 
             const context: DesializationContext =
             {
@@ -712,7 +742,7 @@ module Geoma.Tools
             try
             {
                 const chunks = Utils.SerializeHelper.splitData(data, Document._chunkSeparator);
-                const error = new Error("Невозможно восстановить данные");
+                const error = new Error(Resources.string("Невозможно восстановить данные"));
                 for (const chunk of chunks)
                 {
                     const info = Utils.SerializeHelper.splitData(chunk, info_separator);
@@ -865,7 +895,7 @@ module Geoma.Tools
         }
         public promptNumber(message: string, default_value?: number): number | null
         {
-            const number_text = this.prompt(`${message}\r\nВведите число`, default_value?.toString());
+            const number_text = this.prompt(Resources.string("{0}\r\nВведите число", message), default_value?.toString());
             if (number_text)
             {
                 const number = parseFloat(number_text);
@@ -875,7 +905,7 @@ module Geoma.Tools
                 }
                 else
                 {
-                    this.alert(`Значение '${number_text}' не является числом`);
+                    this.alert(Resources.string("Значение '{0}' не является числом", number_text));
                 }
             }
             return default_value == undefined ? null : default_value;
@@ -911,6 +941,17 @@ module Geoma.Tools
                 this._onBeforeDraw.emitEvent(new CustomEvent<BeforeDrawEvent>("BeforeDrawEvent"));
             }
 
+            this._background.draw(play_ground);
+
+            const current_transform = play_ground.context2d.getTransform();
+            play_ground.context2d.setTransform(
+                current_transform.a * play_ground.ratio,
+                current_transform.b,
+                current_transform.c,
+                current_transform.d * play_ground.ratio,
+                current_transform.e,
+                current_transform.f
+            );
             super.innerDraw(play_ground);
             if (this._contextMenu)
             {
@@ -932,6 +973,7 @@ module Geoma.Tools
                 delete this._tapTool;
                 PointTool.showMenu(this);
             }
+            play_ground.context2d.setTransform(current_transform);
         }
         protected execLineSegmentState(end_point: ActivePoint): void
         {
@@ -946,7 +988,7 @@ module Geoma.Tools
             let can_add_line = true;
             if (start_point == end_point)
             {
-                this.alert("Нельзя провести линию к той же точке!");
+                this.alert(Resources.string("Нельзя провести линию к той же точке!"));
                 can_add_line = false;
             }
             else
@@ -956,7 +998,7 @@ module Geoma.Tools
                     const line = this._data.lines.item(i);
                     if (line.belongs(start_point) && line.belongs(end_point))
                     {
-                        this.alert(`Линия ${line.name} уже проведена!`);
+                        this.alert(Resources.string("Линия {0} уже проведена!", line.name));
                         can_add_line = false;
                         break;
                     }
@@ -985,7 +1027,7 @@ module Geoma.Tools
             {
                 if (segment == other_segment)
                 {
-                    this.alert(`Угол может быть обозначен только между различными прямыми, имеющими одну общую точку.`);
+                    this.alert(Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
                 }
                 else
                 {
@@ -1002,7 +1044,7 @@ module Geoma.Tools
                             }
                             else
                             {
-                                this.alert(`Угол между прямыми ${segment.name} и ${other_segment.name} уже обозначен.`);
+                                this.alert(Resources.string("Угол между прямыми {0} и {1} уже обозначен.", segment.name, other_segment.name));
                                 return null;
                             }
                         }
@@ -1075,7 +1117,7 @@ module Geoma.Tools
             }
             else
             {
-                this.alert(`Отрезки ${segment.name} и ${other_segment.name} не содержат общих точек`);
+                this.alert(Resources.string("Отрезки {0} и {1} не содержат общих точек", segment.name, other_segment.name));
             }
             return null;
         }
@@ -1090,7 +1132,7 @@ module Geoma.Tools
                 {
                     if (angle.hasBisector)
                     {
-                        this.alert(`Биссектриса угла ${angle.name} уже проведена.`);
+                        this.alert(Resources.string("Биссектриса угла {0} уже проведена.", angle.name));
                     }
                     else
                     {
@@ -1112,7 +1154,7 @@ module Geoma.Tools
             const segment = this._state.activeItem as ActiveLineSegment;
             if (segment.belongs(other_segment.start) || segment.belongs(other_segment.end))
             {
-                this.alert(`Отрезки ${segment.name} и ${other_segment.name} имеют общую точку и не могут стать ||.`);
+                this.alert(Resources.string("Отрезки {0} и {1} имеют общую точку и не могут стать ||.", segment.name, other_segment.name));
             }
             else
             {
@@ -1125,7 +1167,7 @@ module Geoma.Tools
             const segment = this._state.activeItem as ActiveLineSegment;
             if (!segment.belongs(other_segment.start) && !segment.belongs(other_segment.end))
             {
-                this.alert(`Отрезки ${segment.name} и ${other_segment.name} не имеют общей точки и не могут стать ⟂.`);
+                this.alert(Resources.string("Отрезки {0} и {1} не имеют общей точки и не могут стать ⟂.", segment.name, other_segment.name));
             }
             else
             {
@@ -1145,7 +1187,7 @@ module Geoma.Tools
             let can_add_circle = true;
             if (center_point == pivot_point)
             {
-                this.alert("Нельзя провести окружность к той же точке!");
+                this.alert(Resources.string("Нельзя провести окружность к той же точке!"));
                 can_add_circle = false;
             }
             else
@@ -1155,7 +1197,7 @@ module Geoma.Tools
                     const circle = this._data.circles.item(i);
                     if (circle.kind == kind && circle.point1 == center_point && circle.point2 == pivot_point)
                     {
-                        this.alert(`Окружность ${circle.name} уже проведена!`);
+                        this.alert(Resources.string("Окружность {0} уже проведена!", circle.name));
                         can_add_circle = false;
                         break;
                     }
@@ -1282,6 +1324,7 @@ module Geoma.Tools
         }
 
         private readonly _selectedSprites = new Array<Sprite.Sprite>();
+        private readonly _background: Background;
         private readonly _tools: Sprite.Container;
         private _data: DocumentData;
         private _tooltip?: Sprite.Sprite;

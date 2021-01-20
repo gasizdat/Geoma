@@ -8,6 +8,7 @@
 /// <reference path="tools.menu.ts" />
 /// <reference path="tools.tools.ts" />
 /// <reference path="tools.styles.ts" />
+/// <reference path="tools.resources.ts" />
 /// <reference path="tools.point.base.ts" />
 /// <reference path="tools.point.active.ts" />
 /// <reference path="tools.point.common.ts" />
@@ -315,10 +316,10 @@ module Geoma.Tools
                     const y = doc.mouseArea.mousePoint.y;
                     const menu = new Menu(doc, x, y);
 
-                    let menu_item = menu.addMenuItem(`Добавить точку`);
+                    let menu_item = menu.addMenuItem(Resources.string("Добавить точку"));
                     menu_item.onChecked.bind(this, () => doc.addPoint(Point.make(x, y)));
 
-                    menu_item = menu.addMenuItem(`Удалить окружность ${this.name}`);
+                    menu_item = menu.addMenuItem(Resources.string("Удалить окружность {0}", this.name));
                     menu_item.onChecked.bind(this, () => doc.removeCircleLine(this));
 
                     menu.show();

@@ -8,6 +8,7 @@
 /// <reference path="tools.menu.ts" />
 /// <reference path="tools.tools.ts" />
 /// <reference path="tools.styles.ts" />
+/// <reference path="tools.resources.ts" />
 /// <reference path="tools.point.base.ts" />
 /// <reference path="tools.point.active.ts" />
 /// <reference path="tools.point.common.ts" />
@@ -461,18 +462,18 @@ module Geoma.Tools
                     const menu = new Menu(doc, x, y);
                     const exists_other_segments = makeMod(this, () => doc.lineSegments.length > 1);
 
-                    let menu_item = menu.addMenuItem("Обозначить угол...");
+                    let menu_item = menu.addMenuItem(Resources.string("Обозначить угол..."));
                     menu_item.onChecked.bind(this, () => doc.setAngleIndicatorState(this, event));
                     menu_item.enabled.addModifier(exists_other_segments);
 
-                    menu_item = menu.addMenuItem("Показать биссектрису угла...");
+                    menu_item = menu.addMenuItem(Resources.string("Показать биссектрису угла..."));
                     menu_item.onChecked.bind(this, () => doc.setBisectorState(this, event));
                     menu_item.enabled.addModifier(exists_other_segments);
 
-                    menu_item = menu.addMenuItem("Задать размер...");
+                    menu_item = menu.addMenuItem(Resources.string("Задать размер..."));
                     menu_item.onChecked.bind(this, () =>
                     {
-                        const value = this.document.prompt(`Введите размер в пикселях`, Utils.toInt(this.length).toString());
+                        const value = this.document.prompt(Resources.string("Введите размер в пикселях"), Utils.toInt(this.length).toString());
                         if (value != null)
                         {
                             const length = Utils.toInt(toInt(value));
@@ -482,27 +483,28 @@ module Geoma.Tools
                             }
                             else
                             {
-                                this.document.alert(`Введен недопустимый размер ${value}`);
+                                this.document.alert(Resources.string("Введен недопустимый размер {0}", value));
                             }
                         }
                     });
                     menu_item.enabled.addModifier(makeMod(this, () => !this.fixedLength));
 
-                    menu_item = menu.addMenuItem(makeMod(this, (): string => this.fixedLength ? `Изменяемый размер` : `Фиксированный размер`));
+                    menu_item = menu.addMenuItem(makeMod(this, (): string =>
+                        this.fixedLength ? Resources.string("Изменяемый размер") : Resources.string("Фиксированный размер")));
                     menu_item.onChecked.bind(this, this.fixedLength ? this.makeFree : this.makeFixed);
 
-                    menu_item = menu.addMenuItem("Сделать ||...");
+                    menu_item = menu.addMenuItem(Resources.string("Сделать ||..."));
                     menu_item.onChecked.bind(this, () => doc.setParallelLineState(this));
                     menu_item.enabled.addModifier(exists_other_segments);
 
-                    menu_item = menu.addMenuItem("Сделать ⟂...");
+                    menu_item = menu.addMenuItem(Resources.string("Сделать ⟂..."));
                     menu_item.onChecked.bind(this, () => doc.setPerpendicularLineState(this));
                     menu_item.enabled.addModifier(exists_other_segments);
 
-                    menu_item = menu.addMenuItem("Добавить точку");
+                    menu_item = menu.addMenuItem(Resources.string("Добавить точку"));
                     menu_item.onChecked.bind(this, () => doc.addPoint(Point.make(x, y)));
 
-                    menu_item = menu.addMenuItem(`Удалить прямую ${this.name}`);
+                    menu_item = menu.addMenuItem(Resources.string("Удалить прямую {0}", this.name));
                     menu_item.onChecked.bind(this, () => doc.removeLineSegment(this));
 
                     menu.show();

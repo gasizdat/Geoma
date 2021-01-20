@@ -8,6 +8,7 @@
 /// <reference path="tools.menu.ts" />
 /// <reference path="tools.tools.ts" />
 /// <reference path="tools.styles.ts" />
+/// <reference path="tools.resources.ts" />
 /// <reference path="tools.point.base.ts" />
 /// <reference path="tools.intersections.ts" />
 /// <reference path="tools.axes.lines.ts" />
@@ -173,7 +174,7 @@ module Geoma.Tools
             }
         }
 
-        private static readonly error = new Error("Невозможно восстановить данные");
+        private static readonly error = new Error(Resources.string("Невозможно восстановить данные"));
     }
 
     export abstract class CodeDefinitionElement extends CodeElement
@@ -974,11 +975,11 @@ module Geoma.Tools
                     const y = doc.mouseArea.mousePoint.y;
                     const menu = new Menu(doc, x, y);
 
-                    let menu_item = menu.addMenuItem(`Точность...`);
+                    let menu_item = menu.addMenuItem(Resources.string("Точность..."));
                     menu_item.onChecked.bind(this, () =>
                     {
                         const dx = this.document.promptNumber(
-                            `Приращение аргумента x функции ${this.code.text}`,
+                            Resources.string("Приращение аргумента x функции {0}", this.code.text),
                             this.dx
                         );
                         if (dx != undefined && dx != null)
@@ -987,16 +988,16 @@ module Geoma.Tools
                         }
                     });
 
-                    menu_item = menu.addMenuItem("Масштаб по осям x/y...");
+                    menu_item = menu.addMenuItem(Resources.string("Масштаб по осям x/y..."));
                     menu_item.onChecked.bind(this.axes, this.axes.scaleDialog);
 
-                    menu_item = menu.addMenuItem(`Редактировать функцию f = ${this.code.text} ...`);
+                    menu_item = menu.addMenuItem(Resources.string("Редактировать функцию f = {0} ...", this.code.text));
                     menu_item.onChecked.bind(this, this.showExpressionEditor);
 
-                    menu_item = menu.addMenuItem(`Добавить точку`);
+                    menu_item = menu.addMenuItem(Resources.string("Добавить точку"));
                     menu_item.onChecked.bind(this, () => doc.addPoint(Point.make(x, y)));
 
-                    menu_item = menu.addMenuItem(`Удалить прямую ${this.name}`);
+                    menu_item = menu.addMenuItem(Resources.string("Удалить прямую {0}", this.name));
                     menu_item.onChecked.bind(this, () => doc.removeParametricLine(this));
 
                     menu.show();
