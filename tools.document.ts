@@ -126,7 +126,7 @@ module Geoma.Tools
             this._tools.push(file_tool);
 
             const settings_tool = new SettingsTool(this, 0, tool_y, tool_radius, tool_line_width);
-            settings_tool.addX(makeMod(this, (value: number) => value + this.mouseArea.w / 2));
+            settings_tool.addX(makeMod(this, (value: number) => value + file_tool.right + tool_radius + tool_padding));
             this._tools.push(settings_tool);
 
             const doc_name = new Sprite.Text(0, tool_y, 0, 0, () => CurrentTheme.MenuItemTextBrush, () => CurrentTheme.MenuItemTextStyle, makeMod(this, () => this.name));

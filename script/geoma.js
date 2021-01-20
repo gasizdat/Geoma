@@ -577,7 +577,7 @@ var Geoma;
                 for (var i = 0; i < event.targetTouches.length; i++) {
                     var touch = event.touches[i];
                     var mouse_event = document.createEvent('MouseEvents');
-                    mouse_event.initMouseEvent("mousemove", true, true, (_a = event.view) !== null && _a !== void 0 ? _a : window, event.detail, touch.screenX, touch.screenY, touch.clientX, touch.clientY, event.ctrlKey, event.altKey, event.shiftKey, event.metaKey, 0, touch.target);
+                    mouse_event.initMouseEvent("mousemove", true, true, (_a = event.view) !== null && _a !== void 0 ? _a : window, event.detail, touch.screenX, touch.screenY, touch.clientX, touch.clientY, event.ctrlKey, event.altKey, event.shiftKey, event.metaKey, 1, touch.target);
                     _this.onMouseMove.emitEvent(mouse_event);
                 }
             };
@@ -6113,7 +6113,7 @@ var Geoma;
                 file_tool.addX(makeMod(_this, function (value) { return value + _this._pointTool.right + tool_radius + tool_padding; }));
                 _this._tools.push(file_tool);
                 var settings_tool = new Tools.SettingsTool(_this, 0, tool_y, tool_radius, tool_line_width);
-                settings_tool.addX(makeMod(_this, function (value) { return value + _this.mouseArea.w / 2; }));
+                settings_tool.addX(makeMod(_this, function (value) { return value + file_tool.right + tool_radius + tool_padding; }));
                 _this._tools.push(settings_tool);
                 var doc_name = new Geoma.Sprite.Text(0, tool_y, 0, 0, function () { return Tools.CurrentTheme.MenuItemTextBrush; }, function () { return Tools.CurrentTheme.MenuItemTextStyle; }, makeMod(_this, function () { return _this.name; }));
                 doc_name.addX(makeMod(_this, function () { return Math.max(_this.mouseArea.x + _this.mouseArea.w - doc_name.w - tool_padding, settings_tool.right + tool_padding); }));

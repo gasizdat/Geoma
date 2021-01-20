@@ -38,7 +38,7 @@ module Geoma
                         event.altKey,
                         event.shiftKey,
                         event.metaKey,
-                        0,//Main button
+                        1,//Main button
                         touch.target
                     );
                     this.onMouseMove.emitEvent(mouse_event);
