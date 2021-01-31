@@ -117,14 +117,14 @@ module Geoma.Tools
         }
         public mouseHit(point: IPoint): boolean
         {
-            if (Math.abs(point.y - this.y) <= CurrentTheme.ActiveLineMouseThickness ||
-                Math.abs(point.x - this.x) <= CurrentTheme.ActiveLineMouseThickness)
+            if (Math.abs(point.y - this.y) <= Thickness.Mouse ||
+                Math.abs(point.x - this.x) <= Thickness.Mouse)
             {
                 return true;
             }
             else if (this._adorners.visible)
             {
-                const margins = AxesLines._adornerMargins + CurrentTheme.ActiveLineMouseThickness;
+                const margins = AxesLines._adornerMargins + Thickness.Mouse;
                 return point.x >= (this._adorners.left - margins) &&
                     point.x <= (this._adorners.right + margins) &&
                     point.y >= (this._adorners.top - margins) &&

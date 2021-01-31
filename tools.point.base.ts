@@ -66,9 +66,13 @@ module Geoma.Tools
         {
             return this._line.middleY;
         }
+        public get w(): number
+        {
+            return this._line.w + (this._text ? (this._text.w + ActivePointBase._textPadding) : 0);
+        }
         public get right(): number
         {
-            return this._line.x + this.item.w;
+            return this._line.x + this.w;
         }
         public get bottom(): number
         {
@@ -78,9 +82,9 @@ module Geoma.Tools
         public setName(value: binding<string>, brush: binding<Brush>, style: binding<CanvasTextDrawingStyles>): void
         {
             assert(!this.name);
-            const name_text = new Sprite.Text(this._line.right + 5, this.y, 0, 0, brush, style, value);
-            this.item.push(name_text);
-            this.item.name = name_text.text.value;
+            this._text = new Sprite.Text(this._line.right + ActivePointBase._textPadding, this.y, 0, 0, brush, style, value);
+            this.item.push(this._text);
+            this.item.name = this._text.text.value;
         }
         public serialize(context: SerializationContext): Array<string>
         {
@@ -98,6 +102,8 @@ module Geoma.Tools
             super.mouseMove(event);
         }
 
-        private _line: Sprite.Polyline;
+        private readonly _line: Sprite.Polyline;
+        private _text?: Sprite.Text;
+        private static readonly _textPadding: number = 5;
     }
 }

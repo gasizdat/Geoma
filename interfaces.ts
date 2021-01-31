@@ -13,6 +13,7 @@ module Geoma
         readonly y: number;
         readonly w: number;
         readonly h: number;
+        readonly ratio: number;
     }
 
     export interface IEventListener<TEvent extends Event>

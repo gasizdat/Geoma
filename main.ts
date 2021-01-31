@@ -8,8 +8,13 @@
 let playGround: Geoma.PlayGround;
 let mainDocument: Geoma.Tools.Document;
 
+const GeomaApplicationVersion: number = 0;
+const GeomaFeatureVersion: number = 1;
+const GeomaFixVersion: number = 2;
+
 window.onload = () =>
 {
+    document.title = `${document.title} v${GeomaApplicationVersion}.${GeomaFeatureVersion}.${GeomaFixVersion}`;
     let canvas = document.getElementById('playArea');
     playGround = new Geoma.PlayGround(canvas as HTMLCanvasElement);
     mainDocument = new Geoma.Tools.Document(playGround);

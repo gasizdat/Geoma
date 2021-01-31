@@ -411,7 +411,7 @@ module Geoma.Tools
                         const x = (Math.sqrt(d) + w) / k2_1;
                         const y = ActiveLineBase.getY(x, coeff);
                         const p1 = Point.make(x, y);
-                        if (PointLine.intersected(p1, line.startPoint, line.endPoint, CurrentTheme.ActiveLineCaclThickness))
+                        if (PointLine.intersected(p1, line.startPoint, line.endPoint, Thickness.Calc))
                         {
                             ret.p1 = p1;
                         }
@@ -420,7 +420,7 @@ module Geoma.Tools
                         const x = (w - Math.sqrt(d)) / k2_1;
                         const y = ActiveLineBase.getY(x, coeff);
                         const p2 = Point.make(x, y);
-                        if (PointLine.intersected(p2, line.startPoint, line.endPoint, CurrentTheme.ActiveLineCaclThickness))
+                        if (PointLine.intersected(p2, line.startPoint, line.endPoint, Thickness.Calc))
                         {
                             ret.p2 = p2;
                         }
@@ -442,11 +442,11 @@ module Geoma.Tools
                     const p1y = y0 + h;
                     const p2y = y0 - h;
                     const ret: CircleLineIntersection = {};
-                    if (PointLine.intersected(Point.make(x1, p1y), line.startPoint, line.endPoint, CurrentTheme.ActiveLineCaclThickness))
+                    if (PointLine.intersected(Point.make(x1, p1y), line.startPoint, line.endPoint, Thickness.Calc))
                     {
                         ret.p1 = Point.make(x1, p1y);
                     }
-                    if (PointLine.intersected(Point.make(x1, p2y), line.startPoint, line.endPoint, CurrentTheme.ActiveLineCaclThickness))
+                    if (PointLine.intersected(Point.make(x1, p2y), line.startPoint, line.endPoint, Thickness.Calc))
                     {
                         ret.p2 = Point.make(x1, p2y);
                     }

@@ -586,7 +586,7 @@ module Geoma.Tools
         }
         public mouseHit(point: IPoint): boolean
         {
-            return PointParametric.intersected(point, this, CurrentTheme.ActiveLineMouseThickness);
+            return PointParametric.intersected(point, this, Thickness.Mouse);
         }
         public move(dx: number, dy: number): void
         {
@@ -600,8 +600,8 @@ module Geoma.Tools
         {
             const dialog = new ExpressionDialog(
                 this.document,
-                makeMod(this, () => this.document.mouseArea.x + this.document.mouseArea.w / 2 - this.document.mouseArea.w / 10),
-                makeMod(this, () => this.document.mouseArea.y + this.document.mouseArea.h / 2 - this.document.mouseArea.h / 10),
+                makeMod(this, () => (this.document.mouseArea.x + this.document.mouseArea.w / 2 - this.document.mouseArea.w / 10) / this.document.mouseArea.ratio),
+                makeMod(this, () => (this.document.mouseArea.y + this.document.mouseArea.h / 2 - this.document.mouseArea.h / 10) / this.document.mouseArea.ratio),
                 this.code
             );
             dialog.onEnter.bind(this, (event: CustomEvent<CodeElement | undefined>) => 

@@ -325,6 +325,8 @@ module Geoma.Tools
             this.item.addX(makeMod(this, (value: number) => value - this._dx));
             this.item.addY(makeMod(this, (value: number) => value - this._dy));
             this._clientWidth = makeProp(makeMod(this, this.maxClientWidth), 0);
+            this._mouseDownBinder = document.mouseArea.onMouseDown.bind(this, this.handleEvent);
+            this._mouseUpBinder = document.mouseArea.onMouseDown.bind(this, this.handleEvent);
         }
 
         public get rootMenu(): Menu
@@ -338,6 +340,15 @@ module Geoma.Tools
         }
         public padding: number = 3;
 
+        public dispose(): void
+        {
+            if (!this.disposed)
+            {
+                this._mouseDownBinder.dispose();
+                this._mouseUpBinder.dispose();
+                super.dispose();
+            }
+        }
         public addMenuItem(text: binding<string>): MenuItem
         {
             const index = this.item.length - 1;
@@ -385,36 +396,45 @@ module Geoma.Tools
             this.document.closeMenu(this.rootMenu);
         }
 
-        protected mouseClick(event: MouseEvent): void
+        protected handleEvent(event: MouseEvent): boolean
         {
             if (this.visible)
             {
-                if (this.mouseHit(event) || this._parentGroup?.mouseHit(event))
+                if (!this._parentGroup)
                 {
+                    //Suppress bubbling of any mouse event to other elements of document from the top level menu
                     event.cancelBubble = true;
                 }
-                else
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        protected mouseClick(event: MouseEvent): void
+        {
+            if (this.handleEvent(event) && !this.mouseHit(event))
+            {
+                let close_menu: boolean = true;
+                for (let i = 0; i < this.item.length; i++)
                 {
-                    let close_menu: boolean = true;
-                    for (let i = 0; i < this.item.length; i++)
+                    if (this.item.item(i).selected)
                     {
-                        if (this.item.item(i).selected)
-                        {
-                            close_menu = false;
-                            break;
-                        }
+                        close_menu = false;
+                        break;
                     }
-                    if (close_menu)
-                    {
-                        this.close();
-                    }
+                }
+                if (close_menu)
+                {
+                    this.close();
                 }
             }
             super.mouseClick(event);
         }
         protected mouseMove(event: MouseEvent): void
         {
-            if (this.visible && this.mouseHit(event))
+            if (this.handleEvent(event) && this.mouseHit(event))
             {
                 if (this._parentGroup)
                 {
@@ -423,8 +443,8 @@ module Geoma.Tools
                         this._parentGroup.selected = true;
                     }
                 }
-                event.cancelBubble = true;
             }
+
             super.mouseMove(event);
         }
         protected maxClientWidth(): number
@@ -454,10 +474,12 @@ module Geoma.Tools
             }
         }
 
+        private readonly _mouseDownBinder: IEventListener<MouseEvent>;
+        private readonly _mouseUpBinder: IEventListener<MouseEvent>;
         private _hasGroupExpander: boolean = false;
         private _dx: number = 0;
         private _dy: number = 0;
-        private _clientWidth: property<number>;
+        private readonly _clientWidth: property<number>;
         private _rootMenu?: Menu;
         private _parentGroup?: MenuGroup;
     }

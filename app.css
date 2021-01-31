@@ -7,6 +7,7 @@ span {
 }
 
 .playArea {
+    touch-action: none;
     background: #4FA7FF;
     color: lightGreen;
     /*border: solid green;*/

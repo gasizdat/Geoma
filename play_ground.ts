@@ -12,59 +12,97 @@ module Geoma
         constructor(canvas: HTMLCanvasElement)
         {
             super(0, 0);
+
             assert(canvas);
             this._canvas = canvas;
-            this._canvas.onmousemove = this.onMouseMove.connect();
-            this._canvas.onmousedown = this.onMouseDown.connect();
-            this._canvas.onmouseup = this.onMouseUp.connect();
-            this._canvas.ontouchmove = (event: TouchEvent) =>
+
+            const mouse_pointed_device = ("onmousemove" in window);
+            const touch_screen_device =
+                ("ontouchstart" in window) ||
+                (navigator.maxTouchPoints > 0) ||
+                (navigator.msMaxTouchPoints > 0);
+
+            if (touch_screen_device)
             {
-                const document = this._canvas.ownerDocument;
-                for (let i = 0; i < event.targetTouches.length; i++)
+                this._touchInterface = true;
+                console.log("The touchsreen device.");
+                this._canvas.ontouchmove = ((touch_event: TouchEvent) =>
                 {
-                    const touch = event.touches[i];
-                    const mouse_event = document.createEvent('MouseEvents');
-                    mouse_event.initMouseEvent(
-                        "mousemove",
-                        true,
-                        true,
-                        event.view ?? window,
-                        event.detail,
-                        touch.screenX,
-                        touch.screenY,
-                        touch.clientX,
-                        touch.clientY,
-                        event.ctrlKey,
-                        event.altKey,
-                        event.shiftKey,
-                        event.metaKey,
-                        1,//Main button
-                        touch.target
-                    );
-                    this.onMouseMove.emitEvent(mouse_event);
-                }
-            };
+                    const document = this._canvas.ownerDocument;
+                    for (let i = 0; i < touch_event.targetTouches.length; i++)
+                    {
+                        const touch = touch_event.targetTouches[i];
+                        const mouse_data = PlayGround.touchToMouseEventInit(touch_event, touch);
+                        Tools.Thickness.setMouseThickness(Math.max(touch.radiusX, touch.radiusY));
+                        this.mouseMove(new MouseEvent("mousemove", mouse_data));
+                    }
+                }).bind(this);
+                this._canvas.ontouchstart = ((touch_event: TouchEvent) =>
+                {
+                    const document = this._canvas.ownerDocument;
+                    for (let i = 0; i < touch_event.targetTouches.length; i++)
+                    {
+                        const touch = touch_event.targetTouches[i];
+                        const mouse_data = PlayGround.touchToMouseEventInit(touch_event, touch);
+                        Tools.Thickness.setMouseThickness(Math.max(touch.radiusX, touch.radiusY));
+                        let mouse_event = new MouseEvent("mousedown", mouse_data);
+                        if (this.mousePoint.x != mouse_event.x || this.mousePoint.y != mouse_event.y)
+                        {
+                            this.mouseMove(mouse_event);
+                            if (mouse_event.cancelBubble)
+                            {
+                                mouse_event = new MouseEvent("mousedown", mouse_data);
+                            }
+                        }
+                        this.mouseDown(mouse_event);
+                    }
+                }).bind(this);
+                this._canvas.ontouchend = ((touch_event: TouchEvent) =>
+                {
+                    const document = this._canvas.ownerDocument;
+                    for (let i = 0; i < touch_event.changedTouches.length; i++)
+                    {
+                        const touch = touch_event.changedTouches[i];
+                        const mouse_data = PlayGround.touchToMouseEventInit(touch_event, touch);
+                        Tools.Thickness.setMouseThickness(Math.max(touch.radiusX, touch.radiusY));
+                        let mouse_event = new MouseEvent("mouseup", mouse_data);
+                        if (this.mousePoint.x != mouse_event.x || this.mousePoint.y != mouse_event.y)
+                        {
+                            this.mouseMove(mouse_event);
+                            if (mouse_event.cancelBubble)
+                            {
+                                mouse_event = new MouseEvent("mouseup", mouse_data);
+                            }
+                        }
+                        this.mouseUp(mouse_event);
+                    }
+                }).bind(this);
+            }
+            else if (mouse_pointed_device)
+            {
+                console.log("The device with mouse or touchpad.");
+                this._canvas.onmousemove = this.mouseMove.bind(this);
+                this._canvas.onmousedown = this.mouseDown.bind(this);
+                this._canvas.onmouseup = this.mouseUp.bind(this);
+            }
+            else
+            {
+                assert(false, "The device doesn't have mouse or touchscreen");
+            }
 
             this.invalidate();
-            this.addW(() => this._canvas.width);
-            this.addH(() => this._canvas.height);
+            this.addW(Utils.makeMod(this, () => Math.trunc(this._canvas.width / this.ratio)));
+            this.addH(Utils.makeMod(this, () => Math.trunc(this._canvas.height / this.ratio)));
 
             const context2d = this._canvas.getContext("2d");
             assert(context2d);
             this._context2d = context2d;
-
-            this.onMouseMove.bind(this, (event: MouseEvent): void => { this._mousePoint = event });
-            this.onMouseDown.bind(this, (event: MouseEvent): void => { this._downPoint = event });
-            this.onMouseUp.bind(this, (event: MouseEvent): void =>
-            {
-                const click_tolerance = 1;
-                if (this._downPoint && Math.abs(this._downPoint.x - event.x) <= click_tolerance && Math.abs(this._downPoint.y - event.y) <= click_tolerance)
-                {
-                    this.onMouseClick.emitEvent(event);
-                }
-            });
         }
 
+        public get touchInterface(): boolean
+        {
+            return this._touchInterface;
+        }
         public get mousePoint(): IPoint
         {
             return this._mousePoint;
@@ -94,7 +132,7 @@ module Geoma
                 this._canvas.height = parent.clientHeight * ratio;
             }
         }
-        public getPosition(el: HTMLElement): IPoint
+        public static getPosition(el: HTMLElement): IPoint
         {
             let x = 0;
             let y = 0;
@@ -111,8 +149,88 @@ module Geoma
             return Point.make(x, y);
         }
 
-        private _canvas: HTMLCanvasElement;
-        private _context2d: CanvasRenderingContext2D;
+        protected updateMouseEvent(event: MouseEvent): MouseEvent
+        {
+            if (event.x == event.offsetX && event.y == event.offsetY)
+            {
+                return event;
+            }
+            else
+            {
+                return new MouseEvent(event.type, {
+                    view: event.view ?? window,
+                    altKey: event.altKey,
+                    bubbles: event.bubbles,
+                    button: event.button,
+                    buttons: event.buttons,
+                    cancelable: event.cancelable,
+                    clientX: event.offsetX,
+                    clientY: event.offsetY,
+                    ctrlKey: event.ctrlKey,
+                    detail: event.detail,
+                    metaKey: event.metaKey,
+                    relatedTarget: event.target,
+                    screenX: event.screenX,
+                    screenY: event.screenY,
+                    shiftKey: event.shiftKey,
+                    movementX: event.movementX,
+                    movementY: event.movementY
+                });
+            }
+        }
+        protected mouseMove(event: MouseEvent): void
+        {
+            const updated_event = this.updateMouseEvent(event);
+            this._mousePoint = updated_event;
+            this.onMouseMove.emitEvent(updated_event);
+        }
+        protected mouseDown(event: MouseEvent): void
+        {
+            const updated_event = this.updateMouseEvent(event);
+            this._downPoint = updated_event;
+            this.onMouseDown.emitEvent(updated_event);
+        }
+        protected mouseUp(event: MouseEvent): void
+        {
+            const updated_event = this.updateMouseEvent(event);
+            const click_tolerance = 1;
+            if (this._downPoint && Math.abs(this._downPoint.x - updated_event.x) <= click_tolerance && Math.abs(this._downPoint.y - updated_event.y) <= click_tolerance)
+            {
+                this.onMouseClick.emitEvent(updated_event);
+            }
+            this.onMouseUp.emitEvent(updated_event);
+        }
+
+        private static touchToMouseEventInit(touch_event: TouchEvent, touch: Touch): MouseEventInit
+        {
+            let dx: number = 0, dy: number = 0;
+            if (touch_event.target instanceof HTMLElement)
+            {
+                dx = touch_event.target.offsetLeft;
+                dy = touch_event.target.offsetTop;
+            }
+            return {
+                view: touch_event.view ?? window,
+                altKey: touch_event.altKey,
+                bubbles: touch_event.bubbles,
+                button: 1,
+                buttons: 1,
+                cancelable: true,
+                clientX: touch.clientX - dx,
+                clientY: touch.clientY - dy,
+                ctrlKey: touch_event.ctrlKey,
+                detail: touch_event.detail,
+                metaKey: touch_event.metaKey,
+                relatedTarget: touch.target,
+                screenX: touch.screenX,
+                screenY: touch.screenY,
+                shiftKey: touch_event.shiftKey,
+            };
+        }
+
+        private readonly _touchInterface: boolean = false;
+        private readonly _canvas: HTMLCanvasElement;
+        private readonly _context2d: CanvasRenderingContext2D;
         private _mousePoint: IPoint = Point.make(0, 0);
         private _downPoint: IPoint = Point.make(0, 0);
     }

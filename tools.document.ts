@@ -113,21 +113,35 @@ module Geoma.Tools
             this._data.initialize(this);
             this.push(this._tools);
 
+            const tap_tool = new TapTool(
+                this,
+                () => CurrentTheme.TapDelayTime,
+                () => CurrentTheme.TapActivateTime,
+                () => CurrentTheme.TapLineWidth,
+                () => CurrentTheme.TapRadius,
+                () => CurrentTheme.TapBrush
+            );
+            tap_tool.onActivate.bind(this, () => PointTool.showMenu(this));
+            this.push(tap_tool);
+
             const tool_radius = 20;
             const tool_line_width = 5;
             const tool_y = 40;
             const tool_padding = 10;
 
-            this._pointTool = new PointTool(this, 40, tool_y, tool_radius, tool_line_width);
-            this._tools.push(this._pointTool);
+            const point_tool = new PointTool(this, 40, tool_y, tool_radius, tool_line_width);
+            this._tools.push(point_tool);
 
             const file_tool = new FileTool(this, 0, tool_y, tool_radius, tool_line_width);
-            file_tool.addX(makeMod(this, (value: number) => value + this._pointTool.right + tool_radius + tool_padding));
             this._tools.push(file_tool);
 
             const settings_tool = new SettingsTool(this, 0, tool_y, tool_radius, tool_line_width);
-            settings_tool.addX(makeMod(this, (value: number) => value + file_tool.right + tool_radius + tool_padding));
             this._tools.push(settings_tool);
+
+            const max_w = () => Math.max(point_tool.w, file_tool.w/*, settings_tool.w*/) + tool_padding;
+
+            file_tool.addX((value: number) => value + point_tool.x + max_w() * 1);
+            settings_tool.addX((value: number) => value + point_tool.x + max_w() * 2);
 
             const doc_name = new Sprite.Text(0, tool_y, 0, 0, () => CurrentTheme.MenuItemTextBrush, () => CurrentTheme.MenuItemTextStyle, makeMod(this, () => this.name));
             doc_name.addX(makeMod(this, () => Math.max(this.mouseArea.x + this.mouseArea.w - doc_name.w - tool_padding, settings_tool.right + tool_padding)));
@@ -138,8 +152,6 @@ module Geoma.Tools
             this._tools.push(tools_separator);
 
             this._mouseClickBinder = mouse_area.onMouseClick.bind(this, this.mouseClick, true);
-            this._mouseDownBinder = mouse_area.onMouseDown.bind(this, this.mouseDown, true);
-            this._mouseUpBinder = mouse_area.onMouseUp.bind(this, this.mouseUp, true);
             const save_data = document.location.hash;
             if (save_data != null && save_data.length && save_data[0] == "#")
             {
@@ -265,30 +277,9 @@ module Geoma.Tools
                 }
             }
         }
-        public mouseDown(event: MouseEvent): void
-        {
-            if (this._tapTool)
-            {
-                this._tools.remove(this._tapTool);
-                delete this._tapTool;
-            }
-
-            if (event.y > this._tools.bottom && this._selectedSprites.length == 0)
-            {
-                this._tapTool = new TapIndicator(this, CurrentTheme.TapDelayTime, CurrentTheme.TapActivateTime, CurrentTheme.TapLineWidth, CurrentTheme.TapRadius, CurrentTheme.TapBrush);
-                this._tools.push(this._tapTool);
-            }
-        }
-        public mouseUp(event: MouseEvent): void
-        {
-            if (this._tapTool)
-            {
-                this._tapTool._mouseUp.value = true;
-            }
-        }
         public canShowMenu(sprite: Sprite.Sprite): boolean
         {
-            return !this._contextMenu && !this._state && this._selectedSprites.indexOf(sprite) != -1;
+            return sprite.visible && !this._contextMenu && !this._state && this._selectedSprites.indexOf(sprite) != -1;
         }
         public showMenu(menu: Menu): void
         {
@@ -307,8 +298,6 @@ module Geoma.Tools
             if (!this.disposed)
             {
                 this._mouseClickBinder.dispose();
-                this._mouseDownBinder.dispose();
-                this._mouseUpBinder.dispose();
                 super.dispose();
             }
         }
@@ -542,8 +531,8 @@ module Geoma.Tools
         {
             const dialog = new ExpressionDialog(
                 this,
-                makeMod(this, () => this.mouseArea.x + this.mouseArea.w / 2 - this.mouseArea.w / 10),
-                makeMod(this, () => this.mouseArea.y + this.mouseArea.h / 2 - this.mouseArea.h / 10)
+                makeMod(this, () => (this.mouseArea.x + this.mouseArea.w / 2 - this.mouseArea.w / 10) / this.mouseArea.ratio),
+                makeMod(this, () => (this.mouseArea.y + this.mouseArea.h / 2 - this.mouseArea.h / 10) / this.mouseArea.ratio)
             );
             dialog.onEnter.bind(this, (event: CustomEvent<CodeElement | undefined>) => 
             {
@@ -966,13 +955,6 @@ module Geoma.Tools
                 this._tooltip.draw(play_ground);
             }
 
-            if (this._tapTool && this._tapTool.activated)
-            {
-                this._tools.remove(this._tapTool);
-                this._tapTool.dispose();
-                delete this._tapTool;
-                PointTool.showMenu(this);
-            }
             play_ground.context2d.setTransform(current_transform);
         }
         protected execLineSegmentState(end_point: ActivePoint): void
@@ -1056,7 +1038,7 @@ module Geoma.Tools
                             this._state.pitchPoint,
                             segment.start,
                             common_point,
-                            CurrentTheme.ActiveLineMouseThickness
+                            Thickness.Mouse
                         );
                         if (intersect)
                         {
@@ -1069,7 +1051,7 @@ module Geoma.Tools
                                 this._state.pitchPoint,
                                 common_point,
                                 segment.end,
-                                CurrentTheme.ActiveLineMouseThickness
+                                Thickness.Mouse
                             );
                             if (intersect)
                             {
@@ -1086,7 +1068,7 @@ module Geoma.Tools
                             select_point,
                             other_segment.start,
                             common_point,
-                            CurrentTheme.ActiveLineMouseThickness
+                            Thickness.Mouse
                         );
                         if (intersect)
                         {
@@ -1099,7 +1081,7 @@ module Geoma.Tools
                                 select_point,
                                 common_point,
                                 other_segment.end,
-                                CurrentTheme.ActiveLineMouseThickness
+                                Thickness.Mouse
                             );
                             if (intersect)
                             {
@@ -1330,12 +1312,8 @@ module Geoma.Tools
         private _tooltip?: Sprite.Sprite;
         private _contextMenu?: Menu;
         private readonly _mouseArea: IMouseArea;
-        private readonly _pointTool: ActivePointBase;
-        private _tapTool?: TapIndicator;
         private _state?: DocState;
         private readonly _mouseClickBinder: IEventListener<MouseEvent>;
-        private readonly _mouseDownBinder: IEventListener<MouseEvent>;
-        private readonly _mouseUpBinder: IEventListener<MouseEvent>;
         private _onBeforeDraw?: MulticastEvent<BeforeDrawEvent>;
         private _groupNo: number;
 

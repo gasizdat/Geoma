@@ -6,7 +6,23 @@ module Geoma.Tools
     import Brush = Sprite.Brush;
     type TextStyle = CanvasTextDrawingStyles;
 
-    class DefaultThemeStyle 
+    class ThicknessHelper
+    {
+        public readonly Calc: number = 0.1;
+        public get Mouse(): number
+        {
+            return this._mouseThickness;
+        }
+        public setMouseThickness(value: number)
+        {
+            this._mouseThickness = Math.max(ThicknessHelper._minimalMouseThickness, value);
+        }
+
+        private static _minimalMouseThickness: number = 5;
+        private _mouseThickness: number = ThicknessHelper._minimalMouseThickness;
+    }
+
+    class DefaultThemeStyle
     {
         readonly name: string = "DefaultTheme";
 
@@ -37,8 +53,6 @@ module Geoma.Tools
         readonly ActiveLineWidth: number = 2;
         readonly ActiveLineBrush: Sprite.Brush = "SandyBrown";
         readonly ActiveLineSelectBrush: Sprite.Brush = "Lime";
-        readonly ActiveLineMouseThickness: number = 5;
-        readonly ActiveLineCaclThickness: number = 0.1;
 
         readonly ActiveCircleWidth: number = 2;
         readonly ActiveCircleBrush: Sprite.Brush = "SandyBrown";
@@ -76,7 +90,6 @@ module Geoma.Tools
         readonly BisectorBrush: Sprite.Brush = "DarkTurquoise";
         readonly BisectorSelectionBrush: Sprite.Brush = "Lime";
         readonly BisectorLineWidth: number = 1;
-
 
         readonly BackgroundBrush: Brush = "SteelBlue";
 
@@ -148,8 +161,6 @@ module Geoma.Tools
         readonly ActiveLineWidth: number = 2;
         readonly ActiveLineBrush: Brush = "DarkSlateGray";
         readonly ActiveLineSelectBrush: Brush = "OrangeRed";
-        readonly ActiveLineMouseThickness: number = 5;
-        readonly ActiveLineCaclThickness: number = 0.1;
 
         readonly ActiveCircleWidth: number = 2;
         readonly ActiveCircleBrush: Brush = "DarkSlateGray";
@@ -214,6 +225,7 @@ module Geoma.Tools
         };
     }
 
+    export const Thickness: ThicknessHelper = new ThicknessHelper();
     export const DefaultTheme: IThemeStyle = new DefaultThemeStyle();
     export const BlueTheme: IThemeStyle = new BlueThemeStyle();
     export let CurrentTheme: IThemeStyle = DefaultTheme;

@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <UseIISExpress>true</UseIISExpress>
+    <Use64BitIISExpress>true</Use64BitIISExpress>
+    <IISExpressSSLPort />
+    <IISExpressAnonymousAuthentication />
+    <IISExpressWindowsAuthentication />
+    <IISExpressUseClassicPipelineMode />
+    <UseGlobalApplicationHostFile />
+    <ToolsVersionPromptShown>3.9</ToolsVersionPromptShown>
+    <LastActiveSolutionConfig>Debug|Any CPU</LastActiveSolutionConfig>
+  </PropertyGroup>
+  <ProjectExtensions>
+    <VisualStudio>
+      <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}">
+        <WebProjectProperties>
+          <StartPageUrl>#v2;p-224.50-363.50-A;p-701.50-366.50-B;p-597.50-122.50-C;p-405.50-97.50-D;p-533.50-297.50-E;cp-472.50-202.50-F-6;p-829.50-154.50-G;p-81.50-253.50-H;cp-370.50-363.50-I-9;p-371.50-111.50-J;cp-285.50-226.50-K-11;l-0-1-p8;l-0-2-p5;l-3-4-p5;l-3-5;l-5-2;l-5-6;l-5-7-p10;l-5-4;l-5-8;l-8-9;l-0-8;l-8-10;l-5-10;a-3-4;a-9-10;a-9-8;a-9-11;a-12-11;a-1-0;a-5-7;a-7-8</StartPageUrl>
+          <StartAction>SpecificPage</StartAction>
+          <AspNetDebugging>False</AspNetDebugging>
+          <SilverlightDebugging>False</SilverlightDebugging>
+          <NativeDebugging>False</NativeDebugging>
+          <SQLDebugging>False</SQLDebugging>
+          <ExternalProgram>
+          </ExternalProgram>
+          <StartExternalURL>
+          </StartExternalURL>
+          <StartCmdLineArguments>
+          </StartCmdLineArguments>
+          <StartWorkingDirectory>
+          </StartWorkingDirectory>
+          <EnableENC>True</EnableENC>
+          <AlwaysStartWebServerOnDebug>True</AlwaysStartWebServerOnDebug>
+        </WebProjectProperties>
+      </FlavorProperties>
+    </VisualStudio>
+  </ProjectExtensions>
+</Project>

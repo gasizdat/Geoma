@@ -180,7 +180,7 @@ module Geoma.Tools
         }
         public mouseHit(point: IPoint): boolean
         {
-            return PointCircle.isIntersected(point, this, CurrentTheme.ActiveLineMouseThickness);
+            return PointCircle.isIntersected(point, this, Thickness.Mouse);
         }
         public addPoint(point: ActiveCommonPoint): void
         {

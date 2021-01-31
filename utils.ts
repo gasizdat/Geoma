@@ -60,6 +60,17 @@ module Geoma.Utils
                 }
             }
 
+            if (this._dirtyRemoveListeners)
+            {
+                for (const listener of this._dirtyRemoveListeners)
+                {
+                    const index = this._listeners.indexOf(listener);
+                    assert(index != -1);
+                    this._listeners.splice(index, 1);
+                }
+                delete this._dirtyRemoveListeners;
+            }
+
             if (this._dirtyForwardListeners)
             {
                 this._listeners.unshift(...this._dirtyForwardListeners);
@@ -125,7 +136,18 @@ module Geoma.Utils
             let index = this._listeners.indexOf(listener);
             if (index != -1)
             {
-                this._listeners.splice(index, 1);
+                if (this._isEmited)
+                {
+                    if (!this._dirtyRemoveListeners)
+                    {
+                        this._dirtyRemoveListeners = [];
+                    }
+                    this._dirtyRemoveListeners.push(listener);
+                }
+                else
+                {
+                    this._listeners.splice(index, 1);
+                }
                 return;
             }
             if (this._dirtyForwardListeners)
@@ -152,6 +174,7 @@ module Geoma.Utils
         private _listeners: Array<IEventListener<TEvent>>;
         private _dirtyForwardListeners?: Array<IEventListener<TEvent>>;
         private _dirtyBackwardListeners?: Array<IEventListener<TEvent>>;
+        private _dirtyRemoveListeners?: Array<IEventListener<TEvent>>;
         private _isEmited: boolean = false;
     }
 
@@ -456,7 +479,7 @@ module Geoma.Utils
         {
             this._h.addModifier(modifier);
         }
-        public mouseHit(point: IPoint)
+        public mouseHit(point: IPoint): boolean
         {
             return this.left <= point.x &&
                 this.right >= point.x &&

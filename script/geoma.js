@@ -3,7 +3,7 @@ var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
         return extendStatics(d, b);
     };
     return function (d, b) {
@@ -77,6 +77,15 @@ var Geoma;
                         }
                     }
                 }
+                if (this._dirtyRemoveListeners) {
+                    for (var _d = 0, _e = this._dirtyRemoveListeners; _d < _e.length; _d++) {
+                        var listener = _e[_d];
+                        var index = this._listeners.indexOf(listener);
+                        assert(index != -1);
+                        this._listeners.splice(index, 1);
+                    }
+                    delete this._dirtyRemoveListeners;
+                }
                 if (this._dirtyForwardListeners) {
                     (_a = this._listeners).unshift.apply(_a, this._dirtyForwardListeners);
                     delete this._dirtyForwardListeners;
@@ -125,7 +134,15 @@ var Geoma;
             MulticastEvent.prototype.remove = function (listener) {
                 var index = this._listeners.indexOf(listener);
                 if (index != -1) {
-                    this._listeners.splice(index, 1);
+                    if (this._isEmited) {
+                        if (!this._dirtyRemoveListeners) {
+                            this._dirtyRemoveListeners = [];
+                        }
+                        this._dirtyRemoveListeners.push(listener);
+                    }
+                    else {
+                        this._listeners.splice(index, 1);
+                    }
                     return;
                 }
                 if (this._dirtyForwardListeners) {
@@ -564,39 +581,84 @@ var Geoma;
             _this.onMouseDown = new MulticastEvent();
             _this.onMouseUp = new MulticastEvent();
             _this.onMouseClick = new MulticastEvent();
+            _this._touchInterface = false;
             _this._mousePoint = Point.make(0, 0);
             _this._downPoint = Point.make(0, 0);
             assert(canvas);
             _this._canvas = canvas;
-            _this._canvas.onmousemove = _this.onMouseMove.connect();
-            _this._canvas.onmousedown = _this.onMouseDown.connect();
-            _this._canvas.onmouseup = _this.onMouseUp.connect();
-            _this._canvas.ontouchmove = function (event) {
-                var _a;
-                var document = _this._canvas.ownerDocument;
-                for (var i = 0; i < event.targetTouches.length; i++) {
-                    var touch = event.touches[i];
-                    var mouse_event = document.createEvent('MouseEvents');
-                    mouse_event.initMouseEvent("mousemove", true, true, (_a = event.view) !== null && _a !== void 0 ? _a : window, event.detail, touch.screenX, touch.screenY, touch.clientX, touch.clientY, event.ctrlKey, event.altKey, event.shiftKey, event.metaKey, 1, touch.target);
-                    _this.onMouseMove.emitEvent(mouse_event);
-                }
-            };
+            var mouse_pointed_device = ("onmousemove" in window);
+            var touch_screen_device = ("ontouchstart" in window) ||
+                (navigator.maxTouchPoints > 0) ||
+                (navigator.msMaxTouchPoints > 0);
+            if (touch_screen_device) {
+                _this._touchInterface = true;
+                console.log("The touchsreen device.");
+                _this._canvas.ontouchmove = (function (touch_event) {
+                    var document = _this._canvas.ownerDocument;
+                    for (var i = 0; i < touch_event.targetTouches.length; i++) {
+                        var touch = touch_event.targetTouches[i];
+                        var mouse_data = PlayGround.touchToMouseEventInit(touch_event, touch);
+                        Geoma.Tools.Thickness.setMouseThickness(Math.max(touch.radiusX, touch.radiusY));
+                        _this.mouseMove(new MouseEvent("mousemove", mouse_data));
+                    }
+                }).bind(_this);
+                _this._canvas.ontouchstart = (function (touch_event) {
+                    var document = _this._canvas.ownerDocument;
+                    for (var i = 0; i < touch_event.targetTouches.length; i++) {
+                        var touch = touch_event.targetTouches[i];
+                        var mouse_data = PlayGround.touchToMouseEventInit(touch_event, touch);
+                        Geoma.Tools.Thickness.setMouseThickness(Math.max(touch.radiusX, touch.radiusY));
+                        var mouse_event = new MouseEvent("mousedown", mouse_data);
+                        if (_this.mousePoint.x != mouse_event.x || _this.mousePoint.y != mouse_event.y) {
+                            _this.mouseMove(mouse_event);
+                            if (mouse_event.cancelBubble) {
+                                mouse_event = new MouseEvent("mousedown", mouse_data);
+                            }
+                        }
+                        _this.mouseDown(mouse_event);
+                    }
+                }).bind(_this);
+                _this._canvas.ontouchend = (function (touch_event) {
+                    var document = _this._canvas.ownerDocument;
+                    for (var i = 0; i < touch_event.changedTouches.length; i++) {
+                        var touch = touch_event.changedTouches[i];
+                        var mouse_data = PlayGround.touchToMouseEventInit(touch_event, touch);
+                        Geoma.Tools.Thickness.setMouseThickness(Math.max(touch.radiusX, touch.radiusY));
+                        var mouse_event = new MouseEvent("mouseup", mouse_data);
+                        if (_this.mousePoint.x != mouse_event.x || _this.mousePoint.y != mouse_event.y) {
+                            _this.mouseMove(mouse_event);
+                            if (mouse_event.cancelBubble) {
+                                mouse_event = new MouseEvent("mouseup", mouse_data);
+                            }
+                        }
+                        _this.mouseUp(mouse_event);
+                    }
+                }).bind(_this);
+            }
+            else if (mouse_pointed_device) {
+                console.log("The device with mouse or touchpad.");
+                _this._canvas.onmousemove = _this.mouseMove.bind(_this);
+                _this._canvas.onmousedown = _this.mouseDown.bind(_this);
+                _this._canvas.onmouseup = _this.mouseUp.bind(_this);
+            }
+            else {
+                assert(false, "The device doesn't have mouse or touchscreen");
+            }
             _this.invalidate();
-            _this.addW(function () { return _this._canvas.width; });
-            _this.addH(function () { return _this._canvas.height; });
+            _this.addW(Geoma.Utils.makeMod(_this, function () { return Math.trunc(_this._canvas.width / _this.ratio); }));
+            _this.addH(Geoma.Utils.makeMod(_this, function () { return Math.trunc(_this._canvas.height / _this.ratio); }));
             var context2d = _this._canvas.getContext("2d");
             assert(context2d);
             _this._context2d = context2d;
-            _this.onMouseMove.bind(_this, function (event) { _this._mousePoint = event; });
-            _this.onMouseDown.bind(_this, function (event) { _this._downPoint = event; });
-            _this.onMouseUp.bind(_this, function (event) {
-                var click_tolerance = 1;
-                if (_this._downPoint && Math.abs(_this._downPoint.x - event.x) <= click_tolerance && Math.abs(_this._downPoint.y - event.y) <= click_tolerance) {
-                    _this.onMouseClick.emitEvent(event);
-                }
-            });
             return _this;
         }
+        Object.defineProperty(PlayGround.prototype, "touchInterface", {
+            get: function () {
+                return this._touchInterface;
+            },
+            enumerable: false,
+            configurable: true
+        });
         Object.defineProperty(PlayGround.prototype, "mousePoint", {
             get: function () {
                 return this._mousePoint;
@@ -627,7 +689,7 @@ var Geoma;
                 this._canvas.height = parent.clientHeight * ratio;
             }
         };
-        PlayGround.prototype.getPosition = function (el) {
+        PlayGround.getPosition = function (el) {
             var x = 0;
             var y = 0;
             if (el.offsetParent) {
@@ -639,6 +701,76 @@ var Geoma;
                 }
             }
             return Point.make(x, y);
+        };
+        PlayGround.prototype.updateMouseEvent = function (event) {
+            var _a;
+            if (event.x == event.offsetX && event.y == event.offsetY) {
+                return event;
+            }
+            else {
+                return new MouseEvent(event.type, {
+                    view: (_a = event.view) !== null && _a !== void 0 ? _a : window,
+                    altKey: event.altKey,
+                    bubbles: event.bubbles,
+                    button: event.button,
+                    buttons: event.buttons,
+                    cancelable: event.cancelable,
+                    clientX: event.offsetX,
+                    clientY: event.offsetY,
+                    ctrlKey: event.ctrlKey,
+                    detail: event.detail,
+                    metaKey: event.metaKey,
+                    relatedTarget: event.target,
+                    screenX: event.screenX,
+                    screenY: event.screenY,
+                    shiftKey: event.shiftKey,
+                    movementX: event.movementX,
+                    movementY: event.movementY
+                });
+            }
+        };
+        PlayGround.prototype.mouseMove = function (event) {
+            var updated_event = this.updateMouseEvent(event);
+            this._mousePoint = updated_event;
+            this.onMouseMove.emitEvent(updated_event);
+        };
+        PlayGround.prototype.mouseDown = function (event) {
+            var updated_event = this.updateMouseEvent(event);
+            this._downPoint = updated_event;
+            this.onMouseDown.emitEvent(updated_event);
+        };
+        PlayGround.prototype.mouseUp = function (event) {
+            var updated_event = this.updateMouseEvent(event);
+            var click_tolerance = 1;
+            if (this._downPoint && Math.abs(this._downPoint.x - updated_event.x) <= click_tolerance && Math.abs(this._downPoint.y - updated_event.y) <= click_tolerance) {
+                this.onMouseClick.emitEvent(updated_event);
+            }
+            this.onMouseUp.emitEvent(updated_event);
+        };
+        PlayGround.touchToMouseEventInit = function (touch_event, touch) {
+            var _a;
+            var dx = 0, dy = 0;
+            if (touch_event.target instanceof HTMLElement) {
+                dx = touch_event.target.offsetLeft;
+                dy = touch_event.target.offsetTop;
+            }
+            return {
+                view: (_a = touch_event.view) !== null && _a !== void 0 ? _a : window,
+                altKey: touch_event.altKey,
+                bubbles: touch_event.bubbles,
+                button: 1,
+                buttons: 1,
+                cancelable: true,
+                clientX: touch.clientX - dx,
+                clientY: touch.clientY - dy,
+                ctrlKey: touch_event.ctrlKey,
+                detail: touch_event.detail,
+                metaKey: touch_event.metaKey,
+                relatedTarget: touch.target,
+                screenX: touch.screenX,
+                screenY: touch.screenY,
+                shiftKey: touch_event.shiftKey,
+            };
         };
         PlayGround.drawingSprites = 0;
         return PlayGround;
@@ -1317,7 +1449,6 @@ var Geoma;
 (function (Geoma) {
     var Tools;
     (function (Tools) {
-        var makeProp = Geoma.Utils.makeProp;
         var assert = Geoma.Utils.assert;
         var DocumentSprite = (function (_super) {
             __extends(DocumentSprite, _super);
@@ -1415,73 +1546,30 @@ var Geoma;
             return Tooltip;
         }(Geoma.Sprite.Container));
         Tools.Tooltip = Tooltip;
-        var TapIndicator = (function (_super) {
-            __extends(TapIndicator, _super);
-            function TapIndicator(document, delay_time, activate_time, line_width, radius, brush) {
-                var _this = this;
-                var stub = (function (_super) {
-                    __extends(stub, _super);
-                    function stub() {
-                        return _super !== null && _super.apply(this, arguments) || this;
-                    }
-                    stub.prototype.innerDraw = function (play_ground) {
-                        throw new Error("Method not implemented.");
-                    };
-                    return stub;
-                }(Geoma.Sprite.Sprite));
-                _this = _super.call(this, document, new stub()) || this;
-                _this._mouseUp = makeProp(false);
-                _this._delayTime = makeProp(delay_time, 0);
-                _this._activateTime = makeProp(activate_time, 0);
-                _this._lineWidth = makeProp(line_width, 0);
-                _this._radius = makeProp(radius, 0);
-                _this._brush = makeProp(brush, "Black");
-                _this._startTicks = Tools.Document.getTicks();
-                _this._activated = false;
-                return _this;
-            }
-            Object.defineProperty(TapIndicator.prototype, "activated", {
-                get: function () {
-                    return this._activated;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            TapIndicator.prototype.innerDraw = function (play_ground) {
-                var dt = Math.abs(this._startTicks - Tools.Document.getTicks()) - this._delayTime.value;
-                if (dt > 0) {
-                    var point = play_ground.mousePoint;
-                    play_ground.context2d.beginPath();
-                    play_ground.context2d.strokeStyle = this._brush.value;
-                    play_ground.context2d.lineWidth = this._lineWidth.value;
-                    play_ground.context2d.shadowColor = Tools.CurrentTheme.TapShadowColor;
-                    play_ground.context2d.shadowBlur = Tools.CurrentTheme.TapShadowBlure;
-                    var duration = this._activateTime.value - this._delayTime.value;
-                    var radius = Math.cos(Math.PI * dt / duration - Math.PI / 2) * this._radius.value;
-                    if (dt >= duration) {
-                        if (!this._mouseUp.value) {
-                            this._activated = true;
-                        }
-                        play_ground.context2d.shadowColor = "rgba(0,0,0,0)";
-                        play_ground.context2d.shadowBlur = 0;
-                        return;
-                    }
-                    play_ground.context2d.arc(point.x, point.y, radius, 0, Math.PI * 2, false);
-                    play_ground.context2d.lineWidth = 2;
-                    play_ground.context2d.stroke();
-                    play_ground.context2d.shadowColor = "rgba(0,0,0,0)";
-                    play_ground.context2d.shadowBlur = 0;
-                }
-            };
-            return TapIndicator;
-        }(DocumentSprite));
-        Tools.TapIndicator = TapIndicator;
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
 })(Geoma || (Geoma = {}));
 var Geoma;
 (function (Geoma) {
     var Tools;
     (function (Tools) {
+        var ThicknessHelper = (function () {
+            function ThicknessHelper() {
+                this.Calc = 0.1;
+                this._mouseThickness = ThicknessHelper._minimalMouseThickness;
+            }
+            Object.defineProperty(ThicknessHelper.prototype, "Mouse", {
+                get: function () {
+                    return this._mouseThickness;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            ThicknessHelper.prototype.setMouseThickness = function (value) {
+                this._mouseThickness = Math.max(ThicknessHelper._minimalMouseThickness, value);
+            };
+            ThicknessHelper._minimalMouseThickness = 5;
+            return ThicknessHelper;
+        }());
         var DefaultThemeStyle = (function () {
             function DefaultThemeStyle() {
                 this.name = "DefaultTheme";
@@ -1509,8 +1597,6 @@ var Geoma;
                 this.ActiveLineWidth = 2;
                 this.ActiveLineBrush = "SandyBrown";
                 this.ActiveLineSelectBrush = "Lime";
-                this.ActiveLineMouseThickness = 5;
-                this.ActiveLineCaclThickness = 0.1;
                 this.ActiveCircleWidth = 2;
                 this.ActiveCircleBrush = "SandyBrown";
                 this.ActiveCircleSelectBrush = "Lime";
@@ -1600,8 +1686,6 @@ var Geoma;
                 this.ActiveLineWidth = 2;
                 this.ActiveLineBrush = "DarkSlateGray";
                 this.ActiveLineSelectBrush = "OrangeRed";
-                this.ActiveLineMouseThickness = 5;
-                this.ActiveLineCaclThickness = 0.1;
                 this.ActiveCircleWidth = 2;
                 this.ActiveCircleBrush = "DarkSlateGray";
                 this.ActiveCircleSelectBrush = "OrangeRed";
@@ -1658,6 +1742,7 @@ var Geoma;
             }
             return BlueThemeStyle;
         }());
+        Tools.Thickness = new ThicknessHelper();
         Tools.DefaultTheme = new DefaultThemeStyle();
         Tools.BlueTheme = new BlueThemeStyle();
         Tools.CurrentTheme = Tools.DefaultTheme;
@@ -1708,9 +1793,16 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
+            Object.defineProperty(ActivePointBase.prototype, "w", {
+                get: function () {
+                    return this._line.w + (this._text ? (this._text.w + ActivePointBase._textPadding) : 0);
+                },
+                enumerable: false,
+                configurable: true
+            });
             Object.defineProperty(ActivePointBase.prototype, "right", {
                 get: function () {
-                    return this._line.x + this.item.w;
+                    return this._line.x + this.w;
                 },
                 enumerable: false,
                 configurable: true
@@ -1724,9 +1816,9 @@ var Geoma;
             });
             ActivePointBase.prototype.setName = function (value, brush, style) {
                 assert(!this.name);
-                var name_text = new Geoma.Sprite.Text(this._line.right + 5, this.y, 0, 0, brush, style, value);
-                this.item.push(name_text);
-                this.item.name = name_text.text.value;
+                this._text = new Geoma.Sprite.Text(this._line.right + ActivePointBase._textPadding, this.y, 0, 0, brush, style, value);
+                this.item.push(this._text);
+                this.item.name = this._text.text.value;
             };
             ActivePointBase.prototype.serialize = function (context) {
                 assert(false);
@@ -1742,6 +1834,7 @@ var Geoma;
                 this.selected = this.mouseHit(event);
                 _super.prototype.mouseMove.call(this, event);
             };
+            ActivePointBase._textPadding = 5;
             return ActivePointBase;
         }(Tools.DocumentSprite));
         Tools.ActivePointBase = ActivePointBase;
@@ -1981,6 +2074,8 @@ var Geoma;
                 _this.item.addX(makeMod(_this, function (value) { return value - _this._dx; }));
                 _this.item.addY(makeMod(_this, function (value) { return value - _this._dy; }));
                 _this._clientWidth = makeProp(makeMod(_this, _this.maxClientWidth), 0);
+                _this._mouseDownBinder = document.mouseArea.onMouseDown.bind(_this, _this.handleEvent);
+                _this._mouseUpBinder = document.mouseArea.onMouseDown.bind(_this, _this.handleEvent);
                 return _this;
             }
             Object.defineProperty(Menu.prototype, "rootMenu", {
@@ -1999,6 +2094,13 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
+            Menu.prototype.dispose = function () {
+                if (!this.disposed) {
+                    this._mouseDownBinder.dispose();
+                    this._mouseUpBinder.dispose();
+                    _super.prototype.dispose.call(this);
+                }
+            };
             Menu.prototype.addMenuItem = function (text) {
                 var _this = this;
                 var index = this.item.length - 1;
@@ -2027,35 +2129,39 @@ var Geoma;
             Menu.prototype.close = function () {
                 this.document.closeMenu(this.rootMenu);
             };
-            Menu.prototype.mouseClick = function (event) {
-                var _a;
+            Menu.prototype.handleEvent = function (event) {
                 if (this.visible) {
-                    if (this.mouseHit(event) || ((_a = this._parentGroup) === null || _a === void 0 ? void 0 : _a.mouseHit(event))) {
+                    if (!this._parentGroup) {
                         event.cancelBubble = true;
                     }
-                    else {
-                        var close_menu = true;
-                        for (var i = 0; i < this.item.length; i++) {
-                            if (this.item.item(i).selected) {
-                                close_menu = false;
-                                break;
-                            }
+                    return true;
+                }
+                else {
+                    return false;
+                }
+            };
+            Menu.prototype.mouseClick = function (event) {
+                if (this.handleEvent(event) && !this.mouseHit(event)) {
+                    var close_menu = true;
+                    for (var i = 0; i < this.item.length; i++) {
+                        if (this.item.item(i).selected) {
+                            close_menu = false;
+                            break;
                         }
-                        if (close_menu) {
-                            this.close();
-                        }
+                    }
+                    if (close_menu) {
+                        this.close();
                     }
                 }
                 _super.prototype.mouseClick.call(this, event);
             };
             Menu.prototype.mouseMove = function (event) {
-                if (this.visible && this.mouseHit(event)) {
+                if (this.handleEvent(event) && this.mouseHit(event)) {
                     if (this._parentGroup) {
                         if (!this._parentGroup.selected) {
                             this._parentGroup.selected = true;
                         }
                     }
-                    event.cancelBubble = true;
                 }
                 _super.prototype.mouseMove.call(this, event);
             };
@@ -2192,7 +2298,10 @@ var Geoma;
     var Tools;
     (function (Tools) {
         var makeMod = Geoma.Utils.makeMod;
+        var makeProp = Geoma.Utils.makeProp;
         var Point = Geoma.Utils.Point;
+        var assert = Geoma.Utils.assert;
+        var MulticastEvent = Geoma.Utils.MulticastEvent;
         var ToolBase = (function (_super) {
             __extends(ToolBase, _super);
             function ToolBase(document, x, y, radius, line_width, name) {
@@ -2445,6 +2554,101 @@ var Geoma;
             return SettingsTool;
         }(ToolBase));
         Tools.SettingsTool = SettingsTool;
+        var TapTool = (function (_super) {
+            __extends(TapTool, _super);
+            function TapTool(document, delay_time, activate_time, line_width, radius, brush) {
+                var _this = this;
+                var stub = (function (_super) {
+                    __extends(stub, _super);
+                    function stub() {
+                        return _super !== null && _super.apply(this, arguments) || this;
+                    }
+                    stub.prototype.innerDraw = function (play_ground) {
+                        throw new Error("Method not implemented.");
+                    };
+                    return stub;
+                }(Geoma.Sprite.Sprite));
+                _this = _super.call(this, document, new stub()) || this;
+                _this._mouseDownListener = _this.document.mouseArea.onMouseDown.bind(_this, _this.mouseDown);
+                _this._delayTime = makeProp(delay_time, 0);
+                _this._activateTime = makeProp(activate_time, 0);
+                _this._lineWidth = makeProp(line_width, 0);
+                _this._radius = makeProp(radius, 0);
+                _this._brush = makeProp(brush, "Black");
+                _this.visible = false;
+                _this.onActivate = new MulticastEvent();
+                return _this;
+            }
+            TapTool.prototype.dispose = function () {
+                var _a;
+                if (!this.disposed) {
+                    this._mouseDownListener.dispose();
+                    (_a = this._mouseUpListener) === null || _a === void 0 ? void 0 : _a.dispose();
+                    _super.prototype.dispose.call(this);
+                }
+            };
+            TapTool.prototype.innerDraw = function (play_ground) {
+                assert(this._startTicks);
+                assert(this._downPoint);
+                var elapsed_time = Tools.Document.getTicks() - this._startTicks;
+                var active_time = elapsed_time - this._delayTime.value;
+                if (active_time >= 0) {
+                    var duration = this._activateTime.value - this._delayTime.value;
+                    var radius = Math.cos(Math.PI * active_time / duration - Math.PI / 2) * this._radius.value;
+                    if (active_time >= duration) {
+                        this.tryActivate(play_ground.mousePoint);
+                    }
+                    else {
+                        var shadow_color = play_ground.context2d.shadowColor;
+                        var shadow_blur = play_ground.context2d.shadowBlur;
+                        var point = this._downPoint;
+                        play_ground.context2d.beginPath();
+                        play_ground.context2d.strokeStyle = this._brush.value;
+                        play_ground.context2d.lineWidth = this._lineWidth.value;
+                        play_ground.context2d.shadowColor = Tools.CurrentTheme.TapShadowColor;
+                        play_ground.context2d.shadowBlur = Tools.CurrentTheme.TapShadowBlure;
+                        play_ground.context2d.arc(point.x, point.y, radius, 0, Math.PI * 2, false);
+                        play_ground.context2d.lineWidth = 2;
+                        play_ground.context2d.stroke();
+                        play_ground.context2d.shadowColor = shadow_color;
+                        play_ground.context2d.shadowBlur = shadow_blur;
+                    }
+                }
+            };
+            TapTool.prototype.mouseDown = function (event) {
+                if (this.document.selectedSprites.length == 0) {
+                    assert(!this._mouseUpListener);
+                    this._mouseUpListener = this.document.mouseArea.onMouseUp.bind(this, this.mouseUp, true);
+                    this._downPoint = event;
+                    this._startTicks = Tools.Document.getTicks();
+                    this.visible = true;
+                    this.selected = true;
+                }
+            };
+            TapTool.prototype.mouseUp = function (event) {
+                this.visible = false;
+                this.selected = false;
+                assert(this._mouseUpListener);
+                this._mouseUpListener.dispose();
+                delete this._mouseUpListener;
+            };
+            TapTool.prototype.tryActivate = function (point) {
+                if (this._downPoint && this.document.selectedSprites.length == 1 && this.document.canShowMenu(this)) {
+                    var dp = Point.sub(this._downPoint, point);
+                    if ((dp.x * dp.x + dp.y * dp.y) <= (Tools.Thickness.Mouse * Tools.Thickness.Mouse)) {
+                        this.onActivate.emitEvent(new CustomEvent("ontap", { detail: point }));
+                    }
+                }
+                this.selected = false;
+                this.visible = false;
+                assert(this._mouseUpListener);
+                this._mouseUpListener.dispose();
+                delete this._mouseUpListener;
+            };
+            TapTool._transparent = "rgba(0,0,0,0)";
+            return TapTool;
+        }(Tools.DocumentSprite));
+        Tools.TapTool = TapTool;
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
 })(Geoma || (Geoma = {}));
 var Geoma;
@@ -2669,7 +2873,7 @@ var Geoma;
                 }
             };
             ActiveLineBase.prototype.mouseHit = function (point) {
-                return this.visible && Tools.PointLine.intersected(point, this._startPoint, this._endPoint, Tools.CurrentTheme.ActiveLineMouseThickness);
+                return this.visible && Tools.PointLine.intersected(point, this._startPoint, this._endPoint, Tools.Thickness.Mouse);
             };
             ActiveLineBase.prototype.setLength = function (value, fix_point) {
                 assert(false, "Not implemented yet");
@@ -2701,7 +2905,7 @@ var Geoma;
             };
             ActiveLineBase.prototype.through = function (p) {
                 assert(this.belongs(p));
-                if (!Tools.PointLine.intersected(p, this.startPoint, this.endPoint, Tools.CurrentTheme.ActiveLineCaclThickness)) {
+                if (!Tools.PointLine.intersected(p, this.startPoint, this.endPoint, Tools.Thickness.Calc)) {
                     var dx = this._startPoint.x - p.x;
                     var dy = this._startPoint.y - p.y;
                     var l1 = Math.sqrt(dx * dx + dy * dy);
@@ -3718,7 +3922,7 @@ var Geoma;
                 return false;
             };
             ActiveCircleLine.prototype.mouseHit = function (point) {
-                return Tools.PointCircle.isIntersected(point, this, Tools.CurrentTheme.ActiveLineMouseThickness);
+                return Tools.PointCircle.isIntersected(point, this, Tools.Thickness.Mouse);
             };
             ActiveCircleLine.prototype.addPoint = function (point) {
                 assert(!this.belongs(point));
@@ -4384,7 +4588,7 @@ var Geoma;
                 }
             };
             ParametricLine.prototype.mouseHit = function (point) {
-                return Tools.PointParametric.intersected(point, this, Tools.CurrentTheme.ActiveLineMouseThickness);
+                return Tools.PointParametric.intersected(point, this, Tools.Thickness.Mouse);
             };
             ParametricLine.prototype.move = function (dx, dy) {
                 this.axes.move(dx, dy);
@@ -4394,7 +4598,7 @@ var Geoma;
             };
             ParametricLine.prototype.showExpressionEditor = function () {
                 var _this = this;
-                var dialog = new Tools.ExpressionDialog(this.document, makeMod(this, function () { return _this.document.mouseArea.x + _this.document.mouseArea.w / 2 - _this.document.mouseArea.w / 10; }), makeMod(this, function () { return _this.document.mouseArea.y + _this.document.mouseArea.h / 2 - _this.document.mouseArea.h / 10; }), this.code);
+                var dialog = new Tools.ExpressionDialog(this.document, makeMod(this, function () { return (_this.document.mouseArea.x + _this.document.mouseArea.w / 2 - _this.document.mouseArea.w / 10) / _this.document.mouseArea.ratio; }), makeMod(this, function () { return (_this.document.mouseArea.y + _this.document.mouseArea.h / 2 - _this.document.mouseArea.h / 10) / _this.document.mouseArea.ratio; }), this.code);
                 dialog.onEnter.bind(this, function (event) {
                     if (event.detail) {
                         _this.code = event.detail;
@@ -5046,7 +5250,7 @@ var Geoma;
                             var x = (Math.sqrt(d) + w) / k2_1;
                             var y = Tools.ActiveLineBase.getY(x, coeff);
                             var p1 = Point.make(x, y);
-                            if (PointLine.intersected(p1, line.startPoint, line.endPoint, Tools.CurrentTheme.ActiveLineCaclThickness)) {
+                            if (PointLine.intersected(p1, line.startPoint, line.endPoint, Tools.Thickness.Calc)) {
                                 ret.p1 = p1;
                             }
                         }
@@ -5054,7 +5258,7 @@ var Geoma;
                             var x = (w - Math.sqrt(d)) / k2_1;
                             var y = Tools.ActiveLineBase.getY(x, coeff);
                             var p2 = Point.make(x, y);
-                            if (PointLine.intersected(p2, line.startPoint, line.endPoint, Tools.CurrentTheme.ActiveLineCaclThickness)) {
+                            if (PointLine.intersected(p2, line.startPoint, line.endPoint, Tools.Thickness.Calc)) {
                                 ret.p2 = p2;
                             }
                         }
@@ -5072,10 +5276,10 @@ var Geoma;
                         var p1y = y0 + h;
                         var p2y = y0 - h;
                         var ret = {};
-                        if (PointLine.intersected(Point.make(x1, p1y), line.startPoint, line.endPoint, Tools.CurrentTheme.ActiveLineCaclThickness)) {
+                        if (PointLine.intersected(Point.make(x1, p1y), line.startPoint, line.endPoint, Tools.Thickness.Calc)) {
                             ret.p1 = Point.make(x1, p1y);
                         }
-                        if (PointLine.intersected(Point.make(x1, p2y), line.startPoint, line.endPoint, Tools.CurrentTheme.ActiveLineCaclThickness)) {
+                        if (PointLine.intersected(Point.make(x1, p2y), line.startPoint, line.endPoint, Tools.Thickness.Calc)) {
                             ret.p2 = Point.make(x1, p2y);
                         }
                         return ret;
@@ -5282,12 +5486,12 @@ var Geoma;
                 }
             };
             AxesLines.prototype.mouseHit = function (point) {
-                if (Math.abs(point.y - this.y) <= Tools.CurrentTheme.ActiveLineMouseThickness ||
-                    Math.abs(point.x - this.x) <= Tools.CurrentTheme.ActiveLineMouseThickness) {
+                if (Math.abs(point.y - this.y) <= Tools.Thickness.Mouse ||
+                    Math.abs(point.x - this.x) <= Tools.Thickness.Mouse) {
                     return true;
                 }
                 else if (this._adorners.visible) {
-                    var margins = AxesLines._adornerMargins + Tools.CurrentTheme.ActiveLineMouseThickness;
+                    var margins = AxesLines._adornerMargins + Tools.Thickness.Mouse;
                     return point.x >= (this._adorners.left - margins) &&
                         point.x <= (this._adorners.right + margins) &&
                         point.y >= (this._adorners.top - margins) &&
@@ -5706,7 +5910,7 @@ var Geoma;
                         item = menu.addMenuItem("123");
                         item.onChecked.bind(this, function () {
                             var number = _this.document.promptNumber("");
-                            if (number) {
+                            if (number != null) {
                                 _this._owner._codeElement = new Tools.CodeLiteral(number);
                             }
                         });
@@ -6033,12 +6237,22 @@ var Geoma;
                 if (expression) {
                     code.codeElement = expression;
                 }
+                _this._mouseDownBinder = document.mouseArea.onMouseDown.bind(_this, _this.mouseHandle);
+                _this._mouseUpBinder = document.mouseArea.onMouseDown.bind(_this, _this.mouseHandle);
                 return _this;
             }
-            ExpressionDialog.prototype.mouseMove = function (event) {
-                if (this.mouseHit(event)) {
-                    event.cancelBubble = true;
+            ExpressionDialog.prototype.dispose = function () {
+                if (!this.disposed) {
+                    this._mouseDownBinder.dispose();
+                    this._mouseUpBinder.dispose();
+                    _super.prototype.dispose.call(this);
                 }
+            };
+            ExpressionDialog.prototype.mouseHandle = function (event) {
+                event.cancelBubble = true;
+            };
+            ExpressionDialog.prototype.mouseMove = function (event) {
+                this.mouseHandle(event);
                 _super.prototype.mouseMove.call(this, event);
             };
             return ExpressionDialog;
@@ -6103,18 +6317,22 @@ var Geoma;
                 _this._background = new Tools.Background(_this);
                 _this._data.initialize(_this);
                 _this.push(_this._tools);
+                var tap_tool = new Tools.TapTool(_this, function () { return Tools.CurrentTheme.TapDelayTime; }, function () { return Tools.CurrentTheme.TapActivateTime; }, function () { return Tools.CurrentTheme.TapLineWidth; }, function () { return Tools.CurrentTheme.TapRadius; }, function () { return Tools.CurrentTheme.TapBrush; });
+                tap_tool.onActivate.bind(_this, function () { return Tools.PointTool.showMenu(_this); });
+                _this.push(tap_tool);
                 var tool_radius = 20;
                 var tool_line_width = 5;
                 var tool_y = 40;
                 var tool_padding = 10;
-                _this._pointTool = new Tools.PointTool(_this, 40, tool_y, tool_radius, tool_line_width);
-                _this._tools.push(_this._pointTool);
+                var point_tool = new Tools.PointTool(_this, 40, tool_y, tool_radius, tool_line_width);
+                _this._tools.push(point_tool);
                 var file_tool = new Tools.FileTool(_this, 0, tool_y, tool_radius, tool_line_width);
-                file_tool.addX(makeMod(_this, function (value) { return value + _this._pointTool.right + tool_radius + tool_padding; }));
                 _this._tools.push(file_tool);
                 var settings_tool = new Tools.SettingsTool(_this, 0, tool_y, tool_radius, tool_line_width);
-                settings_tool.addX(makeMod(_this, function (value) { return value + file_tool.right + tool_radius + tool_padding; }));
                 _this._tools.push(settings_tool);
+                var max_w = function () { return Math.max(point_tool.w, file_tool.w) + tool_padding; };
+                file_tool.addX(function (value) { return value + point_tool.x + max_w() * 1; });
+                settings_tool.addX(function (value) { return value + point_tool.x + max_w() * 2; });
                 var doc_name = new Geoma.Sprite.Text(0, tool_y, 0, 0, function () { return Tools.CurrentTheme.MenuItemTextBrush; }, function () { return Tools.CurrentTheme.MenuItemTextStyle; }, makeMod(_this, function () { return _this.name; }));
                 doc_name.addX(makeMod(_this, function () { return Math.max(_this.mouseArea.x + _this.mouseArea.w - doc_name.w - tool_padding, settings_tool.right + tool_padding); }));
                 _this._tools.push(doc_name);
@@ -6122,8 +6340,6 @@ var Geoma;
                 tools_separator.addPolygon(new Geoma.Polygon.Line(Point.make(0, 0), Point.make(8000, 0)));
                 _this._tools.push(tools_separator);
                 _this._mouseClickBinder = mouse_area.onMouseClick.bind(_this, _this.mouseClick, true);
-                _this._mouseDownBinder = mouse_area.onMouseDown.bind(_this, _this.mouseDown, true);
-                _this._mouseUpBinder = mouse_area.onMouseUp.bind(_this, _this.mouseUp, true);
                 var save_data = document.location.hash;
                 if (save_data != null && save_data.length && save_data[0] == "#") {
                     var data = decodeURI(save_data.substring(1));
@@ -6249,23 +6465,8 @@ var Geoma;
                     }
                 }
             };
-            Document.prototype.mouseDown = function (event) {
-                if (this._tapTool) {
-                    this._tools.remove(this._tapTool);
-                    delete this._tapTool;
-                }
-                if (event.y > this._tools.bottom && this._selectedSprites.length == 0) {
-                    this._tapTool = new Tools.TapIndicator(this, Tools.CurrentTheme.TapDelayTime, Tools.CurrentTheme.TapActivateTime, Tools.CurrentTheme.TapLineWidth, Tools.CurrentTheme.TapRadius, Tools.CurrentTheme.TapBrush);
-                    this._tools.push(this._tapTool);
-                }
-            };
-            Document.prototype.mouseUp = function (event) {
-                if (this._tapTool) {
-                    this._tapTool._mouseUp.value = true;
-                }
-            };
             Document.prototype.canShowMenu = function (sprite) {
-                return !this._contextMenu && !this._state && this._selectedSprites.indexOf(sprite) != -1;
+                return sprite.visible && !this._contextMenu && !this._state && this._selectedSprites.indexOf(sprite) != -1;
             };
             Document.prototype.showMenu = function (menu) {
                 this._contextMenu = menu;
@@ -6279,8 +6480,6 @@ var Geoma;
             Document.prototype.dispose = function () {
                 if (!this.disposed) {
                     this._mouseClickBinder.dispose();
-                    this._mouseDownBinder.dispose();
-                    this._mouseUpBinder.dispose();
                     _super.prototype.dispose.call(this);
                 }
             };
@@ -6465,7 +6664,7 @@ var Geoma;
             };
             Document.prototype.addParametricLine = function (point, axes) {
                 var _this = this;
-                var dialog = new Tools.ExpressionDialog(this, makeMod(this, function () { return _this.mouseArea.x + _this.mouseArea.w / 2 - _this.mouseArea.w / 10; }), makeMod(this, function () { return _this.mouseArea.y + _this.mouseArea.h / 2 - _this.mouseArea.h / 10; }));
+                var dialog = new Tools.ExpressionDialog(this, makeMod(this, function () { return (_this.mouseArea.x + _this.mouseArea.w / 2 - _this.mouseArea.w / 10) / _this.mouseArea.ratio; }), makeMod(this, function () { return (_this.mouseArea.y + _this.mouseArea.h / 2 - _this.mouseArea.h / 10) / _this.mouseArea.ratio; }));
                 dialog.onEnter.bind(this, function (event) {
                     if (event.detail) {
                         var new_axes = !axes;
@@ -6783,12 +6982,6 @@ var Geoma;
                 if (this._tooltip) {
                     this._tooltip.draw(play_ground);
                 }
-                if (this._tapTool && this._tapTool.activated) {
-                    this._tools.remove(this._tapTool);
-                    this._tapTool.dispose();
-                    delete this._tapTool;
-                    Tools.PointTool.showMenu(this);
-                }
                 play_ground.context2d.setTransform(current_transform);
             };
             Document.prototype.execLineSegmentState = function (end_point) {
@@ -6851,12 +7044,12 @@ var Geoma;
                         }
                         if (common_point instanceof Tools.ActiveCommonPoint) {
                             assert(this._state.pitchPoint);
-                            var intersect = Tools.PointLine.intersected(this._state.pitchPoint, segment.start, common_point, Tools.CurrentTheme.ActiveLineMouseThickness);
+                            var intersect = Tools.PointLine.intersected(this._state.pitchPoint, segment.start, common_point, Tools.Thickness.Mouse);
                             if (intersect) {
                                 segment = (_a = this.getLineSegment(segment.start, common_point)) !== null && _a !== void 0 ? _a : this._addLineSegment(segment.start, common_point);
                             }
                             else {
-                                intersect = Tools.PointLine.intersected(this._state.pitchPoint, common_point, segment.end, Tools.CurrentTheme.ActiveLineMouseThickness);
+                                intersect = Tools.PointLine.intersected(this._state.pitchPoint, common_point, segment.end, Tools.Thickness.Mouse);
                                 if (intersect) {
                                     segment = (_b = this.getLineSegment(common_point, segment.end)) !== null && _b !== void 0 ? _b : this._addLineSegment(common_point, segment.end);
                                 }
@@ -6864,12 +7057,12 @@ var Geoma;
                                     return null;
                                 }
                             }
-                            intersect = Tools.PointLine.intersected(select_point, other_segment.start, common_point, Tools.CurrentTheme.ActiveLineMouseThickness);
+                            intersect = Tools.PointLine.intersected(select_point, other_segment.start, common_point, Tools.Thickness.Mouse);
                             if (intersect) {
                                 other_segment = (_c = this.getLineSegment(other_segment.start, common_point)) !== null && _c !== void 0 ? _c : this._addLineSegment(other_segment.start, common_point);
                             }
                             else {
-                                intersect = Tools.PointLine.intersected(select_point, common_point, other_segment.end, Tools.CurrentTheme.ActiveLineMouseThickness);
+                                intersect = Tools.PointLine.intersected(select_point, common_point, other_segment.end, Tools.Thickness.Mouse);
                                 if (intersect) {
                                     other_segment = (_d = this.getLineSegment(common_point, other_segment.end)) !== null && _d !== void 0 ? _d : this._addLineSegment(common_point, other_segment.end);
                                 }
@@ -7056,7 +7249,11 @@ var Geoma;
 })(Geoma || (Geoma = {}));
 var playGround;
 var mainDocument;
+var GeomaApplicationVersion = 0;
+var GeomaFeatureVersion = 1;
+var GeomaFixVersion = 2;
 window.onload = function () {
+    document.title = document.title + " v" + GeomaApplicationVersion + "." + GeomaFeatureVersion + "." + GeomaFixVersion;
     var canvas = document.getElementById('playArea');
     playGround = new Geoma.PlayGround(canvas);
     mainDocument = new Geoma.Tools.Document(playGround);
@@ -7400,7 +7597,7 @@ var Geoma;
         var Background = (function (_super) {
             __extends(Background, _super);
             function Background(document) {
-                return _super.call(this, function () { return document.mouseArea.x; }, function () { return document.mouseArea.y; }, function () { return document.mouseArea.w; }, function () { return document.mouseArea.h; }, function () { return Tools.CurrentTheme.BackgroundBrush; }) || this;
+                return _super.call(this, function () { return document.mouseArea.x; }, function () { return document.mouseArea.y; }, function () { return document.mouseArea.w * document.mouseArea.ratio; }, function () { return document.mouseArea.h * document.mouseArea.ratio; }, function () { return Tools.CurrentTheme.BackgroundBrush; }) || this;
             }
             return Background;
         }(Geoma.Sprite.Rectangle));

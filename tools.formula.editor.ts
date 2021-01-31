@@ -124,7 +124,7 @@ module Geoma.Tools
                     item.onChecked.bind(this, () =>
                     {
                         const number = this.document.promptNumber(``);
-                        if (number)
+                        if (number != null)
                         {
                             this._owner._codeElement = new CodeLiteral(number);
                         }
@@ -492,19 +492,34 @@ module Geoma.Tools
             {
                 code.codeElement = expression;
             }
+            this._mouseDownBinder = document.mouseArea.onMouseDown.bind(this, this.mouseHandle);
+            this._mouseUpBinder = document.mouseArea.onMouseDown.bind(this, this.mouseHandle);
+        }
+
+        public dispose(): void
+        {
+            if (!this.disposed)
+            {
+                this._mouseDownBinder.dispose();
+                this._mouseUpBinder.dispose();
+                super.dispose();
+            }
         }
 
         public readonly onEnter: MulticastEvent<CustomEvent<CodeElement| undefined>>;
 
+        protected mouseHandle(event: MouseEvent): void
+        {
+            event.cancelBubble = true;
+        }
         protected mouseMove(event: MouseEvent): void
         {
-            if (this.mouseHit(event))
-            {
-                event.cancelBubble = true;
-            }
+            this.mouseHandle(event);
             super.mouseMove(event);
         }
 
+        private readonly _mouseDownBinder: IEventListener<MouseEvent>;
+        private readonly _mouseUpBinder: IEventListener<MouseEvent>;
         private readonly _code: CodePlaceholder;
         private readonly _padding: number = 10;
     }

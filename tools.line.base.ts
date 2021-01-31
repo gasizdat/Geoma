@@ -247,7 +247,7 @@ module Geoma.Tools
                 point,
                 this._startPoint,
                 this._endPoint,
-                CurrentTheme.ActiveLineMouseThickness
+                Thickness.Mouse
             );
         }
         public setLength(value: number, fix_point?: IPoint): void
@@ -289,7 +289,7 @@ module Geoma.Tools
         public through(p: ActivePointBase)
         {
             assert(this.belongs(p));
-            if (!PointLine.intersected(p, this.startPoint, this.endPoint, CurrentTheme.ActiveLineCaclThickness))
+            if (!PointLine.intersected(p, this.startPoint, this.endPoint, Thickness.Calc))
             {
                 let dx = this._startPoint.x - p.x;
                 let dy = this._startPoint.y - p.y;
