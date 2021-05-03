@@ -7,17 +7,17 @@ var __extends = (this && this.__extends) || (function () {
         return extendStatics(d, b);
     };
     return function (d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
         extendStatics(d, b);
         function __() { this.constructor = d; }
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
-var __spreadArrays = (this && this.__spreadArrays) || function () {
-    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-    for (var r = Array(s), k = 0, i = 0; i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-            r[k] = a[j];
-    return r;
+var __spreadArray = (this && this.__spreadArray) || function (to, from) {
+    for (var i = 0, il = from.length, j = to.length; i < il; i++, j++)
+        to[j] = from[i];
+    return to;
 };
 var __assign = (this && this.__assign) || function () {
     __assign = Object.assign || function(t) {
@@ -584,6 +584,7 @@ var Geoma;
             _this._touchInterface = false;
             _this._mousePoint = Point.make(0, 0);
             _this._downPoint = Point.make(0, 0);
+            _this._offset = Point.make(0, 0);
             assert(canvas);
             _this._canvas = canvas;
             var mouse_pointed_device = ("onmousemove" in window);
@@ -645,6 +646,8 @@ var Geoma;
                 assert(false, "The device doesn't have mouse or touchscreen");
             }
             _this.invalidate();
+            _this.addX(Geoma.Utils.makeMod(_this, function (value) { return value - _this.offset.x; }));
+            _this.addY(Geoma.Utils.makeMod(_this, function (value) { return value - _this.offset.y; }));
             _this.addW(Geoma.Utils.makeMod(_this, function () { return Math.trunc(_this._canvas.width / _this.ratio); }));
             _this.addH(Geoma.Utils.makeMod(_this, function () { return Math.trunc(_this._canvas.height / _this.ratio); }));
             var context2d = _this._canvas.getContext("2d");
@@ -652,6 +655,27 @@ var Geoma;
             _this._context2d = context2d;
             return _this;
         }
+        Object.defineProperty(PlayGround.prototype, "right", {
+            get: function () {
+                return this.x + this.w + this.offset.x * 2;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(PlayGround.prototype, "bottom", {
+            get: function () {
+                return this.y + this.h + this.offset.y * 2;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(PlayGround.prototype, "offset", {
+            get: function () {
+                return this._offset;
+            },
+            enumerable: false,
+            configurable: true
+        });
         Object.defineProperty(PlayGround.prototype, "touchInterface", {
             get: function () {
                 return this._touchInterface;
@@ -689,6 +713,9 @@ var Geoma;
                 this._canvas.height = parent.clientHeight * ratio;
             }
         };
+        PlayGround.prototype.setOffset = function (dx, dy) {
+            this._offset = Point.make(dx, dy);
+        };
         PlayGround.getPosition = function (el) {
             var x = 0;
             var y = 0;
@@ -704,7 +731,9 @@ var Geoma;
         };
         PlayGround.prototype.updateMouseEvent = function (event) {
             var _a;
-            if (event.x == event.offsetX && event.y == event.offsetY) {
+            var offset_x = event.offsetX + this.offset.x;
+            var offset_y = event.offsetY + this.offset.y;
+            if (event.x == offset_x && event.y == offset_y) {
                 return event;
             }
             else {
@@ -715,8 +744,8 @@ var Geoma;
                     button: event.button,
                     buttons: event.buttons,
                     cancelable: event.cancelable,
-                    clientX: event.offsetX,
-                    clientY: event.offsetY,
+                    clientX: offset_x,
+                    clientY: offset_y,
                     ctrlKey: event.ctrlKey,
                     detail: event.detail,
                     metaKey: event.metaKey,
@@ -1001,6 +1030,9 @@ var Geoma;
                 var index = this._sprites.indexOf(sprite);
                 assert(index != -1);
                 this._sprites.splice(index, 1);
+            };
+            Container.prototype.contains = function (sprite) {
+                return this._sprites.indexOf(sprite) > -1;
             };
             Container.prototype.addX = function (modifier) {
                 for (var _i = 0, _a = this._sprites; _i < _a.length; _i++) {
@@ -1595,8 +1627,14 @@ var Geoma;
                     font: "12px Arial", textBaseline: "top", direction: "inherit", textAlign: "left"
                 };
                 this.ActiveLineWidth = 2;
-                this.ActiveLineBrush = "SandyBrown";
+                this.ActiveLineBrush = "Aqua";
                 this.ActiveLineSelectBrush = "Lime";
+                this.ActiveLineSegmentWidth = 2;
+                this.ActiveLineSegmentBrush = "SandyBrown";
+                this.ActiveLineSegmentSelectBrush = "Lime";
+                this.ParametricLineWidth = 2;
+                this.ParametricLineBrush = "SandyBrown";
+                this.ParametricLineSelectBrush = "Lime";
                 this.ActiveCircleWidth = 2;
                 this.ActiveCircleBrush = "SandyBrown";
                 this.ActiveCircleSelectBrush = "Lime";
@@ -1639,6 +1677,8 @@ var Geoma;
                 this.ToolLineBrush = "#dd11cc";
                 this.ToolSelectLineBrush = "Lime";
                 this.ToolSeparatorBrush = "PowderBlue";
+                this.ToolDisabledBrush = "#000877";
+                this.ToolDisabledLineBrush = "#770088";
                 this.AdornerNameBrush = "#EFFFFF";
                 this.AdornerNameStyle = {
                     font: "18px Arial", textBaseline: "middle", direction: "inherit", textAlign: "left"
@@ -1684,8 +1724,14 @@ var Geoma;
                 this.TapShadowColor = "Lime";
                 this.TapShadowBlure = 15;
                 this.ActiveLineWidth = 2;
-                this.ActiveLineBrush = "DarkSlateGray";
+                this.ActiveLineBrush = "DarkGray";
                 this.ActiveLineSelectBrush = "OrangeRed";
+                this.ActiveLineSegmentWidth = 2;
+                this.ActiveLineSegmentBrush = "DarkSlateGray";
+                this.ActiveLineSegmentSelectBrush = "OrangeRed";
+                this.ParametricLineWidth = 2;
+                this.ParametricLineBrush = "DarkSlateGray";
+                this.ParametricLineSelectBrush = "OrangeRed";
                 this.ActiveCircleWidth = 2;
                 this.ActiveCircleBrush = "DarkSlateGray";
                 this.ActiveCircleSelectBrush = "OrangeRed";
@@ -1696,6 +1742,8 @@ var Geoma;
                 this.ToolBrush = "LightSkyBlue";
                 this.ToolLineBrush = "DarkSlateGray";
                 this.ToolSelectLineBrush = "OrangeRed";
+                this.ToolDisabledBrush = "LightSteelBlue";
+                this.ToolDisabledLineBrush = "DimGray";
                 this.TooltipStyle = {
                     font: "18px Arial", textBaseline: "top", direction: "inherit", textAlign: "left"
                 };
@@ -1821,7 +1869,10 @@ var Geoma;
                 this.item.name = this._text.text.value;
             };
             ActivePointBase.prototype.serialize = function (context) {
-                assert(false);
+                var data = [];
+                data.push("" + (this._line.x + this.item.first.w / 2 + this._line.lineWidth.value / 2));
+                data.push("" + (this._line.y + this.item.first.w / 2 + this._line.lineWidth.value / 2));
+                return data;
             };
             Object.defineProperty(ActivePointBase.prototype, "boundingBox", {
                 get: function () {
@@ -2178,11 +2229,17 @@ var Geoma;
             };
             Menu.prototype.innerDraw = function (play_ground) {
                 _super.prototype.innerDraw.call(this, play_ground);
-                if (this.bottom > play_ground.bottom) {
-                    this._dy = this.bottom - play_ground.bottom + 10;
+                if ((this.bottom + 10) > play_ground.bottom) {
+                    var dy = this.bottom - play_ground.bottom;
+                    if (dy > this._dy) {
+                        this._dy = dy;
+                    }
                 }
-                if (this.right > play_ground.right) {
-                    this._dx = this.right - play_ground.right + 10;
+                if ((this.right + 10) > play_ground.right) {
+                    var dx = this.right - play_ground.right;
+                    if (dx > this._dx) {
+                        this._dx = dx;
+                    }
                 }
             };
             return Menu;
@@ -2218,9 +2275,9 @@ var Geoma;
                 }
                 switch (Resources.language) {
                     case UiLanguage.enUs:
-                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArrays([(_a = Resources.enEnStrings[resource_id]) !== null && _a !== void 0 ? _a : resource_id], args));
+                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([(_a = Resources.enEnStrings[resource_id]) !== null && _a !== void 0 ? _a : resource_id], args));
                     case UiLanguage.ruRu:
-                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArrays([resource_id], args));
+                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([resource_id], args));
                 }
             };
             Resources.language = UiLanguage.ruRu;
@@ -2259,7 +2316,7 @@ var Geoma;
                 "{0}\r\nВведите число": "{0}\r\nPlease, enter a number",
                 "Значение '{0}' не является числом": "The '{0}' is not a number",
                 "Нельзя провести линию к той же точке!": "Unable to make line segment with one point.",
-                "Линия {0} уже проведена!": "Line segment is already exists.",
+                "Отрезок {0} уже проведен!": "Line segment {0} is already exists.",
                 "Угол может быть обозначен только между различными прямыми, имеющими одну общую точку.": "The angle can be set between two different lines segments with one common point.",
                 "Угол между прямыми {0} и {1} уже обозначен.": "The angle is already exists between lines segments {0} and {1}.",
                 "Отрезки {0} и {1} не содержат общих точек": "The {0} and {1} lines segments have not common points.",
@@ -2278,15 +2335,42 @@ var Geoma;
                 "Фиксированный размер": "Fixed size",
                 "Обозначить угол...": "Add the angle indicator...",
                 "Показать биссектрису угла...": "Add the angle bisector...",
-                "Сделать ||...": "Make it parallel...",
-                "Сделать ⟂...": "Make it orthogonal...",
-                "Удалить прямую {0}": "Delete the {0} line segment",
+                "Сделать ||...": "Make it parallel to...",
+                "Сделать ⟂...": "Make it orthogonal to...",
+                "Удалить отрезок {0}": "Delete the {0} line segment",
                 "Приращение аргумента x функции {0}": "dx value of the function {0}",
                 "Точность...": "Accuracy...",
                 "Создать окружность из центра...": "Create a circle with point as center...",
                 "Создать окружность на диаметре...": "Create a circle with point as one of diameter point...",
                 "Удалить точку": "Delete point",
-                "Выберите место": "Please select a starting location"
+                "Выберите место": "Please select a starting location",
+                "Создать линию...": "Create a line...",
+                "Линия {0} уже проведена!": "Line {0} is already exists.",
+                "Удалить линию {0}": "Delete the {0} line ",
+                "Удалить график {0}": "Delete the {0} function graph",
+                "Отмена": "Undo",
+                "Повтор": "Redo",
+                "Перемещение точки {0}": "Moving of the {0} point",
+                "Удаление точки {0}": "Delete the {0} point",
+                "Добавление точки": "Add a point",
+                "Перемещение сегмента {0}": "Moving of the {0} line segment",
+                "Удаление сегмента {0}": "Delete the {0} line segment",
+                "Добавление сегмента": "Add a line segment",
+                "Название угла ({0})": "Angle name ({0})",
+                "Отобразить угол": "Show angle",
+                "Добавление окружности": "Add a circle",
+                "Перемещение окружности {0}": "Moving of the {0} circle",
+                "Добавление линии": "Add a line",
+                "Перемещение линии {0}": "Moving of the {0} line",
+                "Сделать ||": "Make parallel",
+                "Сделать ⟂": "Make orthogonal",
+                "Добавление функции": "Add a function graph",
+                "Перемещение функции {0}": "Moving of the {0} function graph",
+                "Масштабирование функции {0}": "Scaling of the {0} function graph",
+                "Редактирование функции {0}": "Editing of the {0} function grapth",
+                "Масштабирование осей": "Scaling of the axes",
+                "Автоматическое сохранение": "Autosave",
+                "Перемещение страницы": "Moving of the canvas"
             };
             return Resources;
         }());
@@ -2302,13 +2386,19 @@ var Geoma;
         var Point = Geoma.Utils.Point;
         var assert = Geoma.Utils.assert;
         var MulticastEvent = Geoma.Utils.MulticastEvent;
+        var property = Geoma.Utils.ModifiableProperty;
         var ToolBase = (function (_super) {
             __extends(ToolBase, _super);
-            function ToolBase(document, x, y, radius, line_width, name) {
-                var _this = _super.call(this, document, x, y, radius, line_width, function () { return Tools.CurrentTheme.ToolBrush; }, function () { return Tools.CurrentTheme.ToolLineBrush; }, function () { return Tools.CurrentTheme.ToolSelectLineBrush; }) || this;
+            function ToolBase(document, x, y, radius, line_width, name, enabled) {
+                if (enabled === void 0) { enabled = new property(true); }
+                var _this = _super.call(this, document, x, y, radius, line_width, function () { return enabled.value ? Tools.CurrentTheme.ToolBrush : Tools.CurrentTheme.ToolDisabledBrush; }, function () { return enabled.value ? Tools.CurrentTheme.ToolLineBrush : Tools.CurrentTheme.ToolDisabledLineBrush; }, function () { return enabled.value ? Tools.CurrentTheme.ToolSelectLineBrush : Tools.CurrentTheme.ToolDisabledLineBrush; }) || this;
+                _this.enabled = true;
                 _this.setName(name, function () { return Tools.CurrentTheme.ToolNameBrush; }, function () { return Tools.CurrentTheme.ToolNameStyle; });
                 return _this;
             }
+            ToolBase.prototype.mouseHit = function (point) {
+                return _super.prototype.mouseHit.call(this, Point.sub(point, this.document.mouseArea.offset));
+            };
             return ToolBase;
         }(Tools.ActivePointBase));
         var PointTool = (function (_super) {
@@ -2340,6 +2430,8 @@ var Geoma;
                 var menu = new Tools.Menu(document, x, y);
                 var menu_item = menu.addMenuItem(Tools.Resources.string("Создать точку"));
                 menu_item.onChecked.bind(this, function () { return document.addPoint(Point.make(x, y)); });
+                menu_item = menu.addMenuItem(Tools.Resources.string("Создать линию..."));
+                menu_item.onChecked.bind(this, function () { return document.setLineState(new Tools.ActivePoint(document, x, y)); });
                 menu_item = menu.addMenuItem(Tools.Resources.string("Создать отрезок..."));
                 menu_item.onChecked.bind(this, function () { return document.setLineSegmentState(new Tools.ActivePoint(document, x, y)); });
                 menu_item = menu.addMenuItem(Tools.Resources.string("Создать окружность из центра..."));
@@ -2391,25 +2483,36 @@ var Geoma;
             Object.defineProperty(FileTool, "LocalStorageKeys", {
                 get: function () {
                     var names = [];
+                    var has_autosave = false;
                     for (var i = 0; i < window.localStorage.length; i++) {
                         var doc_name = window.localStorage.key(i);
                         if (doc_name != null) {
-                            names.push(doc_name);
+                            if (FileTool._autosavedDocumentName == doc_name) {
+                                has_autosave = true;
+                            }
+                            else {
+                                names.push(doc_name);
+                            }
                         }
                     }
                     names.sort(Geoma.Utils.CompareCaseInsensitive);
+                    if (has_autosave) {
+                        names.splice(0, 0, FileTool._autosavedDocumentName);
+                    }
                     return names;
                 },
                 enumerable: false,
                 configurable: true
             });
+            FileTool.saveLastState = function (data) {
+                window.localStorage.setItem(FileTool._autosavedDocumentName, data);
+            };
             FileTool.prototype.mouseClick = function (event) {
+                var _this = this;
                 if (this.mouseHit(event) && this.document.canShowMenu(this)) {
-                    var x = this.boundingBox.right;
-                    var y = this.boundingBox.bottom;
-                    var menu = new Tools.Menu(this.document, x, y);
+                    var menu = new Tools.Menu(this.document, this.x + this.document.mouseArea.offset.x, this.bottom + this.document.mouseArea.offset.y);
                     var menu_item = menu.addMenuItem(Tools.Resources.string("Новый"));
-                    menu_item.onChecked.bind(this.document, this.document.newDocument);
+                    menu_item.onChecked.bind(this.document, this.document.new);
                     var open_group = menu.addMenuGroup(Tools.Resources.string("Открыть"));
                     menu_item = menu.addMenuItem(Tools.Resources.string("Сохранить..."));
                     menu_item.onChecked.bind(this, this.saveCommand);
@@ -2421,16 +2524,24 @@ var Geoma;
                         if (name_1 == SettingsTool.settingsKey) {
                             continue;
                         }
-                        menu_item = open_group.addMenuItem(name_1);
-                        menu_item.onChecked.bind(this, this.openCommand);
-                        menu_item = delete_group.addMenuItem(name_1);
-                        menu_item.onChecked.bind(this, this.removeCommand);
+                        else if (name_1 == FileTool._autosavedDocumentName) {
+                            menu_item = open_group.addMenuItem(Tools.Resources.string("Автоматическое сохранение"));
+                            menu_item.onChecked.bind(this, function (event) { return _this.openCommand(event, FileTool._autosavedDocumentName); });
+                            menu_item = delete_group.addMenuItem(Tools.Resources.string("Автоматическое сохранение"));
+                            menu_item.onChecked.bind(this, function (event) { return _this.removeCommand(event, FileTool._autosavedDocumentName); });
+                        }
+                        else {
+                            menu_item = open_group.addMenuItem(name_1);
+                            menu_item.onChecked.bind(this, this.openCommand);
+                            menu_item = delete_group.addMenuItem(name_1);
+                            menu_item.onChecked.bind(this, this.removeCommand);
+                        }
                     }
                     menu.show();
                 }
             };
-            FileTool.prototype.openCommand = function (event) {
-                var data = window.localStorage.getItem(event.detail.tooltip);
+            FileTool.prototype.openCommand = function (event, file_name) {
+                var data = window.localStorage.getItem(file_name !== null && file_name !== void 0 ? file_name : event.detail.tooltip);
                 if (data && data.length) {
                     this.document.open(data);
                     this.document.name = event.detail.tooltip;
@@ -2440,8 +2551,8 @@ var Geoma;
                     this.removeCommand(event);
                 }
             };
-            FileTool.prototype.removeCommand = function (event) {
-                window.localStorage.removeItem(event.detail.tooltip);
+            FileTool.prototype.removeCommand = function (event, file_name) {
+                window.localStorage.removeItem(file_name !== null && file_name !== void 0 ? file_name : event.detail.tooltip);
             };
             FileTool.prototype.saveCommand = function () {
                 var data = this.document.save();
@@ -2465,6 +2576,7 @@ var Geoma;
                     });
                 }
             };
+            FileTool._autosavedDocumentName = "{44ED56BE-46A8-4C51-8726-E1D6B4696A38}";
             return FileTool;
         }(ToolBase));
         Tools.FileTool = FileTool;
@@ -2519,9 +2631,7 @@ var Geoma;
             SettingsTool.prototype.mouseClick = function (event) {
                 var _this = this;
                 if (this.mouseHit(event) && this.document.canShowMenu(this)) {
-                    var x = this.boundingBox.right;
-                    var y = this.boundingBox.bottom;
-                    var menu = new Tools.Menu(this.document, x, y);
+                    var menu = new Tools.Menu(this.document, this.x + this.document.mouseArea.offset.x, this.bottom + this.document.mouseArea.offset.y);
                     var language_group = menu.addMenuGroup("Язык (Language)");
                     var menu_item = language_group.addMenuItem("Русский");
                     menu_item.onChecked.bind(this, function () { return Tools.Resources.language = Tools.UiLanguage.ruRu; });
@@ -2554,6 +2664,48 @@ var Geoma;
             return SettingsTool;
         }(ToolBase));
         Tools.SettingsTool = SettingsTool;
+        var UndoTool = (function (_super) {
+            __extends(UndoTool, _super);
+            function UndoTool(document, x, y, radius, line_width) {
+                if (radius === void 0) { radius = 5; }
+                if (line_width === void 0) { line_width = 2; }
+                var _this = _super.call(this, document, x, y, radius, line_width, function () { return Tools.Resources.string("Отмена"); }, new property(function () { return document.canUndo(); }, false)) || this;
+                var icon_line_width = 2;
+                var undo_point = Point.make(x - radius + icon_line_width + line_width / 2 + 2, y - radius + icon_line_width + line_width / 2 + 2);
+                var undo_icon = new Geoma.Sprite.Polyshape(undo_point.x, undo_point.y, icon_line_width, makeMod(_this, function () { return _this.lineBrush; }), 1);
+                undo_icon.addPolygon(new Geoma.Polygon.CustomPath(undo_point, "m17.026,22.957c10.957-11.421-2.326-20.865-10.384-13.309l2.464,2.352h-9.106v-8.947l2.232,2.229c14.794-13.203,31.51,7.051,14.794,17.675z"));
+                _this.item.push(undo_icon);
+                return _this;
+            }
+            UndoTool.prototype.mouseClick = function (event) {
+                if (this.mouseHit(event) && this.document.canUndo()) {
+                    this.document.undo();
+                }
+            };
+            return UndoTool;
+        }(ToolBase));
+        Tools.UndoTool = UndoTool;
+        var RedoTool = (function (_super) {
+            __extends(RedoTool, _super);
+            function RedoTool(document, x, y, radius, line_width) {
+                if (radius === void 0) { radius = 5; }
+                if (line_width === void 0) { line_width = 2; }
+                var _this = _super.call(this, document, x, y, radius, line_width, function () { return Tools.Resources.string("Повтор"); }, new property(function () { return document.canRedo(); }, false)) || this;
+                var icon_line_width = 2;
+                var redo_point = Point.make(x - radius + icon_line_width + line_width / 2 + 2, y - radius + icon_line_width + line_width / 2 + 2);
+                var redo_icon = new Geoma.Sprite.Polyshape(redo_point.x, redo_point.y, icon_line_width, makeMod(_this, function () { return _this.lineBrush; }), 1);
+                redo_icon.addPolygon(new Geoma.Polygon.CustomPath(redo_point, "m6.974,22.957c-10.957-11.421,2.326-20.865,10.384-13.309l-2.464,2.352h9.106v-8.947l-2.232,2.229c-14.794-13.203-31.51,7.051-14.794,17.675z"));
+                _this.item.push(redo_icon);
+                return _this;
+            }
+            RedoTool.prototype.mouseClick = function (event) {
+                if (this.mouseHit(event) && this.document.canRedo()) {
+                    this.document.redo();
+                }
+            };
+            return RedoTool;
+        }(ToolBase));
+        Tools.RedoTool = RedoTool;
         var TapTool = (function (_super) {
             __extends(TapTool, _super);
             function TapTool(document, delay_time, activate_time, line_width, radius, brush) {
@@ -2649,6 +2801,91 @@ var Geoma;
             return TapTool;
         }(Tools.DocumentSprite));
         Tools.TapTool = TapTool;
+        var MoveTool = (function (_super) {
+            __extends(MoveTool, _super);
+            function MoveTool(document) {
+                var _this = _super.call(this, document, new Tools.Container(), true) || this;
+                _this._position = Point.make(document.mouseArea.mousePoint.x, document.mouseArea.mousePoint.y - MoveTool._IconSize - Tools.Thickness.Mouse - 1);
+                var x = makeMod(_this, function () { return _this._position.x; });
+                var y = makeMod(_this, function () { return _this._position.y; });
+                var icon_path = new Geoma.Polygon.CustomPath(Point.make(MoveTool._IconSize, MoveTool._IconSize), "M500,10C229.8,10,10,229.8,10,500c0,270.2,219.8,490,490,490s490-219.8,490-490C990,229.8,770.2,10,500,10z M500,930.7C262.5,930.7,69.3,737.5,69.3,500C69.3,262.5,262.5,69.3,500,69.3c237.5,0,430.7,193.2,430.7,430.7C930.7,737.5,737.5,930.7,500,930.7z M541.9,500l100.6,100.6l6.2-40.7l58.6,8.9L689,689l-120.2,18.3l-8.9-58.6l40.7-6.2L500,541.9L398.9,643l37.8,5.8l-8.9,58.6l-120.1-18.3l-18.3-120.2L348,560l6.6,43.5L458.1,500L354.6,396.5l-6.6,43.5l-58.6-8.9L307.6,311l120.2-18.3l8.9,58.6l-37.7,5.7l101,101l100.6-100.6l-40.7-6.2l8.9-58.6L689,311l18.3,120.2l-58.6,8.9l-6.2-40.7L541.9,500z");
+                var icon_stroke = new Geoma.Sprite.Polyline(x, y, Tools.CurrentTheme.TapLineWidth, Tools.CurrentTheme.TapBrush, MoveTool._IconSize / 1000);
+                icon_stroke.addPolygon(icon_path);
+                icon_stroke.addVisible(makeMod(_this, function () { return !_this._startDrag && !_this.mouseHit(_this.document.mouseArea.mousePoint); }));
+                var icon = new Geoma.Sprite.Polyshape(x, y, Tools.CurrentTheme.TapLineWidth, Tools.CurrentTheme.TapBrush, MoveTool._IconSize / 1000);
+                icon.addPolygon(icon_path);
+                icon.addVisible(function () { return !icon_stroke.visible; });
+                _this.item.push(icon_stroke);
+                _this.item.push(icon);
+                _this._mouseDownListener = document.mouseArea.onMouseDown.bind(_this, _this.mouseDown, true);
+                _this._mouseUpListener = document.mouseArea.onMouseUp.bind(_this, _this.mouseUp, true);
+                return _this;
+            }
+            MoveTool.prototype.dispose = function () {
+                var _a;
+                if (!this.disposed) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.rollback();
+                    this._mouseDownListener.dispose();
+                    this._mouseUpListener.dispose();
+                    _super.prototype.dispose.call(this);
+                    this.document.remove(this);
+                }
+            };
+            Object.defineProperty(MoveTool.prototype, "isActive", {
+                get: function () {
+                    var _a;
+                    return ((_a = this.item.last) === null || _a === void 0 ? void 0 : _a.visible) == true;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            MoveTool.prototype.innerDraw = function (play_ground) {
+                _super.prototype.innerDraw.call(this, play_ground);
+            };
+            MoveTool.prototype.mouseMove = function (event) {
+                _super.prototype.mouseMove.call(this, event);
+                if (this._startDrag) {
+                    if (event.buttons > 0) {
+                        this.selected = true;
+                        var dp = Point.add(Point.sub(this._startDrag, event), this.document.mouseArea.offset);
+                        if (!this._transaction) {
+                            this._transaction = this.document.beginUndo(Tools.Resources.string("Перемещение страницы"));
+                        }
+                        this.document.mouseArea.setOffset(dp.x, dp.y);
+                    }
+                    else {
+                        this.selected = false;
+                        this._position = Point.sub(event, Point.make(MoveTool._IconSize / 2, MoveTool._IconSize / 2));
+                    }
+                }
+                event.cancelBubble = this.isActive;
+            };
+            MoveTool.prototype.mouseDown = function (event) {
+                if (this.mouseHit(event)) {
+                    this._startDrag = event;
+                    Tools.Document.forceCloseMenu(this);
+                }
+                else {
+                    this.dispose();
+                }
+                event.cancelBubble = this.isActive;
+            };
+            MoveTool.prototype.mouseUp = function (event) {
+                var _a;
+                if (this._startDrag && !this.selected) {
+                    var dp = Point.sub(this._startDrag, event);
+                    if ((dp.x * dp.x + dp.y * dp.y) <= (Tools.Thickness.Mouse * Tools.Thickness.Mouse)) {
+                        (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.commit();
+                        delete this._transaction;
+                        this.dispose();
+                    }
+                }
+                event.cancelBubble = this.isActive;
+            };
+            MoveTool._IconSize = 40;
+            return MoveTool;
+        }(Tools.DocumentSprite));
+        Tools.MoveTool = MoveTool;
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
 })(Geoma || (Geoma = {}));
 var Geoma;
@@ -2667,8 +2904,8 @@ var Geoma;
                 _this._hPadding = makeProp(horizontal_padding, 10);
                 _this._vPadding = makeProp(vertical_padding, 10);
                 _this._mouseDown = false;
-                _this._mouseDownListener = _this.document.mouseArea.onMouseDown.bind(_this, _this.mouseDown);
-                _this._mouseUpListener = _this.document.mouseArea.onMouseUp.bind(_this, _this.mouseUp);
+                _this._mouseDownListener = _this.document.mouseArea.onMouseDown.bind(_this, _this.mouseDown, forward_event);
+                _this._mouseUpListener = _this.document.mouseArea.onMouseUp.bind(_this, _this.mouseUp, forward_event);
                 _this.backgroundBrush = makeProp(Tools.CurrentTheme.ButtonBackgroundBrush);
                 _this.backgroundSelectBrush = makeProp(Tools.CurrentTheme.ButtonSelectedBrush);
                 _this.foregroundBrush = makeProp(Tools.CurrentTheme.ButtonItemTextBrush);
@@ -2719,6 +2956,7 @@ var Geoma;
     var Tools;
     (function (Tools) {
         var makeProp = Geoma.Utils.makeProp;
+        var Point = Geoma.Utils.Point;
         var assert = Geoma.Utils.assert;
         var ActiveLineBase = (function (_super) {
             __extends(ActiveLineBase, _super);
@@ -2854,6 +3092,14 @@ var Geoma;
                     assert(false);
                 }
             };
+            ActiveLineBase.setAngle = function (value, pivot_x, pivot_y, x2, y2) {
+                var dx = pivot_x - x2;
+                var dy = pivot_y - y2;
+                var length = Math.sqrt(dx * dx + dy * dy);
+                var x1 = pivot_x + Math.cos(value) * length;
+                var y1 = pivot_y + Math.sin(value) * length;
+                return Point.make(x2 - x1, y2 - y1);
+            };
             ActiveLineBase.getY = function (x, coefficients) {
                 return coefficients.k * x + coefficients.b;
             };
@@ -2872,8 +3118,44 @@ var Geoma;
                     return null;
                 }
             };
+            ActiveLineBase.getLineDrawInfo = function (document, pivot, angle) {
+                var offset = document.mouseArea.offset;
+                var viewport_w = document.mouseArea.w;
+                var viewport_h = document.mouseArea.h;
+                var tan_angle = Math.tan(angle);
+                if (tan_angle == 0) {
+                    return { startPoint: Point.make(offset.x - viewport_w, pivot.y), endPoint: Point.make(offset.x + viewport_w * 2, pivot.y) };
+                }
+                var x0 = pivot.x - offset.x;
+                var y0 = pivot.y - offset.y;
+                var x1 = x0 - y0 / tan_angle;
+                var y1 = 0;
+                if (x1 < 0) {
+                    y1 -= x1 * tan_angle;
+                    x1 = 0;
+                }
+                else if (x1 > viewport_w) {
+                    y1 -= (x1 - viewport_w) * tan_angle;
+                    x1 = viewport_w;
+                }
+                y1 += offset.y;
+                x1 += offset.x;
+                var x2 = x0 - (y0 - viewport_h) / tan_angle;
+                var y2 = viewport_h;
+                if (x2 < 0) {
+                    y2 -= x2 * tan_angle;
+                    x2 = 0;
+                }
+                else if (x2 > viewport_w) {
+                    y2 -= (x2 - viewport_w) * tan_angle;
+                    x2 = viewport_w;
+                }
+                y2 += offset.y;
+                x2 += offset.x;
+                return { startPoint: Point.make(x1, y1), endPoint: Point.make(x2, y2) };
+            };
             ActiveLineBase.prototype.mouseHit = function (point) {
-                return this.visible && Tools.PointLine.intersected(point, this._startPoint, this._endPoint, Tools.Thickness.Mouse);
+                return this.visible;
             };
             ActiveLineBase.prototype.setLength = function (value, fix_point) {
                 assert(false, "Not implemented yet");
@@ -2905,7 +3187,7 @@ var Geoma;
             };
             ActiveLineBase.prototype.through = function (p) {
                 assert(this.belongs(p));
-                if (!Tools.PointLine.intersected(p, this.startPoint, this.endPoint, Tools.Thickness.Calc)) {
+                if (!Tools.PointLineSegment.intersected(p, this.startPoint, this.endPoint, Tools.Thickness.Calc)) {
                     var dx = this._startPoint.x - p.x;
                     var dy = this._startPoint.y - p.y;
                     var l1 = Math.sqrt(dx * dx + dy * dy);
@@ -2931,6 +3213,42 @@ var Geoma;
             ActiveLineBase.prototype.removePoint = function (point) {
                 assert(false, "Not implemented yet");
             };
+            ActiveLineBase.prototype.setParallelTo = function (other_segment) {
+                var parallel_line = other_segment;
+                var start_angle_1 = ActiveLineBase.getAngle(this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y);
+                var end_angle_1 = ActiveLineBase.getAngle(this.endPoint.x, this.endPoint.y, this.startPoint.x, this.startPoint.y);
+                var start_angle_2 = ActiveLineBase.getAngle(other_segment.startPoint.x, other_segment.startPoint.y, other_segment.endPoint.x, other_segment.endPoint.y);
+                var end_angle_2 = ActiveLineBase.getAngle(other_segment.endPoint.x, other_segment.endPoint.y, other_segment.startPoint.x, other_segment.startPoint.y);
+                var rotate_angle_abs = 2 * Math.PI;
+                var rotate_angle;
+                var rotate_start = false;
+                if (Math.abs(start_angle_1 - start_angle_2) < rotate_angle_abs) {
+                    rotate_start = true;
+                    rotate_angle = start_angle_2;
+                    rotate_angle_abs = Math.abs(start_angle_1 - start_angle_2);
+                }
+                if (Math.abs(start_angle_1 - end_angle_2) < rotate_angle_abs) {
+                    rotate_start = true;
+                    rotate_angle = end_angle_2;
+                    rotate_angle_abs = Math.abs(start_angle_1 - end_angle_2);
+                }
+                if (Math.abs(end_angle_1 - start_angle_2) < rotate_angle_abs) {
+                    rotate_start = false;
+                    rotate_angle = start_angle_2;
+                    rotate_angle_abs = Math.abs(end_angle_1 - start_angle_2);
+                }
+                if (Math.abs(end_angle_1 - end_angle_2) < rotate_angle_abs) {
+                    rotate_start = false;
+                    rotate_angle = end_angle_2;
+                    rotate_angle_abs = Math.abs(end_angle_1 - end_angle_2);
+                }
+                if (rotate_start) {
+                    this.setAngle(rotate_angle, this.startPoint);
+                }
+                else {
+                    this.setAngle(rotate_angle, this.endPoint);
+                }
+            };
             ActiveLineBase.prototype.innerDraw = function (play_ground) {
                 play_ground.context2d.beginPath();
                 play_ground.context2d.lineWidth = this.lineWidth.value;
@@ -2953,7 +3271,6 @@ var Geoma;
     var Tools;
     (function (Tools) {
         var makeMod = Geoma.Utils.makeMod;
-        var toInt = Geoma.Utils.toInt;
         var Point = Geoma.Utils.Point;
         var ActivePoint = (function (_super) {
             __extends(ActivePoint, _super);
@@ -2973,7 +3290,9 @@ var Geoma;
                 return this._moved.get(receiptor);
             };
             ActivePoint.prototype.dispose = function () {
+                var _a;
                 if (!this.disposed) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.rollback();
                     this._mouseDownListener.dispose();
                     this._mouseUpListener.dispose();
                     _super.prototype.dispose.call(this);
@@ -2985,9 +3304,7 @@ var Geoma;
                 this._moved.set();
             };
             ActivePoint.prototype.serialize = function (context) {
-                var data = [];
-                data.push(this.x.toFixed(2));
-                data.push(this.y.toFixed(2));
+                var data = _super.prototype.serialize.call(this, context);
                 data.push(this.name);
                 return data;
             };
@@ -3003,7 +3320,7 @@ var Geoma;
             };
             ActivePoint.deserialize = function (context, data, index) {
                 if (data.length > (index + 2)) {
-                    var point = new ActivePoint(context.document, toInt(data[index]), toInt(data[index + 1]));
+                    var point = new ActivePoint(context.document, parseFloat(data[index]), parseFloat(data[index + 1]));
                     point.setName(data[index + 2]);
                     return point;
                 }
@@ -3025,7 +3342,9 @@ var Geoma;
                         var x = doc_1.mouseArea.mousePoint.x;
                         var y = doc_1.mouseArea.mousePoint.y;
                         var menu = new Tools.Menu(doc_1, x, y);
-                        var menu_item = menu.addMenuItem(Tools.Resources.string("Создать отрезок..."));
+                        var menu_item = menu.addMenuItem(Tools.Resources.string("Создать линию..."));
+                        menu_item.onChecked.bind(this, function () { return doc_1.setLineState(_this); });
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Создать отрезок..."));
                         menu_item.onChecked.bind(this, function () { return doc_1.setLineSegmentState(_this); });
                         menu_item = menu.addMenuItem(Tools.Resources.string("Создать окружность из центра..."));
                         menu_item.onChecked.bind(this, function () { return doc_1.setCirclRadiusState(_this); });
@@ -3038,13 +3357,21 @@ var Geoma;
                 }
             };
             ActivePoint.prototype.mouseMove = function (event) {
-                if (this._dragStart && event.buttons != 0) {
-                    var dpos = Point.sub(this._dragStart, event);
-                    if (dpos.x != 0 || dpos.y != 0) {
-                        this.move(dpos.x, dpos.y);
+                if (this._dragStart) {
+                    if (event.buttons != 0) {
+                        var dpos = Point.sub(this._dragStart, event);
+                        if (dpos.x != 0 || dpos.y != 0) {
+                            if (!this._transaction) {
+                                this._transaction = this.document.beginUndo(Tools.Resources.string("Перемещение точки {0}", this.name));
+                            }
+                            this.move(dpos.x, dpos.y);
+                        }
+                        this._dragStart = event;
+                        event.cancelBubble = true;
                     }
-                    this._dragStart = event;
-                    event.cancelBubble = true;
+                    else {
+                        this.mouseUp(event);
+                    }
                 }
                 _super.prototype.mouseMove.call(this, event);
             };
@@ -3054,7 +3381,10 @@ var Geoma;
                 }
             };
             ActivePoint.prototype.mouseUp = function (event) {
+                var _a;
                 if (this._dragStart) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.commit();
+                    delete this._transaction;
                     delete this._dragStart;
                 }
             };
@@ -3106,7 +3436,7 @@ var Geoma;
                     }
                 }
             };
-            ActiveCommonPoint.prototype.addSegment = function (segment) {
+            ActiveCommonPoint.prototype.addGraphLine = function (segment) {
                 var _this = this;
                 var _a;
                 assert(!this._line2);
@@ -3152,7 +3482,7 @@ var Geoma;
                 }
                 this._line1 = this._line2 = undefined;
                 if (line) {
-                    this.addSegment(line);
+                    this.addGraphLine(line);
                 }
                 else {
                     this.document.removePoint(this);
@@ -3179,7 +3509,7 @@ var Geoma;
                             return null;
                         }
                     }
-                    var point = new ActiveCommonPoint(context.document, toInt(data[index]), toInt(data[index + 1]), group_no);
+                    var point = new ActiveCommonPoint(context.document, parseFloat(data[index]), parseFloat(data[index + 1]), group_no);
                     point.setName(data[index + 2]);
                     return point;
                 }
@@ -3219,9 +3549,9 @@ var Geoma;
         var ActiveLineSegment = (function (_super) {
             __extends(ActiveLineSegment, _super);
             function ActiveLineSegment(start, end, line_width, brush, selected_brush) {
-                if (line_width === void 0) { line_width = Tools.CurrentTheme.ActiveLineWidth; }
-                if (brush === void 0) { brush = Tools.CurrentTheme.ActiveLineBrush; }
-                if (selected_brush === void 0) { selected_brush = Tools.CurrentTheme.ActiveLineSelectBrush; }
+                if (line_width === void 0) { line_width = Tools.CurrentTheme.ActiveLineSegmentWidth; }
+                if (brush === void 0) { brush = Tools.CurrentTheme.ActiveLineSegmentBrush; }
+                if (selected_brush === void 0) { selected_brush = Tools.CurrentTheme.ActiveLineSegmentSelectBrush; }
                 var _this = _super.call(this, start.document, start, end, line_width, brush, selected_brush) || this;
                 _this._mouseDownListener = _this.document.mouseArea.onMouseDown.bind(_this, _this.mouseDown);
                 _this._mouseUpListener = _this.document.mouseArea.onMouseUp.bind(_this, _this.mouseUp);
@@ -3357,6 +3687,21 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
+            Object.defineProperty(ActiveLineSegment.prototype, "isPartOf", {
+                get: function () {
+                    if (this.start instanceof Tools.ActiveCommonPoint || this.end instanceof Tools.ActiveCommonPoint) {
+                        for (var i = 0; i < this.document.lineSegments.length; i++) {
+                            var line = this.document.lineSegments.item(i);
+                            if (line instanceof Tools.ActiveLineBase && line.belongs(this.start) && line.belongs(this.end)) {
+                                return line;
+                            }
+                        }
+                    }
+                    return null;
+                },
+                enumerable: false,
+                configurable: true
+            });
             ActiveLineSegment.prototype.belongs = function (p1) {
                 if (this.startPoint == p1 || this.endPoint == p1) {
                     return true;
@@ -3370,61 +3715,6 @@ var Geoma;
                     }
                 }
                 return false;
-            };
-            ActiveLineSegment.prototype.setParallelTo = function (other_segment) {
-                var parallel_line = other_segment;
-                var q1 = this.quadrant;
-                var q2 = parallel_line.quadrant;
-                switch (q2) {
-                    case 1:
-                        switch (q1) {
-                            case 1:
-                            case 2:
-                                this.setAngle(parallel_line.angle);
-                                break;
-                            case 3:
-                            case 4:
-                                this.setAngle(parallel_line.angle - Math.PI);
-                                break;
-                        }
-                        break;
-                    case 2:
-                        switch (q1) {
-                            case 1:
-                            case 2:
-                                this.setAngle(parallel_line.angle);
-                                break;
-                            case 3:
-                            case 4:
-                                this.setAngle(parallel_line.angle, this.end);
-                                break;
-                        }
-                        break;
-                    case 3:
-                        switch (q1) {
-                            case 1:
-                            case 2:
-                                this.setAngle(parallel_line.angle, this.end);
-                                break;
-                            case 3:
-                            case 4:
-                                this.setAngle(parallel_line.angle - Math.PI, this.end);
-                                break;
-                        }
-                        break;
-                    case 4:
-                        switch (q1) {
-                            case 1:
-                            case 2:
-                                this.setAngle(parallel_line.angle, this.end);
-                                break;
-                            case 3:
-                            case 4:
-                                this.setAngle(parallel_line.angle - Math.PI, this.end);
-                                break;
-                        }
-                        break;
-                }
             };
             ActiveLineSegment.prototype.setPerpendicularTo = function (other_segment) {
                 var perpendicular_line = other_segment;
@@ -3442,24 +3732,12 @@ var Geoma;
                 }
             };
             ActiveLineSegment.prototype.setAngle = function (value, pivot_point) {
-                var start, end;
-                if (pivot_point) {
-                    start = pivot_point;
-                    if (start == this.start) {
-                        end = this.end;
-                    }
-                    else {
-                        end = this.start;
-                    }
+                var start_point = pivot_point !== null && pivot_point !== void 0 ? pivot_point : this.startPoint;
+                var end_poin = (start_point == this.endPoint) ? this.startPoint : this.endPoint;
+                var dp = Tools.ActiveLineBase.setAngle(value, start_point.x, start_point.y, end_poin.x, end_poin.y);
+                if (end_poin instanceof Tools.ActivePoint) {
+                    end_poin.move(dp.x, dp.y);
                 }
-                else {
-                    start = this.start;
-                    end = this.end;
-                }
-                var l = this.length;
-                var x1 = start.x + Math.cos(value) * l;
-                var y1 = start.y + Math.sin(value) * l;
-                end.move(end.x - x1, end.y - y1);
             };
             ActiveLineSegment.prototype.setLength = function (value, fix_point) {
                 assert(value > 0);
@@ -3484,15 +3762,17 @@ var Geoma;
                 end.move(end.x - x2, end.y - y2);
             };
             ActiveLineSegment.prototype.dispose = function () {
+                var _a;
                 if (!this.disposed) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.rollback();
                     this._mouseDownListener.dispose();
                     this._mouseUpListener.dispose();
                     if (this._beforeDrawListener) {
                         this._beforeDrawListener.dispose();
                     }
                     if (this._points) {
-                        for (var _i = 0, _a = this._points; _i < _a.length; _i++) {
-                            var point = _a[_i];
+                        for (var _i = 0, _b = this._points; _i < _b.length; _i++) {
+                            var point = _b[_i];
                             point.removeSegment(this);
                         }
                     }
@@ -3532,6 +3812,9 @@ var Geoma;
                 this.start.move(dx, dy);
                 this.end.move(dx, dy);
             };
+            ActiveLineSegment.prototype.mouseHit = function (point) {
+                return _super.prototype.mouseHit.call(this, point) && Tools.PointLineSegment.intersected(point, this.startPoint, this.endPoint, Tools.Thickness.Mouse);
+            };
             ActiveLineSegment.prototype.serialize = function (context) {
                 var data = [];
                 data.push(context.points[this.start.name].toString());
@@ -3564,7 +3847,7 @@ var Geoma;
                             var p_index = toInt(chunck.substring(1));
                             var point = context.data.points.item(p_index);
                             assert(point instanceof Tools.ActiveCommonPoint);
-                            point.addSegment(line);
+                            point.addGraphLine(line);
                             line.addPoint(point);
                         }
                         else {
@@ -3575,13 +3858,21 @@ var Geoma;
                 }
             };
             ActiveLineSegment.prototype.mouseMove = function (event) {
-                if (this._dragStart && event.buttons != 0) {
-                    var dpos = Point.sub(this._dragStart, event);
-                    if (dpos.x != 0 || dpos.y != 0) {
-                        this.move(dpos.x, dpos.y);
+                if (this._dragStart) {
+                    if (event.buttons != 0) {
+                        var dpos = Point.sub(this._dragStart, event);
+                        if (dpos.x != 0 || dpos.y != 0) {
+                            if (!this._transaction) {
+                                this._transaction = this.document.beginUndo(Tools.Resources.string("Перемещение сегмента {0}", this.name));
+                            }
+                            this.move(dpos.x, dpos.y);
+                        }
+                        this._dragStart = event;
+                        event.cancelBubble = true;
                     }
-                    this._dragStart = event;
-                    event.cancelBubble = true;
+                    else {
+                        this.mouseUp(event);
+                    }
                 }
                 _super.prototype.mouseMove.call(this, event);
             };
@@ -3626,7 +3917,7 @@ var Geoma;
                         menu_item.enabled.addModifier(exists_other_segments);
                         menu_item = menu.addMenuItem(Tools.Resources.string("Добавить точку"));
                         menu_item.onChecked.bind(this, function () { return doc_2.addPoint(Point.make(x_1, y_1)); });
-                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить прямую {0}", this.name));
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить отрезок {0}", this.name));
                         menu_item.onChecked.bind(this, function () { return doc_2.removeLineSegment(_this); });
                         menu.show();
                     }
@@ -3639,8 +3930,11 @@ var Geoma;
                 }
             };
             ActiveLineSegment.prototype.mouseUp = function (event) {
+                var _a;
                 if (this._dragStart) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.commit();
                     delete this._dragStart;
+                    delete this._transaction;
                 }
             };
             ActiveLineSegment.prototype.beforeDraw = function (event) {
@@ -3697,7 +3991,39 @@ var Geoma;
 (function (Geoma) {
     var Tools;
     (function (Tools) {
+        var Point = Geoma.Utils.Point;
         var assert = Geoma.Utils.assert;
+        var BisectorLineCalculator = (function () {
+            function BisectorLineCalculator(angle_indicator) {
+                this.angleIndicator = angle_indicator;
+                this.drawInfo = { startPoint: Point.empty, endPoint: Point.empty };
+            }
+            BisectorLineCalculator.prototype.evaluate = function () {
+                this.drawInfo = Tools.ActiveLineBase.getLineDrawInfo(this.angleIndicator.document, this.angleIndicator.commonPivot, this.angleIndicator.bisectorAngle);
+            };
+            return BisectorLineCalculator;
+        }());
+        var BisectorLinePivot = (function () {
+            function BisectorLinePivot(calculator, start) {
+                this._calculator = calculator;
+                this._start = start;
+            }
+            Object.defineProperty(BisectorLinePivot.prototype, "x", {
+                get: function () {
+                    return this._start ? this._calculator.drawInfo.startPoint.x : this._calculator.drawInfo.endPoint.x;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(BisectorLinePivot.prototype, "y", {
+                get: function () {
+                    return this._start ? this._calculator.drawInfo.startPoint.y : this._calculator.drawInfo.endPoint.y;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            return BisectorLinePivot;
+        }());
         var BisectorLine = (function (_super) {
             __extends(BisectorLine, _super);
             function BisectorLine(angle_indicator, line_width, brush, selected_brush) {
@@ -3705,55 +4031,40 @@ var Geoma;
                 if (brush === void 0) { brush = Tools.CurrentTheme.BisectorBrush; }
                 if (selected_brush === void 0) { selected_brush = Tools.CurrentTheme.BisectorSelectionBrush; }
                 var _this = this;
-                var pivot = (function () {
-                    function pivot(angle_indicator, start) {
-                        this._angleIndicator = angle_indicator;
-                        this._start = start;
-                    }
-                    Object.defineProperty(pivot.prototype, "x", {
-                        get: function () {
-                            var i = this._angleIndicator;
-                            var a = this._start ? i.bisectorAngle : i.bisectorAngle - Math.PI;
-                            var x = i.commonPivot.x;
-                            var w = i.document.mouseArea.w;
-                            var h = i.document.mouseArea.h;
-                            var r = Math.sqrt(w * w + h * h);
-                            return Math.cos(a) * r + x;
-                        },
-                        enumerable: false,
-                        configurable: true
-                    });
-                    Object.defineProperty(pivot.prototype, "y", {
-                        get: function () {
-                            var i = this._angleIndicator;
-                            var a = this._start ? i.bisectorAngle : i.bisectorAngle - Math.PI;
-                            var y = i.commonPivot.y;
-                            var w = i.document.mouseArea.w;
-                            var h = i.document.mouseArea.h;
-                            var r = Math.sqrt(w * w + h * h);
-                            return Math.sin(a) * r + y;
-                        },
-                        enumerable: false,
-                        configurable: true
-                    });
-                    return pivot;
-                }());
-                _this = _super.call(this, angle_indicator.document, new pivot(angle_indicator, true), new pivot(angle_indicator, false), line_width, brush, selected_brush) || this;
-                _this._angleIndicator = angle_indicator;
+                var calculator = new BisectorLineCalculator(angle_indicator);
+                _this = _super.call(this, angle_indicator.document, new BisectorLinePivot(calculator, true), new BisectorLinePivot(calculator, false), line_width, brush, selected_brush) || this;
+                _this._calculator = calculator;
+                _this._beforeDrawListener = _this.document.onBeforeDraw.bind(_this._calculator, _this._calculator.evaluate);
                 return _this;
             }
             Object.defineProperty(BisectorLine.prototype, "moved", {
                 get: function () {
-                    return this._angleIndicator.segment1.moved || this._angleIndicator.segment2.moved;
+                    return this._calculator.angleIndicator.segment1.moved || this._calculator.angleIndicator.segment2.moved;
                 },
                 enumerable: false,
                 configurable: true
             });
+            Object.defineProperty(BisectorLine.prototype, "isPartOf", {
+                get: function () {
+                    throw new Error("Method not implemented.");
+                },
+                enumerable: false,
+                configurable: true
+            });
+            BisectorLine.prototype.dispose = function () {
+                if (!this.disposed) {
+                    this._beforeDrawListener.dispose();
+                    _super.prototype.dispose.call(this);
+                }
+            };
             BisectorLine.prototype.move = function (dx, dy) {
                 assert(false, "Not implemented yet");
             };
             BisectorLine.prototype.belongs = function (p1) {
-                return this._angleIndicator.commonPivot == p1;
+                return this._calculator.angleIndicator.commonPivot == p1;
+            };
+            BisectorLine.prototype.mouseHit = function (point) {
+                return _super.prototype.mouseHit.call(this, point) && Tools.PointLine.intersected(point, this._calculator.angleIndicator.center, this.coefficients, Tools.Thickness.Mouse);
             };
             BisectorLine.prototype.mouseClick = function (event) {
                 var _this = this;
@@ -3764,7 +4075,7 @@ var Geoma;
                         var y = doc.mouseArea.mousePoint.y;
                         var menu = new Tools.Menu(doc, x, y);
                         var menu_item = menu.addMenuItem(Tools.Resources.string("Удалить биссектрису"));
-                        menu_item.onChecked.bind(this, function () { return _this._angleIndicator.removeBisector(_this); });
+                        menu_item.onChecked.bind(this, function () { return _this._calculator.angleIndicator.removeBisector(_this); });
                         menu.show();
                     }
                 }
@@ -3898,7 +4209,9 @@ var Geoma;
                 configurable: true
             });
             ActiveCircleLine.prototype.dispose = function () {
+                var _a;
                 if (!this.disposed) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.rollback();
                     this._mouseDownListener.dispose();
                     this._mouseUpListener.dispose();
                     _super.prototype.dispose.call(this);
@@ -3975,7 +4288,7 @@ var Geoma;
                         var p_index = toInt(chunck.substring(1));
                         var point = context.data.points.item(p_index);
                         assert(point instanceof Tools.ActiveCommonPoint);
-                        point.addSegment(circle);
+                        point.addGraphLine(circle);
                         circle.addPoint(point);
                     }
                     return circle;
@@ -4012,13 +4325,21 @@ var Geoma;
             };
             ActiveCircleLine.prototype.mouseMove = function (event) {
                 _super.prototype.mouseMove.call(this, event);
-                if (this._dragStart && event.buttons != 0) {
-                    var dpos = Point.sub(this._dragStart, event);
-                    if (dpos.x != 0 || dpos.y != 0) {
-                        this.move(dpos.x, dpos.y);
+                if (this._dragStart) {
+                    if (event.buttons != 0) {
+                        var dpos = Point.sub(this._dragStart, event);
+                        if (dpos.x != 0 || dpos.y != 0) {
+                            if (!this._transaction) {
+                                this._transaction = this.document.beginUndo(Tools.Resources.string("Перемещение окружности {0}", this.name));
+                            }
+                            this.move(dpos.x, dpos.y);
+                        }
+                        this._dragStart = event;
+                        event.cancelBubble = true;
                     }
-                    this._dragStart = event;
-                    event.cancelBubble = true;
+                    else {
+                        this.mouseUp(event);
+                    }
                 }
                 this.selected = this.mouseHit(event);
                 _super.prototype.mouseMove.call(this, event);
@@ -4045,8 +4366,11 @@ var Geoma;
                 }
             };
             ActiveCircleLine.prototype.mouseUp = function (event) {
+                var _a;
                 if (this._dragStart) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.commit();
                     delete this._dragStart;
+                    delete this._transaction;
                 }
             };
             return ActiveCircleLine;
@@ -4527,7 +4851,9 @@ var Geoma;
                 configurable: true
             });
             ParametricLine.prototype.dispose = function () {
+                var _a;
                 if (!this.disposed) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.rollback();
                     this._mouseDownListener.dispose();
                     this._mouseUpListener.dispose();
                     if (this.selected) {
@@ -4537,14 +4863,15 @@ var Geoma;
                 }
             };
             ParametricLine.prototype.screenY = function (screen_x) {
-                if (screen_x >= 0 && screen_x < this._screenSamples.length) {
-                    return this._screenSamples[toInt(screen_x)];
+                var offset_screen_x = screen_x - this.document.mouseArea.offset.x;
+                if (offset_screen_x >= 0 && offset_screen_x < this._screenSamples.length) {
+                    return this._screenSamples[toInt(offset_screen_x)];
                 }
                 else {
-                    for (var x = screen_x - (this._derivativeLevel * 2); x < screen_x; x++) {
+                    for (var x = offset_screen_x - (this._derivativeLevel * 2); x < offset_screen_x; x++) {
                         this.getY(this.axes.fromScreenX(x));
                     }
-                    return this.axes.toScreenY(this.getY(this.axes.fromScreenX(screen_x)));
+                    return this.axes.toScreenY(this.getY(this.axes.fromScreenX(offset_screen_x)));
                 }
             };
             ParametricLine.prototype.getFunction = function (name) {
@@ -4601,7 +4928,7 @@ var Geoma;
                 var dialog = new Tools.ExpressionDialog(this.document, makeMod(this, function () { return (_this.document.mouseArea.x + _this.document.mouseArea.w / 2 - _this.document.mouseArea.w / 10) / _this.document.mouseArea.ratio; }), makeMod(this, function () { return (_this.document.mouseArea.y + _this.document.mouseArea.h / 2 - _this.document.mouseArea.h / 10) / _this.document.mouseArea.ratio; }), this.code);
                 dialog.onEnter.bind(this, function (event) {
                     if (event.detail) {
-                        _this.code = event.detail;
+                        Tools.UndoTransaction.Do(_this, Tools.Resources.string("Редактирование функции {0}", _this.code.text), function () { _this.code = event.detail; });
                     }
                     _this.document.remove(dialog);
                     dialog.dispose();
@@ -4620,12 +4947,8 @@ var Geoma;
                 return false;
             };
             ParametricLine.prototype.addPoint = function (point) {
-                assert(!this.belongs(point));
                 assert(this.mouseHit(point));
-                if (!this._points) {
-                    this._points = [];
-                }
-                this._points.push(point);
+                this._addPoint(point);
             };
             ParametricLine.prototype.removePoint = function (point) {
                 assert(this.belongs(point));
@@ -4653,7 +4976,7 @@ var Geoma;
                     return null;
                 }
                 else {
-                    var line = new ParametricLine(context.document, function () { return Tools.CurrentTheme.ActiveLineWidth; }, function () { return Tools.CurrentTheme.ActiveLineBrush; }, function () { return Tools.CurrentTheme.ActiveLineSelectBrush; }, context.data.axes.item(toInt(data[index++])));
+                    var line = new ParametricLine(context.document, function () { return Tools.CurrentTheme.ParametricLineWidth; }, function () { return Tools.CurrentTheme.ParametricLineBrush; }, function () { return Tools.CurrentTheme.ParametricLineSelectBrush; }, context.data.axes.item(toInt(data[index++])));
                     var points = new Array();
                     while (data[index].charAt(0) == "p") {
                         var chunck = data[index++];
@@ -4666,11 +4989,11 @@ var Geoma;
                         line.code = CodeElement.deserialize(data, index).code;
                     }
                     if (points.length) {
-                        line.updateSamples(context.document.mouseArea.h);
+                        line.updateSamples(context.document.mouseArea);
                         for (var _i = 0, points_2 = points; _i < points_2.length; _i++) {
                             var point = points_2[_i];
-                            point.addSegment(line);
-                            line.addPoint(point);
+                            point.addGraphLine(line);
+                            line._addPoint(point);
                         }
                     }
                     return line;
@@ -4695,15 +5018,15 @@ var Geoma;
                     return level;
                 }
             };
-            ParametricLine.prototype.updateSamples = function (height) {
+            ParametricLine.prototype.updateSamples = function (mouse_area) {
                 var _this = this;
                 var needs_move = false;
                 var draw_path = new Path2D();
                 var samples = new Array();
                 var dx = this.dx;
                 var minimum_dx = 1e-11;
-                var offscreen_top = -height;
-                var offscreen_bottom = 2 * height;
+                var offscreen_top = -(mouse_area.h - mouse_area.offset.y);
+                var offscreen_bottom = (2 * mouse_area.h) + mouse_area.offset.y;
                 var line_to = function (x, y) {
                     if (needs_move) {
                         needs_move = false;
@@ -4712,7 +5035,7 @@ var Geoma;
                     else {
                         draw_path.lineTo(x, y);
                     }
-                    var integer_x = toInt(x);
+                    var integer_x = Math.floor(x) - mouse_area.offset.x;
                     assert(samples.length > integer_x);
                     samples[integer_x] = y;
                 };
@@ -4805,8 +5128,9 @@ var Geoma;
                 var last_sign = 0;
                 var last_is_nan = true;
                 var last_y = NaN;
-                for (var x = 0; x < this.document.mouseArea.w; x += dx) {
-                    var integer_x = samples.length == Math.floor(x);
+                var last_x = this.document.mouseArea.w + mouse_area.offset.x;
+                for (var x = mouse_area.offset.x; x < last_x; x += dx) {
+                    var integer_x = (samples.length + mouse_area.offset.x) == Math.floor(x);
                     var y = this.axes.toScreenY(this.getY(this.axes.fromScreenX(x)));
                     if (integer_x) {
                         samples.push(NaN);
@@ -4867,7 +5191,7 @@ var Geoma;
             };
             ParametricLine.prototype.innerDraw = function (play_ground) {
                 if (this.axes.needsCalc.get(this.code.text) || !this._drawPath) {
-                    this.updateSamples(play_ground.h);
+                    this.updateSamples(play_ground);
                     assert(this._drawPath);
                 }
                 play_ground.context2d.strokeStyle = this.selected ? this.selectedBrush.value : this.brush.value;
@@ -4887,9 +5211,10 @@ var Geoma;
                         var menu = new Tools.Menu(doc_4, x_3, y_3);
                         var menu_item = menu.addMenuItem(Tools.Resources.string("Точность..."));
                         menu_item.onChecked.bind(this, function () {
-                            var dx = _this.document.promptNumber(Tools.Resources.string("Приращение аргумента x функции {0}", _this.code.text), _this.dx);
+                            var title = Tools.Resources.string("Приращение аргумента x функции {0}", _this.code.text);
+                            var dx = _this.document.promptNumber(title, _this.dx);
                             if (dx != undefined && dx != null) {
-                                _this.dx = dx;
+                                Tools.UndoTransaction.Do(_this, title, function () { return _this.dx = dx; });
                             }
                         });
                         menu_item = menu.addMenuItem(Tools.Resources.string("Масштаб по осям x/y..."));
@@ -4898,7 +5223,7 @@ var Geoma;
                         menu_item.onChecked.bind(this, this.showExpressionEditor);
                         menu_item = menu.addMenuItem(Tools.Resources.string("Добавить точку"));
                         menu_item.onChecked.bind(this, function () { return doc_4.addPoint(Point.make(x_3, y_3)); });
-                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить прямую {0}", this.name));
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить график {0}", this.code.text));
                         menu_item.onChecked.bind(this, function () { return doc_4.removeParametricLine(_this); });
                         menu.show();
                     }
@@ -4908,13 +5233,21 @@ var Geoma;
             ParametricLine.prototype.mouseMove = function (event) {
                 _super.prototype.mouseMove.call(this, event);
                 this.selected = this.mouseHit(event);
-                if (this._dragStart && event.buttons != 0) {
-                    var dpos = Point.sub(this._dragStart, event);
-                    if (dpos.x != 0 || dpos.y != 0) {
-                        this.move(dpos.x, dpos.y);
+                if (this._dragStart) {
+                    if (event.buttons != 0) {
+                        var dpos = Point.sub(this._dragStart, event);
+                        if (dpos.x != 0 || dpos.y != 0) {
+                            if (!this._transaction) {
+                                this._transaction = this.document.beginUndo(Tools.Resources.string("Перемещение функции {0}", this.code.text));
+                            }
+                            this.move(dpos.x, dpos.y);
+                        }
+                        this._dragStart = event;
+                        event.cancelBubble = true;
                     }
-                    this._dragStart = event;
-                    event.cancelBubble = true;
+                    else {
+                        this.mouseUp(event);
+                    }
                 }
             };
             ParametricLine.prototype.mouseDown = function (event) {
@@ -4923,14 +5256,24 @@ var Geoma;
                 }
             };
             ParametricLine.prototype.mouseUp = function (event) {
+                var _a;
                 if (this._dragStart) {
+                    (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.commit();
                     delete this._dragStart;
+                    delete this._transaction;
                 }
             };
             ParametricLine.prototype.getY = function (x) {
                 this._argX = x;
                 this._argY = this._function();
                 return this._argY;
+            };
+            ParametricLine.prototype._addPoint = function (point) {
+                assert(!this.belongs(point));
+                if (!this._points) {
+                    this._points = [];
+                }
+                this._points.push(point);
             };
             return ParametricLine;
         }(Tools.DocumentSprite));
@@ -4981,7 +5324,7 @@ var Geoma;
             Intersection.makePoint = function (point, line1, line2) {
                 if (line2 == undefined) {
                     if (line1 instanceof Tools.ActiveLineBase) {
-                        return PointLine.intersection(point, line1.startPoint, line1.endPoint);
+                        return PointLineSegment.intersection(point, line1.startPoint, line1.endPoint);
                     }
                     else if (line1 instanceof Tools.ActiveCircleLine) {
                         return PointCircle.intersection(point, line1);
@@ -5010,7 +5353,7 @@ var Geoma;
             Intersection.makeIntersection = function (point, line1, line2) {
                 if (line2 == undefined) {
                     if (line1 instanceof Tools.ActiveLineSegment) {
-                        return new PointLine(point, line1);
+                        return new PointLineSegment(point, line1);
                     }
                     else if (line1 instanceof Tools.ActiveCircleLine) {
                         return new PointCircle(point, line1);
@@ -5018,9 +5361,12 @@ var Geoma;
                     else if (line1 instanceof Tools.ParametricLine) {
                         return new PointParametric(point, line1);
                     }
+                    else if (line1 instanceof Tools.ActiveLine) {
+                        return new PointLine(point, line1);
+                    }
                 }
                 else if (line1 instanceof Tools.ActiveLineBase) {
-                    if (line2 instanceof Tools.ActiveLineSegment) {
+                    if (line2 instanceof Tools.ActiveLineBase) {
                         return new LineLine(point, line1, line2);
                     }
                     else if (line2 instanceof Tools.ActiveCircleLine) {
@@ -5050,18 +5396,58 @@ var Geoma;
             return Intersection;
         }());
         Tools.Intersection = Intersection;
+        var LocusType;
+        (function (LocusType) {
+            LocusType[LocusType["outerStart"] = 1] = "outerStart";
+            LocusType[LocusType["innerStart"] = 2] = "innerStart";
+            LocusType[LocusType["innerEnd"] = 3] = "innerEnd";
+            LocusType[LocusType["outerEnd"] = 4] = "outerEnd";
+        })(LocusType || (LocusType = {}));
+        ;
         var PointLine = (function (_super) {
             __extends(PointLine, _super);
             function PointLine(point, line) {
-                var _this = _super.call(this, PointLine.intersection(point, line.startPoint, line.endPoint)) || this;
+                var _this = _super.call(this, PointLine.intersection(point, line.startPoint, line.coefficients)) || this;
                 _this._line = line;
-                var dp = Point.sub(_this.startPoint, line.startPoint);
-                var length = Math.sqrt(dp.x * dp.x + dp.y * dp.y);
-                _this._startRatio = length / line.length;
+                _this.updateLocusInfo(point);
                 _this._intersection = makeProp(makeMod(_this, function () {
-                    var _a, _b;
-                    var c = LineCircle.intersection(_this._line, { center: _this._line.startPoint, radius: _this._line.length * _this._startRatio });
-                    return (_b = (_a = c.p1) !== null && _a !== void 0 ? _a : c.p2) !== null && _b !== void 0 ? _b : Point.empty;
+                    var c = LineCircle.intersection(_this._line, {
+                        center: _this._center,
+                        radius: _this._locusRadius
+                    });
+                    assert(c.p1 && c.p2);
+                    switch (_this._locus) {
+                        case LocusType.outerStart:
+                            if (_this.locus(c.p1) == LocusType.outerStart) {
+                                return c.p1;
+                            }
+                            else {
+                                return c.p2;
+                            }
+                        case LocusType.innerStart:
+                            if (_this.locus(c.p1) == LocusType.outerStart) {
+                                return c.p2;
+                            }
+                            else {
+                                return c.p1;
+                            }
+                        case LocusType.innerEnd:
+                            if (_this.locus(c.p1) == LocusType.outerEnd) {
+                                return c.p2;
+                            }
+                            else {
+                                return c.p1;
+                            }
+                        case LocusType.outerEnd:
+                            if (_this.locus(c.p1) == LocusType.outerEnd) {
+                                return c.p1;
+                            }
+                            else {
+                                return c.p2;
+                            }
+                        default:
+                            assert(false);
+                    }
                 }), Point.empty);
                 return _this;
             }
@@ -5079,6 +5465,102 @@ var Geoma;
                 }
             };
             PointLine.prototype.move = function (dx, dy) {
+                this.updateLocusInfo(Point.sub(this.point, Point.make(dx, dy)));
+            };
+            PointLine.intersection = function (point, pivot_point, coefficient) {
+                if (coefficient) {
+                    return Point.make(point.x, Tools.ActiveLineBase.getY(point.x, coefficient));
+                }
+                else {
+                    return Point.make(pivot_point.x, point.y);
+                }
+            };
+            PointLine.intersected = function (point, pivot_point, coefficient, sensitivity) {
+                assert(sensitivity >= 0);
+                if (coefficient) {
+                    var y = Tools.ActiveLineBase.getY(point.x, coefficient);
+                    if (Math.abs(y - point.y) <= sensitivity) {
+                        return true;
+                    }
+                    else {
+                        var x = Tools.ActiveLineBase.getX(point.y, coefficient);
+                        if (Math.abs(x - point.x) <= sensitivity) {
+                            return true;
+                        }
+                        else {
+                            return false;
+                        }
+                    }
+                }
+                else {
+                    return Math.abs(point.x - pivot_point.x) <= sensitivity;
+                }
+            };
+            PointLine.prototype.updateLocusInfo = function (point) {
+                this._locus = this.locus(point);
+                var dp = Point.sub(point, this._center);
+                this._locusRadius = Math.sqrt(dp.x * dp.x + dp.y * dp.y);
+            };
+            PointLine.prototype.locus = function (point) {
+                var line_length = this._line.length;
+                var dp_start = Point.sub(this._line.startPoint, point);
+                var start_length = Math.sqrt(dp_start.x * dp_start.x + dp_start.y * dp_start.y);
+                var dp_end = Point.sub(this._line.endPoint, point);
+                var end_length = Math.sqrt(dp_end.x * dp_end.x + dp_end.y * dp_end.y);
+                if (start_length <= line_length && end_length <= line_length) {
+                    if (start_length < end_length) {
+                        return LocusType.innerStart;
+                    }
+                    else {
+                        return LocusType.innerEnd;
+                    }
+                }
+                else if (start_length < end_length) {
+                    return LocusType.outerStart;
+                }
+                else {
+                    return LocusType.outerEnd;
+                }
+            };
+            Object.defineProperty(PointLine.prototype, "_center", {
+                get: function () {
+                    return (this._locus == LocusType.innerEnd || this._locus == LocusType.outerEnd) ? this._line.endPoint : this._line.startPoint;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            return PointLine;
+        }(Intersection));
+        Tools.PointLine = PointLine;
+        var PointLineSegment = (function (_super) {
+            __extends(PointLineSegment, _super);
+            function PointLineSegment(point, line) {
+                var _this = _super.call(this, PointLineSegment.intersection(point, line.startPoint, line.endPoint)) || this;
+                _this._line = line;
+                var dp = Point.sub(_this.startPoint, line.startPoint);
+                var length = Math.sqrt(dp.x * dp.x + dp.y * dp.y);
+                _this._startRatio = length / line.length;
+                _this._intersection = makeProp(makeMod(_this, function () {
+                    var _a, _b;
+                    var c = LineCircle.intersection(_this._line, { center: _this._line.startPoint, radius: _this._line.length * _this._startRatio });
+                    return (_b = (_a = c.p1) !== null && _a !== void 0 ? _a : c.p2) !== null && _b !== void 0 ? _b : Point.empty;
+                }), Point.empty);
+                return _this;
+            }
+            Object.defineProperty(PointLineSegment.prototype, "point", {
+                get: function () {
+                    return this._intersection.value;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            PointLineSegment.prototype.dispose = function () {
+                if (!this.disposed) {
+                    _super.prototype.dispose.call(this);
+                    this._intersection.reset();
+                }
+            };
+            PointLineSegment.prototype.move = function (dx, dy) {
                 var new_pos = Point.sub(this.point, Point.make(dx, dy));
                 var dp = Point.sub(new_pos, this._line.startPoint);
                 var length = Math.sqrt(dp.x * dp.x + dp.y * dp.y);
@@ -5086,7 +5568,7 @@ var Geoma;
                     this._startRatio = length / this._line.length;
                 }
             };
-            PointLine.intersection = function (point, line_start, line_end) {
+            PointLineSegment.intersection = function (point, line_start, line_end) {
                 var c = Tools.ActiveLineBase.getCoefficients(line_start.x, line_start.y, line_end.x, line_end.y);
                 if (c) {
                     return Point.make(point.x, Tools.ActiveLineBase.getY(point.x, c));
@@ -5095,7 +5577,7 @@ var Geoma;
                     return Point.make(line_start.x, Geoma.Utils.limit(point.y, line_start.y, line_end.y));
                 }
             };
-            PointLine.intersected = function (point, line_start, line_end, sensitivity) {
+            PointLineSegment.intersected = function (point, line_start, line_end, sensitivity) {
                 assert(sensitivity >= 0);
                 if (Math.abs(line_start.x - line_end.x) <= sensitivity) {
                     return Math.abs(point.x - (line_start.x + line_end.x) / 2) <= sensitivity &&
@@ -5120,9 +5602,9 @@ var Geoma;
                 }
                 return false;
             };
-            return PointLine;
+            return PointLineSegment;
         }(Intersection));
-        Tools.PointLine = PointLine;
+        Tools.PointLineSegment = PointLineSegment;
         var LineLine = (function (_super) {
             __extends(LineLine, _super);
             function LineLine(point, line1, line2) {
@@ -5250,7 +5732,7 @@ var Geoma;
                             var x = (Math.sqrt(d) + w) / k2_1;
                             var y = Tools.ActiveLineBase.getY(x, coeff);
                             var p1 = Point.make(x, y);
-                            if (PointLine.intersected(p1, line.startPoint, line.endPoint, Tools.Thickness.Calc)) {
+                            if (LineCircle.isPointLineIntersected(p1, line)) {
                                 ret.p1 = p1;
                             }
                         }
@@ -5258,7 +5740,7 @@ var Geoma;
                             var x = (w - Math.sqrt(d)) / k2_1;
                             var y = Tools.ActiveLineBase.getY(x, coeff);
                             var p2 = Point.make(x, y);
-                            if (PointLine.intersected(p2, line.startPoint, line.endPoint, Tools.Thickness.Calc)) {
+                            if (LineCircle.isPointLineIntersected(p2, line)) {
                                 ret.p2 = p2;
                             }
                         }
@@ -5276,10 +5758,10 @@ var Geoma;
                         var p1y = y0 + h;
                         var p2y = y0 - h;
                         var ret = {};
-                        if (PointLine.intersected(Point.make(x1, p1y), line.startPoint, line.endPoint, Tools.Thickness.Calc)) {
+                        if (LineCircle.isPointLineIntersected(Point.make(x1, p1y), line)) {
                             ret.p1 = Point.make(x1, p1y);
                         }
-                        if (PointLine.intersected(Point.make(x1, p2y), line.startPoint, line.endPoint, Tools.Thickness.Calc)) {
+                        if (LineCircle.isPointLineIntersected(Point.make(x1, p2y), line)) {
                             ret.p2 = Point.make(x1, p2y);
                         }
                         return ret;
@@ -5321,6 +5803,17 @@ var Geoma;
                 }
                 else {
                     return ret;
+                }
+            };
+            LineCircle.isPointLineIntersected = function (point, line) {
+                if (line instanceof Tools.ActiveLineSegment) {
+                    return PointLineSegment.intersected(point, line.startPoint, line.endPoint, Tools.Thickness.Calc);
+                }
+                else if (line instanceof Tools.ActiveLine) {
+                    return PointLine.intersected(point, line.startPoint, line.coefficients, Tools.Thickness.Calc);
+                }
+                else {
+                    return false;
                 }
             };
             return LineCircle;
@@ -5369,7 +5862,7 @@ var Geoma;
                         var p1 = Point.make(x, line.screenY(x));
                         x++;
                         var p2 = Point.make(x, line.screenY(x));
-                        if (PointLine.intersected(point, p1, p2, sensitivity)) {
+                        if (PointLineSegment.intersected(point, p1, p2, sensitivity)) {
                             return true;
                         }
                     }
@@ -5524,13 +6017,14 @@ var Geoma;
             AxesLines.prototype.serialize = function (context) {
                 var data = [];
                 data.push("" + this.axesId);
-                data.push("" + this.x.toFixed(2));
-                data.push("" + this.y.toFixed(2));
+                data.push("" + this.x);
+                data.push("" + this.y);
                 data.push("" + this.kX);
                 data.push("" + this.kY);
                 return data;
             };
             AxesLines.prototype.scaleDialog = function () {
+                var _this = this;
                 var scale;
                 if (this.kX == this.kY) {
                     scale = 1 / this.kX;
@@ -5538,11 +6032,14 @@ var Geoma;
                         scale = toInt(scale);
                     }
                 }
-                var new_scale = this.document.promptNumber(Tools.Resources.string("Масштаб по осям x/y, %"), scale);
+                var title = Tools.Resources.string("Масштаб по осям x/y, %");
+                var new_scale = this.document.promptNumber(title, scale);
                 if (new_scale != undefined) {
-                    this.kX = 1 / new_scale;
-                    this.kY = 1 / new_scale;
-                    return true;
+                    return Tools.UndoTransaction.Do(this, title, function () {
+                        _this.kX = 1 / new_scale;
+                        _this.kY = 1 / new_scale;
+                        return true;
+                    });
                 }
                 else {
                     return false;
@@ -5553,7 +6050,7 @@ var Geoma;
                     return null;
                 }
                 else {
-                    var axes = new AxesLines(context.document, toInt(data[index++]), toInt(data[index++]), toInt(data[index++]), parseFloat(data[index++]), parseFloat(data[index++]), function () { return Tools.CurrentTheme.AxesWidth; }, function () { return Tools.CurrentTheme.AxesBrush; }, function () { return Tools.CurrentTheme.AxesSelectBrush; });
+                    var axes = new AxesLines(context.document, toInt(data[index++]), parseFloat(data[index++]), parseFloat(data[index++]), parseFloat(data[index++]), parseFloat(data[index++]), function () { return Tools.CurrentTheme.AxesWidth; }, function () { return Tools.CurrentTheme.AxesBrush; }, function () { return Tools.CurrentTheme.AxesSelectBrush; });
                     return axes;
                 }
             };
@@ -5583,21 +6080,25 @@ var Geoma;
                     this._lastKx != this.kX ||
                     this._lastKy != this.kY ||
                     this._lastW != this.document.mouseArea.w ||
-                    this._lastH != this.document.mouseArea.h) {
+                    this._lastH != this.document.mouseArea.h ||
+                    this._lastOffsetX != this.document.mouseArea.offset.x ||
+                    this._lastOffsetY != this.document.mouseArea.offset.y) {
                     this._lastX = this.x;
                     this._lastY = this.y;
                     this._lastKx = this.kX;
                     this._lastKy = this.kY;
                     this._lastW = this.document.mouseArea.w;
                     this._lastH = this.document.mouseArea.h;
+                    this._lastOffsetX = this.document.mouseArea.offset.x;
+                    this._lastOffsetY = this.document.mouseArea.offset.y;
                     this._needsCalc.set();
                 }
             };
             AxesLines.prototype.innerDraw = function (play_ground) {
                 play_ground.context2d.beginPath();
-                play_ground.context2d.moveTo(0, this.y);
+                play_ground.context2d.moveTo(play_ground.offset.x, this.y);
                 play_ground.context2d.lineTo(play_ground.right, this.y);
-                play_ground.context2d.moveTo(this.x, 0);
+                play_ground.context2d.moveTo(this.x, play_ground.offset.y);
                 play_ground.context2d.lineTo(this.x, play_ground.bottom);
                 play_ground.context2d.strokeStyle = this.selected ? this.selectedBrush : this.brush;
                 play_ground.context2d.lineWidth = this.lineWidth;
@@ -5648,29 +6149,30 @@ var Geoma;
                     };
                     var bar_text_margin = 2;
                     {
-                        var x_coord = -toInt(this.x / dx);
+                        var x_coord = -toInt((this.x - play_ground.offset.x) / dx);
                         var start_x = this.x + x_coord * dx;
                         x_coord *= grade_x.value;
-                        var end_x = play_ground.w + 1;
+                        var end_x = play_ground.right + 1;
                         var digits = get_digits(grade_x);
                         var exponential = is_exponential(grade_x);
                         var y1 = void 0, y2 = void 0, y3 = void 0;
-                        if (this.y >= 0) {
-                            if (this.y < (play_ground.h - 2 * scale_bar_size)) {
+                        var screen_y = this.y - play_ground.offset.y;
+                        if (screen_y >= 0) {
+                            if (screen_y < (play_ground.h - 2 * scale_bar_size)) {
                                 y1 = this.y - scale_bar_size / 2;
                                 y2 = this.y + scale_bar_size / 2;
                                 y3 = this.y + scale_bar_size / 2 + bar_text_margin;
                             }
                             else {
-                                y1 = play_ground.h - scale_bar_size;
-                                y2 = play_ground.h;
+                                y1 = play_ground.h - scale_bar_size + play_ground.offset.y;
+                                y2 = play_ground.h + play_ground.offset.y;
                                 y3 = y1 - scale_bar_size;
                             }
                         }
                         else {
-                            y1 = 0;
-                            y2 = scale_bar_size;
-                            y3 = scale_bar_size + bar_text_margin;
+                            y1 = play_ground.offset.y;
+                            y2 = scale_bar_size + play_ground.offset.y;
+                            y3 = scale_bar_size + bar_text_margin + play_ground.offset.y;
                         }
                         for (var x = start_x; x <= end_x; x += dx) {
                             play_ground.context2d.moveTo(x, y1);
@@ -5680,29 +6182,30 @@ var Geoma;
                         }
                     }
                     {
-                        var y_coord = toInt(this.y / dy);
+                        var y_coord = toInt((this.y - play_ground.offset.y) / dy);
                         var start_y = this.y - y_coord * dy;
                         y_coord *= grade_y.value;
-                        var end_y = play_ground.h + 1;
+                        var end_y = play_ground.bottom + 1;
                         var digits = get_digits(grade_y);
                         var exponential = is_exponential(grade_y);
                         var x1 = void 0, x2 = void 0, x3 = void 0;
-                        if (this.x >= 0) {
-                            if (this.x < (play_ground.w - 2 * scale_bar_size)) {
+                        var screen_x = this.x - play_ground.offset.x;
+                        if (screen_x >= 0) {
+                            if (screen_x < (play_ground.w - 2 * scale_bar_size)) {
                                 x1 = this.x - scale_bar_size / 2;
                                 x2 = this.x + scale_bar_size / 2;
                                 x3 = this.x + scale_bar_size / 2 + bar_text_margin;
                             }
                             else {
-                                x1 = play_ground.w - scale_bar_size;
-                                x2 = play_ground.w;
+                                x1 = play_ground.w - scale_bar_size + play_ground.offset.x;
+                                x2 = play_ground.w + play_ground.offset.x;
                                 x3 = NaN;
                             }
                         }
                         else {
-                            x1 = 0;
-                            x2 = scale_bar_size;
-                            x3 = scale_bar_size + bar_text_margin;
+                            x1 = play_ground.offset.x;
+                            x2 = scale_bar_size + play_ground.offset.x;
+                            x3 = scale_bar_size + bar_text_margin + play_ground.offset.x;
                         }
                         for (var y = start_y; y <= end_y; y += dy) {
                             if (Math.abs(y - this.y) > dy / 2) {
@@ -5755,11 +6258,14 @@ var Geoma;
                                 return _this;
                             }
                             ZoomButton.prototype.onClick = function () {
+                                var _this = this;
                                 assert(this._axes);
                                 if (this._axes._adorners.visible) {
-                                    this._axes.kX *= this._x_multiplier;
-                                    this._axes.kY *= this._y_multiplier;
-                                    return true;
+                                    return Tools.UndoTransaction.Do(this, Tools.Resources.string("Масштабирование осей"), function () {
+                                        _this._axes.kX *= _this._x_multiplier;
+                                        _this._axes.kY *= _this._y_multiplier;
+                                        return true;
+                                    });
                                 }
                                 else {
                                     return false;
@@ -6268,6 +6774,178 @@ var Geoma;
         var toInt = Geoma.Utils.toInt;
         var Point = Geoma.Utils.Point;
         var assert = Geoma.Utils.assert;
+        var ActiveLine = (function (_super) {
+            __extends(ActiveLine, _super);
+            function ActiveLine(start, end, line_width, brush, selected_brush) {
+                if (line_width === void 0) { line_width = Tools.CurrentTheme.ActiveLineWidth; }
+                if (brush === void 0) { brush = Tools.CurrentTheme.ActiveLineBrush; }
+                if (selected_brush === void 0) { selected_brush = Tools.CurrentTheme.ActiveLineSelectBrush; }
+                return _super.call(this, start.document, start, end, line_width, brush, selected_brush) || this;
+            }
+            Object.defineProperty(ActiveLine.prototype, "moved", {
+                get: function () {
+                    assert(false, "TODO");
+                    return false;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(ActiveLine.prototype, "isPartOf", {
+                get: function () {
+                    return null;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(ActiveLine.prototype, "name", {
+                get: function () {
+                    var name1 = this.startPoint.name;
+                    var name2 = this.endPoint.name;
+                    if (name1 < name2) {
+                        return "" + name1 + name2;
+                    }
+                    else {
+                        return "" + name2 + name1;
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            ActiveLine.prototype.dispose = function () {
+                if (!this.disposed) {
+                    if (this._points) {
+                        for (var _i = 0, _a = this._points; _i < _a.length; _i++) {
+                            var point = _a[_i];
+                            point.removeSegment(this);
+                        }
+                    }
+                    delete this._points;
+                    _super.prototype.dispose.call(this);
+                }
+            };
+            ActiveLine.prototype.move = function (dx, dy) {
+                assert(false, "Not implemented yet");
+            };
+            ActiveLine.prototype.belongs = function (p1) {
+                if (this.startPoint == p1 || this.endPoint == p1) {
+                    return true;
+                }
+                else if (this._points) {
+                    for (var _i = 0, _a = this._points; _i < _a.length; _i++) {
+                        var p = _a[_i];
+                        if (p == p1) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
+            ActiveLine.prototype.serialize = function (context) {
+                var data = [];
+                data.push(context.points[this.startPoint.name].toString());
+                data.push(context.points[this.endPoint.name].toString());
+                if (this._points) {
+                    for (var _i = 0, _a = this._points; _i < _a.length; _i++) {
+                        var point = _a[_i];
+                        data.push("p" + context.points[point.name]);
+                    }
+                }
+                return data;
+            };
+            ActiveLine.prototype.mouseHit = function (point) {
+                return this.visible && Tools.PointLine.intersected(point, this.startPoint, this.coefficients, Tools.Thickness.Mouse);
+            };
+            ActiveLine.prototype.addPoint = function (point) {
+                assert(!this.belongs(point));
+                assert(this.mouseHit(point));
+                if (!this._points) {
+                    this._points = [];
+                }
+                this._points.push(point);
+            };
+            ActiveLine.prototype.removePoint = function (point) {
+                assert(this.belongs(point));
+                assert(this._points);
+                var index = this._points.indexOf(point);
+                assert(index >= 0);
+                this._points.splice(index, 1);
+                point.removeSegment(this);
+            };
+            ActiveLine.deserialize = function (context, data, index) {
+                if (data.length < (index + 1)) {
+                    return null;
+                }
+                else {
+                    var start_point = context.data.points.item(toInt(data[index]));
+                    var end_point = context.data.points.item(toInt(data[index + 1]));
+                    var line = new ActiveLine(start_point, end_point);
+                    for (var i = index + 2; i < data.length; i++) {
+                        var chunck = data[i];
+                        if (chunck.length && chunck.charAt(0) == 'p') {
+                            var p_index = toInt(chunck.substring(1));
+                            var point = context.data.points.item(p_index);
+                            assert(point instanceof Tools.ActiveCommonPoint);
+                            point.addGraphLine(line);
+                            line.addPoint(point);
+                        }
+                        else {
+                            return null;
+                        }
+                    }
+                    return line;
+                }
+            };
+            ActiveLine.prototype.mouseClick = function (event) {
+                var _this = this;
+                if (this.mouseHit(event)) {
+                    var doc_6 = this.document;
+                    if (doc_6.canShowMenu(this)) {
+                        var x_6 = doc_6.mouseArea.mousePoint.x;
+                        var y_6 = doc_6.mouseArea.mousePoint.y;
+                        var menu = new Tools.Menu(doc_6, x_6, y_6);
+                        var exists_other_segments = makeMod(this, function () { return doc_6.lineSegments.length > 1; });
+                        var menu_item = menu.addMenuItem(Tools.Resources.string("Добавить точку"));
+                        menu_item.onChecked.bind(this, function () { return doc_6.addPoint(Point.make(x_6, y_6)); });
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Сделать ||..."));
+                        menu_item.onChecked.bind(this, function () { return doc_6.setParallelLineState(_this); });
+                        menu_item.enabled.addModifier(exists_other_segments);
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Удалить линию {0}", this.name));
+                        menu_item.onChecked.bind(this, function () { return doc_6.removeLine(_this); });
+                        menu.show();
+                    }
+                }
+                _super.prototype.mouseClick.call(this, event);
+            };
+            ActiveLine.prototype.innerDraw = function (play_ground) {
+                var draw_info = Tools.ActiveLineBase.getLineDrawInfo(this.document, this.startPoint, this.angle);
+                play_ground.context2d.beginPath();
+                play_ground.context2d.lineWidth = this.lineWidth.value;
+                play_ground.context2d.strokeStyle = this.selected ? this.selectedBrush.value : this.brush.value;
+                play_ground.context2d.moveTo(draw_info.startPoint.x, draw_info.startPoint.y);
+                play_ground.context2d.lineTo(draw_info.endPoint.x, draw_info.endPoint.y);
+                play_ground.context2d.stroke();
+            };
+            ActiveLine.prototype.setAngle = function (value, pivot_point) {
+                var start_point = pivot_point !== null && pivot_point !== void 0 ? pivot_point : this.startPoint;
+                var end_poin = (start_point == this.endPoint) ? this.startPoint : this.endPoint;
+                var dp = Tools.ActiveLineBase.setAngle(value, start_point.x, start_point.y, end_poin.x, end_poin.y);
+                if (end_poin instanceof Tools.ActivePoint) {
+                    end_poin.move(dp.x, dp.y);
+                }
+            };
+            return ActiveLine;
+        }(Tools.ActiveLineBase));
+        Tools.ActiveLine = ActiveLine;
+    })(Tools = Geoma.Tools || (Geoma.Tools = {}));
+})(Geoma || (Geoma = {}));
+var Geoma;
+(function (Geoma) {
+    var Tools;
+    (function (Tools) {
+        var makeMod = Geoma.Utils.makeMod;
+        var toInt = Geoma.Utils.toInt;
+        var Point = Geoma.Utils.Point;
+        var assert = Geoma.Utils.assert;
         var MulticastEvent = Geoma.Utils.MulticastEvent;
         var DocumentData = (function () {
             function DocumentData() {
@@ -6304,11 +6982,36 @@ var Geoma;
             };
             return DocumentData;
         }());
+        var UndoTransaction = (function () {
+            function UndoTransaction(document, name, snapshot, offset) {
+                this.document = document;
+                this.name = name;
+                this.startSnapshot = snapshot;
+                this.mouseAreaOffset = offset;
+            }
+            UndoTransaction.Do = function (sprite, name, processor) {
+                var transaction = sprite.document.beginUndo(name);
+                try {
+                    var result = processor.bind(sprite)();
+                    transaction.commit();
+                    return result;
+                }
+                catch (error) {
+                    transaction.rollback();
+                    throw error;
+                }
+            };
+            return UndoTransaction;
+        }());
+        Tools.UndoTransaction = UndoTransaction;
         var Document = (function (_super) {
             __extends(Document, _super);
             function Document(mouse_area) {
                 var _this = _super.call(this) || this;
                 _this._selectedSprites = new Array();
+                _this._preventShowMenu = false;
+                _this._undoStack = new Array();
+                _this._currentUndoPosition = 0;
                 Geoma.Utils.InitializeCalcRevision();
                 _this._mouseArea = mouse_area;
                 _this._tools = new Geoma.Sprite.Container();
@@ -6316,9 +7019,8 @@ var Geoma;
                 _this._groupNo = 0;
                 _this._background = new Tools.Background(_this);
                 _this._data.initialize(_this);
-                _this.push(_this._tools);
                 var tap_tool = new Tools.TapTool(_this, function () { return Tools.CurrentTheme.TapDelayTime; }, function () { return Tools.CurrentTheme.TapActivateTime; }, function () { return Tools.CurrentTheme.TapLineWidth; }, function () { return Tools.CurrentTheme.TapRadius; }, function () { return Tools.CurrentTheme.TapBrush; });
-                tap_tool.onActivate.bind(_this, function () { return Tools.PointTool.showMenu(_this); });
+                tap_tool.onActivate.bind(_this, _this.onTap);
                 _this.push(tap_tool);
                 var tool_radius = 20;
                 var tool_line_width = 5;
@@ -6328,13 +7030,19 @@ var Geoma;
                 _this._tools.push(point_tool);
                 var file_tool = new Tools.FileTool(_this, 0, tool_y, tool_radius, tool_line_width);
                 _this._tools.push(file_tool);
+                var undo_tool = new Tools.UndoTool(_this, 0, tool_y, tool_radius, tool_line_width);
+                _this._tools.push(undo_tool);
+                var redo_tool = new Tools.RedoTool(_this, 0, tool_y, tool_radius, tool_line_width);
+                _this._tools.push(redo_tool);
                 var settings_tool = new Tools.SettingsTool(_this, 0, tool_y, tool_radius, tool_line_width);
                 _this._tools.push(settings_tool);
-                var max_w = function () { return Math.max(point_tool.w, file_tool.w) + tool_padding; };
+                var max_w = function () { return Math.max(point_tool.w, file_tool.w, undo_tool.w, redo_tool.w) + tool_padding; };
                 file_tool.addX(function (value) { return value + point_tool.x + max_w() * 1; });
-                settings_tool.addX(function (value) { return value + point_tool.x + max_w() * 2; });
+                undo_tool.addX(function (value) { return value + point_tool.x + max_w() * 2; });
+                redo_tool.addX(function (value) { return value + point_tool.x + max_w() * 3; });
+                settings_tool.addX(function (value) { return value + point_tool.x + max_w() * 4; });
                 var doc_name = new Geoma.Sprite.Text(0, tool_y, 0, 0, function () { return Tools.CurrentTheme.MenuItemTextBrush; }, function () { return Tools.CurrentTheme.MenuItemTextStyle; }, makeMod(_this, function () { return _this.name; }));
-                doc_name.addX(makeMod(_this, function () { return Math.max(_this.mouseArea.x + _this.mouseArea.w - doc_name.w - tool_padding, settings_tool.right + tool_padding); }));
+                doc_name.addX(makeMod(_this, function () { return Math.max(_this.mouseArea.x + _this.mouseArea.offset.x + _this.mouseArea.w - doc_name.w - tool_padding, settings_tool.right + tool_padding); }));
                 _this._tools.push(doc_name);
                 var tools_separator = new Geoma.Sprite.Polyline(0, _this._tools.bottom + 10, 1, function () { return Tools.CurrentTheme.ToolSeparatorBrush; });
                 tools_separator.addPolygon(new Geoma.Polygon.Line(Point.make(0, 0), Point.make(8000, 0)));
@@ -6396,77 +7104,8 @@ var Geoma;
                 }
                 this._tooltip = new Tools.Tooltip(function () { return _this._mouseArea.mousePoint.x; }, function () { return _this._mouseArea.mousePoint.y; }, message);
             };
-            Document.prototype.mouseClick = function (event) {
-                var _a, _b;
-                if (this._tooltip) {
-                    this._tooltip.dispose();
-                    delete this._tooltip;
-                }
-                if (this._state) {
-                    try {
-                        switch (this._state.action) {
-                            case "line segment":
-                                {
-                                    var end_point = (_a = this.getPoint(event)) !== null && _a !== void 0 ? _a : this.addPoint(event);
-                                    assert(end_point);
-                                    this.execLineSegmentState(end_point);
-                                }
-                                break;
-                            case "angle indicator":
-                                {
-                                    var other_segment = this.getLineSegment(event);
-                                    if (other_segment) {
-                                        this.execAngleIndicatorState(other_segment, event);
-                                    }
-                                }
-                                break;
-                            case "bisector":
-                                {
-                                    var other_segment = this.getLineSegment(event);
-                                    if (other_segment) {
-                                        this.execBisectorState(other_segment, event);
-                                    }
-                                }
-                                break;
-                            case "parallel":
-                                {
-                                    var other_segment = this.getLineSegment(event);
-                                    if (other_segment) {
-                                        this.execParallelLineState(other_segment);
-                                    }
-                                }
-                                break;
-                            case "perpendicular":
-                                {
-                                    var other_segment = this.getLineSegment(event);
-                                    if (other_segment) {
-                                        this.execPerpendicularLineState(other_segment);
-                                    }
-                                }
-                                break;
-                            case "circle radius":
-                            case "circle diameter":
-                                {
-                                    var end_point = (_b = this.getPoint(event)) !== null && _b !== void 0 ? _b : this.addPoint(event);
-                                    assert(end_point);
-                                    var radius = this._state.action == "circle radius";
-                                    this.execCircleState(end_point, radius ? Tools.CircleLineKind.Radius : Tools.CircleLineKind.Diameter);
-                                }
-                                break;
-                            default:
-                                assert(false);
-                        }
-                        event.cancelBubble = true;
-                        delete this._state;
-                    }
-                    catch (ex) {
-                        delete this._state;
-                        window.alert(ex);
-                    }
-                }
-            };
             Document.prototype.canShowMenu = function (sprite) {
-                return sprite.visible && !this._contextMenu && !this._state && this._selectedSprites.indexOf(sprite) != -1;
+                return sprite.visible && !this._contextMenu && !this._state && this._selectedSprites.indexOf(sprite) != -1 && !this._preventShowMenu;
             };
             Document.prototype.showMenu = function (menu) {
                 this._contextMenu = menu;
@@ -6501,26 +7140,31 @@ var Geoma;
                 }
                 return null;
             };
-            Document.prototype.getLineSegment = function () {
-                var args = [];
-                for (var _i = 0; _i < arguments.length; _i++) {
-                    args[_i] = arguments[_i];
-                }
-                if (args.length == 1) {
+            Document.prototype.getLineSegment = function (p1, p2) {
+                return this.getLine([Tools.ActiveLineSegment], p1, p2);
+            };
+            Document.prototype.getLine = function (lineCtors, p1, p2) {
+                if (!p2) {
                     for (var i = 0; i < this._data.lines.length; i++) {
-                        var segment = this._data.lines.item(i);
-                        if (segment.mouseHit(args[0])) {
-                            return segment;
+                        var line = this._data.lines.item(i);
+                        if (line.mouseHit(p1)) {
+                            for (var i_1 = 0; i_1 < lineCtors.length; i_1++) {
+                                if (line instanceof lineCtors[i_1]) {
+                                    return line;
+                                }
+                            }
                         }
                     }
                 }
-                else if (args.length == 2) {
-                    var p1 = args[0];
-                    var p2 = args[1];
+                else {
                     for (var i = 0; i < this._data.lines.length; i++) {
-                        var segment = this._data.lines.item(i);
-                        if (segment.isPivot(p1) && segment.isPivot(p2)) {
-                            return segment;
+                        var line = this._data.lines.item(i);
+                        if (line.isPivot(p1) && line.isPivot(p2)) {
+                            for (var i_2 = 0; i_2 < lineCtors.length; i_2++) {
+                                if (line instanceof lineCtors[i_2]) {
+                                    return line;
+                                }
+                            }
                         }
                     }
                 }
@@ -6528,12 +7172,22 @@ var Geoma;
             };
             Document.prototype.removeAngle = function (angle, force) {
                 if (force === void 0) { force = false; }
-                if (angle.hasBisector && !force) {
-                    angle.enabled = false;
-                }
-                else if (!angle.disposed) {
-                    this._data.angles.remove(angle);
-                    angle.dispose();
+                if (!angle.disposed) {
+                    var transaction = this.beginUndo(Tools.Resources.string("Удалить индикатор угла {0}", angle.name));
+                    try {
+                        if (angle.hasBisector && !force) {
+                            angle.enabled = false;
+                        }
+                        else if (!angle.disposed) {
+                            this._data.angles.remove(angle);
+                            angle.dispose();
+                        }
+                        transaction.commit();
+                    }
+                    catch (error) {
+                        transaction.rollback();
+                        throw error;
+                    }
                 }
             };
             Document.prototype.getAngleIndicators = function (point) {
@@ -6546,35 +7200,61 @@ var Geoma;
                 }
                 return ret;
             };
-            Document.prototype.newDocument = function () {
-                this._data.dispose(this);
-                this.remove(this._tools);
-                this._data = new DocumentData();
-                this._data.initialize(this);
-                this.push(this._tools);
-                this.name = "";
-            };
             Document.prototype.removePoint = function (point) {
                 if (!point.disposed) {
-                    point.dispose();
-                    this._data.points.remove(point);
-                    for (var i = 0; i < this._data.lines.length; i++) {
-                        var segment = this._data.lines.item(i);
-                        if (segment.isPivot(point)) {
-                            this.removeLineSegment(segment);
-                            i--;
+                    var transaction = this.beginUndo(Tools.Resources.string("Удаление точки {0}", point.name));
+                    try {
+                        point.dispose();
+                        this._data.points.remove(point);
+                        for (var i = 0; i < this._data.lines.length; i++) {
+                            var line = this._data.lines.item(i);
+                            if (line.isPivot(point)) {
+                                if (line instanceof Tools.ActiveLineSegment) {
+                                    this.removeLineSegment(line);
+                                }
+                                else {
+                                    assert(false, "TODO");
+                                }
+                                i--;
+                            }
                         }
+                        for (var i = 0; i < this._data.circles.length; i++) {
+                            var circle = this._data.circles.item(i);
+                            if (circle.isPivot(point)) {
+                                this.removeCircleLine(circle);
+                                i--;
+                            }
+                        }
+                        for (var i = 0; i < this._data.angles.length; i++) {
+                            var angle = this._data.angles.item(i);
+                            if (angle.isRelated(point)) {
+                                this.removeAngle(angle, true);
+                                i--;
+                            }
+                        }
+                        transaction.commit();
                     }
-                    for (var i = 0; i < this._data.circles.length; i++) {
-                        var circle = this._data.circles.item(i);
-                        if (circle.isPivot(point)) {
-                            this.removeCircleLine(circle);
-                            i--;
-                        }
+                    catch (error) {
+                        transaction.rollback();
+                        throw error;
+                    }
+                }
+            };
+            Document.prototype.removeLine = function (line) {
+                if (!line.disposed) {
+                    assert(line.startPoint instanceof Tools.ActivePoint);
+                    assert(line.endPoint instanceof Tools.ActivePoint);
+                    this._data.lines.remove(line);
+                    line.dispose();
+                    if (this.canRemovePoint(line.startPoint)) {
+                        this.removePoint(line.startPoint);
+                    }
+                    if (this.canRemovePoint(line.endPoint)) {
+                        this.removePoint(line.endPoint);
                     }
                     for (var i = 0; i < this._data.angles.length; i++) {
                         var angle = this._data.angles.item(i);
-                        if (angle.isRelated(point)) {
+                        if (angle.isRelated(line)) {
                             this.removeAngle(angle, true);
                             i--;
                         }
@@ -6583,32 +7263,48 @@ var Geoma;
             };
             Document.prototype.removeLineSegment = function (segment) {
                 if (!segment.disposed) {
-                    this._data.lines.remove(segment);
-                    segment.dispose();
-                    if (this.canRemovePoint(segment.start)) {
-                        this.removePoint(segment.start);
-                    }
-                    if (this.canRemovePoint(segment.end)) {
-                        this.removePoint(segment.end);
-                    }
-                    for (var i = 0; i < this._data.angles.length; i++) {
-                        var angle = this._data.angles.item(i);
-                        if (angle.isRelated(segment)) {
-                            this.removeAngle(angle, true);
-                            i--;
+                    var transaction = this.beginUndo(Tools.Resources.string("Удаление сегмента {0}", segment.name));
+                    try {
+                        this._data.lines.remove(segment);
+                        segment.dispose();
+                        if (this.canRemovePoint(segment.start)) {
+                            this.removePoint(segment.start);
                         }
+                        if (this.canRemovePoint(segment.end)) {
+                            this.removePoint(segment.end);
+                        }
+                        for (var i = 0; i < this._data.angles.length; i++) {
+                            var angle = this._data.angles.item(i);
+                            if (angle.isRelated(segment)) {
+                                this.removeAngle(angle, true);
+                                i--;
+                            }
+                        }
+                        transaction.commit();
+                    }
+                    catch (error) {
+                        transaction.rollback();
+                        throw error;
                     }
                 }
             };
             Document.prototype.removeCircleLine = function (circle) {
                 if (!circle.disposed) {
-                    this._data.circles.remove(circle);
-                    circle.dispose();
-                    if (this.canRemovePoint(circle.point1)) {
-                        this.removePoint(circle.point1);
+                    var transaction = this.beginUndo(Tools.Resources.string("Удалить окружность {0}", circle.name));
+                    try {
+                        this._data.circles.remove(circle);
+                        circle.dispose();
+                        if (this.canRemovePoint(circle.point1)) {
+                            this.removePoint(circle.point1);
+                        }
+                        if (this.canRemovePoint(circle.point2)) {
+                            this.removePoint(circle.point2);
+                        }
+                        transaction.commit();
                     }
-                    if (this.canRemovePoint(circle.point2)) {
-                        this.removePoint(circle.point2);
+                    catch (error) {
+                        transaction.rollback();
+                        throw error;
                     }
                 }
             };
@@ -6623,12 +7319,20 @@ var Geoma;
             };
             Document.prototype.removeParametricLine = function (parametric_line) {
                 if (!parametric_line.disposed) {
-                    this._data.parametric.remove(parametric_line);
-                    parametric_line.dispose();
-                    var axes = parametric_line.axes;
-                    if (this.getParametricLines(axes).length == 0) {
-                        this._data.axes.remove(axes);
-                        axes.dispose();
+                    var transaction = this.beginUndo(Tools.Resources.string("Удалить график {0}", parametric_line.code.text));
+                    try {
+                        this._data.parametric.remove(parametric_line);
+                        parametric_line.dispose();
+                        var axes = parametric_line.axes;
+                        if (this.getParametricLines(axes).length == 0) {
+                            this._data.axes.remove(axes);
+                            axes.dispose();
+                        }
+                        transaction.commit();
+                    }
+                    catch (error) {
+                        transaction.rollback();
+                        throw error;
                     }
                 }
             };
@@ -6662,19 +7366,31 @@ var Geoma;
                 this.addToolTip(Tools.Resources.string("Выберите вторую точку"));
                 this._state = { action: "circle diameter", activeItem: point, pitchPoint: point };
             };
+            Document.prototype.setLineState = function (point) {
+                this.addToolTip(Tools.Resources.string("Выберите вторую точку"));
+                this._state = { action: "line", activeItem: point, pitchPoint: point };
+            };
             Document.prototype.addParametricLine = function (point, axes) {
                 var _this = this;
                 var dialog = new Tools.ExpressionDialog(this, makeMod(this, function () { return (_this.mouseArea.x + _this.mouseArea.w / 2 - _this.mouseArea.w / 10) / _this.mouseArea.ratio; }), makeMod(this, function () { return (_this.mouseArea.y + _this.mouseArea.h / 2 - _this.mouseArea.h / 10) / _this.mouseArea.ratio; }));
                 dialog.onEnter.bind(this, function (event) {
                     if (event.detail) {
-                        var new_axes = !axes;
-                        axes = axes !== null && axes !== void 0 ? axes : new Tools.AxesLines(_this, _this._data.axes.length, point.x, point.y, 0.02, 0.02, function () { return Tools.CurrentTheme.AxesWidth; }, function () { return Tools.CurrentTheme.AxesBrush; }, function () { return Tools.CurrentTheme.AxesSelectBrush; });
-                        var line = new Tools.ParametricLine(_this, function () { return Tools.CurrentTheme.ActiveLineWidth; }, function () { return Tools.CurrentTheme.ActiveLineBrush; }, function () { return Tools.CurrentTheme.ActiveLineSelectBrush; }, axes);
-                        line.code = event.detail;
-                        if (new_axes) {
-                            _this._data.axes.push(axes);
+                        var transaction = _this.beginUndo("Добавление функции");
+                        try {
+                            var new_axes = !axes;
+                            axes = axes !== null && axes !== void 0 ? axes : new Tools.AxesLines(_this, _this._data.axes.length, point.x, point.y, 0.02, 0.02, function () { return Tools.CurrentTheme.AxesWidth; }, function () { return Tools.CurrentTheme.AxesBrush; }, function () { return Tools.CurrentTheme.AxesSelectBrush; });
+                            var line = new Tools.ParametricLine(_this, function () { return Tools.CurrentTheme.ParametricLineWidth; }, function () { return Tools.CurrentTheme.ParametricLineBrush; }, function () { return Tools.CurrentTheme.ParametricLineSelectBrush; }, axes);
+                            line.code = event.detail;
+                            if (new_axes) {
+                                _this._data.axes.push(axes);
+                            }
+                            _this._data.parametric.push(line);
+                            transaction.commit();
                         }
-                        _this._data.parametric.push(line);
+                        catch (error) {
+                            transaction.rollback();
+                            throw error;
+                        }
                     }
                     _this.remove(dialog);
                     dialog.dispose();
@@ -6685,7 +7401,7 @@ var Geoma;
                 var lines = new Array();
                 for (var i = 0; i < this._data.lines.length; i++) {
                     var line = this._data.lines.item(i);
-                    if (line.mouseHit(point)) {
+                    if (line.mouseHit(point) && !line.isPartOf) {
                         lines.push(line);
                         line.selected = true;
                     }
@@ -6706,43 +7422,74 @@ var Geoma;
                 }
                 this._groupNo++;
                 if (lines.length == 0) {
-                    var p = new Tools.ActivePoint(this, point.x, point.y);
-                    p.setName(this.nextPointName());
-                    p.selected = true;
-                    this._addPoint(p);
-                    return p;
+                    var transaction = this.beginUndo(Tools.Resources.string("Добавление точки"));
+                    try {
+                        var p = new Tools.ActivePoint(this, point.x, point.y);
+                        p.setName(this.nextPointName());
+                        p.selected = true;
+                        this._addPoint(p);
+                        transaction.commit();
+                        return p;
+                    }
+                    catch (error) {
+                        transaction.rollback();
+                        throw error;
+                    }
                 }
                 else if (lines.length == 1) {
-                    var line = lines[0];
-                    var intersection = Tools.Intersection.makePoint(point, line);
-                    var p = new Tools.ActiveCommonPoint(this, intersection.x, intersection.y, this._groupNo);
-                    line.addPoint(p);
-                    p.addSegment(line);
-                    p.setName(this.nextPointName());
-                    p.selected = true;
-                    this._addPoint(p);
-                    return p;
+                    var transaction = this.beginUndo(Tools.Resources.string("Добавление точки"));
+                    try {
+                        var line = lines[0];
+                        var intersection = Tools.Intersection.makePoint(point, line);
+                        var p = new Tools.ActiveCommonPoint(this, intersection.x, intersection.y, this._groupNo);
+                        line.addPoint(p);
+                        p.addGraphLine(line);
+                        p.setName(this.nextPointName());
+                        p.selected = true;
+                        this._addPoint(p);
+                        transaction.commit();
+                        return p;
+                    }
+                    catch (error) {
+                        transaction.rollback();
+                        throw error;
+                    }
                 }
                 else if (lines.length > 1) {
-                    var start_index = this._data.points.length;
-                    for (var i = 0; i < lines.length; i++) {
-                        var line1 = lines[i];
-                        for (var j = i + 1; j < lines.length; j++) {
-                            var line2 = lines[j];
-                            var intersection = Tools.Intersection.makePoint(point, line1, line2);
-                            var p = new Tools.ActiveCommonPoint(this, intersection.x, intersection.y, this._groupNo);
-                            line1.addPoint(p);
-                            p.addSegment(line1);
-                            line2.addPoint(p);
-                            p.addSegment(line2);
-                            p.setName(this.nextPointName());
-                            p.selected = true;
-                            this._addPoint(p);
+                    var transaction = this.beginUndo(Tools.Resources.string("Добавление точки"));
+                    try {
+                        var start_index = this._data.points.length;
+                        for (var i = 0; i < lines.length; i++) {
+                            var line1 = lines[i];
+                            for (var j = i + 1; j < lines.length; j++) {
+                                var line2 = lines[j];
+                                var intersection = Tools.Intersection.makePoint(point, line1, line2);
+                                var p = new Tools.ActiveCommonPoint(this, intersection.x, intersection.y, this._groupNo);
+                                line1.addPoint(p);
+                                p.addGraphLine(line1);
+                                line2.addPoint(p);
+                                p.addGraphLine(line2);
+                                p.setName(this.nextPointName());
+                                p.selected = true;
+                                this._addPoint(p);
+                            }
                         }
+                        this.addGroupVisibility(start_index, this._data.points.length);
+                        transaction.commit();
                     }
-                    this.addGroupVisibility(start_index, this._data.points.length);
+                    catch (error) {
+                        transaction.rollback();
+                        throw error;
+                    }
                 }
                 return null;
+            };
+            Document.prototype.new = function () {
+                this._mouseArea.setOffset(0, 0);
+                this._data.dispose(this);
+                this._data = new DocumentData();
+                this._data.initialize(this);
+                this.name = "";
             };
             Document.prototype.save = function () {
                 var info_separator = Document._infoSeparatorV2;
@@ -6761,7 +7508,15 @@ var Geoma;
                 }
                 for (var i = 0; i < this._data.lines.length; i++) {
                     var line = this._data.lines.item(i);
-                    ret.push("l" + info_separator + join_data(line.serialize(context)));
+                    if (line instanceof Tools.ActiveLineSegment) {
+                        ret.push("l" + info_separator + join_data(line.serialize(context)));
+                    }
+                    else if (line instanceof Tools.ActiveLine) {
+                        ret.push("ll" + info_separator + join_data(line.serialize(context)));
+                    }
+                    else {
+                        assert(false, "Logical error");
+                    }
                     context.lines[line.name] = i;
                 }
                 for (var i = 0; i < this._data.angles.length; i++) {
@@ -6864,6 +7619,17 @@ var Geoma;
                                     }
                                 }
                                 break;
+                            case "ll":
+                                {
+                                    var line = Tools.ActiveLine.deserialize(context, info, 1);
+                                    if (line) {
+                                        this._data.lines.push(line);
+                                    }
+                                    else {
+                                        throw error;
+                                    }
+                                }
+                                break;
                             case "a":
                                 {
                                     var angle = Tools.AngleIndicator.deserialize(context, info, 1);
@@ -6921,16 +7687,15 @@ var Geoma;
                 }
                 this._data = old_data;
                 old_data.dispose(this);
-                this.remove(this._tools);
                 this._data = context.data;
                 this._data.initialize(this);
-                this.push(this._tools);
                 this._groupNo = 0;
                 for (var group_id in groups) {
                     var group_no = toInt(group_id);
                     this._groupNo = Math.max(this._groupNo, group_no);
                     this.addGroupVisibility(groups[group_no].start_index, groups[group_no].end_index);
                 }
+                this._mouseArea.setOffset(0, 0);
             };
             Document.prototype.copyToClipboard = function (data) {
                 return navigator.clipboard.writeText(data);
@@ -6961,17 +7726,111 @@ var Geoma;
                     this._selectedSprites.splice(index, 1);
                 }
             };
+            Document.prototype.beginUndo = function (action_name) {
+                var UndoTransactionImpl = (function (_super) {
+                    __extends(UndoTransactionImpl, _super);
+                    function UndoTransactionImpl() {
+                        var _this = _super !== null && _super.apply(this, arguments) || this;
+                        _this._undoLevel = 0;
+                        _this._rollingBack = false;
+                        return _this;
+                    }
+                    UndoTransactionImpl.prototype.commit = function () {
+                        this._undoLevel--;
+                        assert(this._undoLevel >= 0);
+                        if (this._undoLevel == 0) {
+                            if (this._rollingBack) {
+                                this._undoLevel++;
+                                this.rollback();
+                            }
+                            else {
+                                if (this.document._currentUndoPosition < this.document._undoStack.length) {
+                                    this.document._undoStack.splice(this.document._currentUndoPosition);
+                                }
+                                this.document._undoStack.push({
+                                    text: this.name,
+                                    snapshot: this.startSnapshot,
+                                    offset: this.mouseAreaOffset
+                                });
+                                if (this.document._undoStack.length > Document._maximalUndoStackSize) {
+                                    this.document._undoStack.splice(0, 1);
+                                }
+                                this.document._currentUndoPosition = this.document._undoStack.length;
+                                delete this.document._currentTransaction;
+                                Tools.FileTool.saveLastState(this.document.save());
+                            }
+                        }
+                    };
+                    UndoTransactionImpl.prototype.rollback = function () {
+                        this._undoLevel--;
+                        this._rollingBack = true;
+                        assert(this._undoLevel >= 0);
+                        if (this._undoLevel == 0) {
+                            this.document.open(this.startSnapshot);
+                            delete this.document._currentTransaction;
+                        }
+                    };
+                    UndoTransactionImpl.prototype.upLevel = function () {
+                        this._undoLevel++;
+                    };
+                    return UndoTransactionImpl;
+                }(UndoTransaction));
+                if (!this._currentTransaction) {
+                    this._currentTransaction = new UndoTransactionImpl(this, action_name, this.save(), this.mouseArea.offset);
+                }
+                this._currentTransaction.upLevel();
+                return this._currentTransaction;
+            };
+            Document.prototype.canUndo = function () {
+                return this._undoStack.length > 0 && this._currentUndoPosition != 0;
+            };
+            Document.prototype.canRedo = function () {
+                return this._undoStack.length > 0 && this._currentUndoPosition < (this._undoStack.length - 1);
+            };
+            Document.prototype.undo = function () {
+                assert(this.canUndo());
+                if (this._currentUndoPosition == this._undoStack.length) {
+                    this._undoStack.push({
+                        text: this._undoStack[this._undoStack.length - 1].text,
+                        snapshot: this.save(),
+                        offset: this.mouseArea.offset
+                    });
+                }
+                this._currentUndoPosition--;
+                var undo_info = this._undoStack[this._currentUndoPosition];
+                this.open(undo_info.snapshot);
+                this.mouseArea.setOffset(undo_info.offset.x, undo_info.offset.y);
+            };
+            Document.prototype.redo = function () {
+                assert(this.canRedo());
+                this._currentUndoPosition++;
+                var undo_info = this._undoStack[this._currentUndoPosition];
+                this.open(undo_info.snapshot);
+                this.mouseArea.setOffset(undo_info.offset.x, undo_info.offset.y);
+            };
             Document.getTicks = function () {
                 return new Date().getTime();
+            };
+            Document.forceCloseMenu = function (move_tool) {
+                var _a;
+                assert(move_tool.document.contains(move_tool));
+                (_a = move_tool.document._contextMenu) === null || _a === void 0 ? void 0 : _a.close();
             };
             Document.prototype.innerDraw = function (play_ground) {
                 Geoma.Utils.UpdateCalcRevision();
                 if (this._onBeforeDraw) {
                     this._onBeforeDraw.emitEvent(new CustomEvent("BeforeDrawEvent"));
                 }
-                this._background.draw(play_ground);
                 var current_transform = play_ground.context2d.getTransform();
-                play_ground.context2d.setTransform(current_transform.a * play_ground.ratio, current_transform.b, current_transform.c, current_transform.d * play_ground.ratio, current_transform.e, current_transform.f);
+                var matrix = DOMMatrix.fromMatrix(current_transform);
+                matrix.a *= play_ground.ratio;
+                matrix.d *= play_ground.ratio;
+                play_ground.context2d.setTransform(matrix);
+                this._background.draw(play_ground);
+                this._tools.draw(play_ground);
+                matrix.e -= this._mouseArea.offset.x * play_ground.ratio;
+                matrix.f -= this._mouseArea.offset.y * play_ground.ratio;
+                play_ground.context2d.setTransform(matrix);
                 _super.prototype.innerDraw.call(this, play_ground);
                 if (this._contextMenu) {
                     this._contextMenu.draw(play_ground);
@@ -6983,6 +7842,93 @@ var Geoma;
                     this._tooltip.draw(play_ground);
                 }
                 play_ground.context2d.setTransform(current_transform);
+                this._preventShowMenu = false;
+            };
+            Document.prototype.mouseClick = function (event) {
+                var _a, _b, _c;
+                if (this._tooltip) {
+                    this._tooltip.dispose();
+                    delete this._tooltip;
+                }
+                if (this._state) {
+                    var transaction = void 0;
+                    try {
+                        switch (this._state.action) {
+                            case "line segment":
+                                {
+                                    transaction = this.beginUndo(Tools.Resources.string("Добавление сегмента"));
+                                    var end_point = (_a = this.getPoint(event)) !== null && _a !== void 0 ? _a : this.addPoint(event);
+                                    assert(end_point);
+                                    this.execLineSegmentState(end_point);
+                                }
+                                break;
+                            case "angle indicator":
+                                {
+                                    var other_segment = this.getLineSegment(event);
+                                    if (other_segment) {
+                                        transaction = this.beginUndo(Tools.Resources.string("Отобразить угол"));
+                                        this.execAngleIndicatorState(other_segment, event);
+                                    }
+                                }
+                                break;
+                            case "bisector":
+                                {
+                                    var other_segment = this.getLineSegment(event);
+                                    if (other_segment) {
+                                        transaction = this.beginUndo(Tools.Resources.string("Показать биссектрисы углов"));
+                                        this.execBisectorState(other_segment, event);
+                                    }
+                                }
+                                break;
+                            case "parallel":
+                                {
+                                    var other_segment = this.getLine([Tools.ActiveLineSegment, Tools.ActiveLine], event);
+                                    if (other_segment) {
+                                        transaction = this.beginUndo(Tools.Resources.string("Сделать ||"));
+                                        this.execParallelLineState(other_segment);
+                                    }
+                                }
+                                break;
+                            case "perpendicular":
+                                {
+                                    var other_segment = this.getLineSegment(event);
+                                    if (other_segment) {
+                                        transaction = this.beginUndo(Tools.Resources.string("Сделать ⟂"));
+                                        this.execPerpendicularLineState(other_segment);
+                                    }
+                                }
+                                break;
+                            case "circle radius":
+                            case "circle diameter":
+                                {
+                                    transaction = this.beginUndo(Tools.Resources.string("Добавление окружности"));
+                                    var end_point = (_b = this.getPoint(event)) !== null && _b !== void 0 ? _b : this.addPoint(event);
+                                    assert(end_point);
+                                    var radius = this._state.action == "circle radius";
+                                    this.execCircleState(end_point, radius ? Tools.CircleLineKind.Radius : Tools.CircleLineKind.Diameter);
+                                }
+                                break;
+                            case "line":
+                                {
+                                    transaction = this.beginUndo(Tools.Resources.string("Добавление линии"));
+                                    var end_point = (_c = this.getPoint(event)) !== null && _c !== void 0 ? _c : this.addPoint(event);
+                                    assert(end_point);
+                                    this.execLineState(end_point);
+                                }
+                                break;
+                            default:
+                                assert(false);
+                        }
+                        delete this._state;
+                        this._preventShowMenu = true;
+                        transaction === null || transaction === void 0 ? void 0 : transaction.commit();
+                    }
+                    catch (ex) {
+                        transaction === null || transaction === void 0 ? void 0 : transaction.rollback();
+                        delete this._state;
+                        window.alert(ex);
+                    }
+                }
             };
             Document.prototype.execLineSegmentState = function (end_point) {
                 assert(this._state && this._state.activeItem instanceof Tools.ActivePoint);
@@ -6992,24 +7938,18 @@ var Geoma;
                     assert(p);
                     start_point = p;
                 }
-                var can_add_line = true;
                 if (start_point == end_point) {
-                    this.alert(Tools.Resources.string("Нельзя провести линию к той же точке!"));
-                    can_add_line = false;
+                    throw Error(Tools.Resources.string("Нельзя провести линию к той же точке!"));
                 }
                 else {
                     for (var i = 0; i < this._data.lines.length; i++) {
                         var line = this._data.lines.item(i);
                         if (line.belongs(start_point) && line.belongs(end_point)) {
-                            this.alert(Tools.Resources.string("Линия {0} уже проведена!", line.name));
-                            can_add_line = false;
-                            break;
+                            throw Error(Tools.Resources.string("Отрезок {0} уже проведен!", line.name));
                         }
                     }
                 }
-                if (can_add_line) {
-                    this._addLineSegment(start_point, end_point);
-                }
+                this._addLineSegment(start_point, end_point);
             };
             Document.prototype.execAngleIndicatorState = function (other_segment, select_point) {
                 var _a, _b, _c, _d;
@@ -7025,7 +7965,7 @@ var Geoma;
                 }
                 if (common_point) {
                     if (segment == other_segment) {
-                        this.alert(Tools.Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
+                        throw Error(Tools.Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
                     }
                     else {
                         for (var i = 0; i < this._data.angles.length; i++) {
@@ -7037,37 +7977,36 @@ var Geoma;
                                     return angle;
                                 }
                                 else {
-                                    this.alert(Tools.Resources.string("Угол между прямыми {0} и {1} уже обозначен.", segment.name, other_segment.name));
-                                    return null;
+                                    throw Error(Tools.Resources.string("Угол между прямыми {0} и {1} уже обозначен.", segment.name, other_segment.name));
                                 }
                             }
                         }
                         if (common_point instanceof Tools.ActiveCommonPoint) {
                             assert(this._state.pitchPoint);
-                            var intersect = Tools.PointLine.intersected(this._state.pitchPoint, segment.start, common_point, Tools.Thickness.Mouse);
+                            var intersect = Tools.PointLineSegment.intersected(this._state.pitchPoint, segment.start, common_point, Tools.Thickness.Mouse);
                             if (intersect) {
                                 segment = (_a = this.getLineSegment(segment.start, common_point)) !== null && _a !== void 0 ? _a : this._addLineSegment(segment.start, common_point);
                             }
                             else {
-                                intersect = Tools.PointLine.intersected(this._state.pitchPoint, common_point, segment.end, Tools.Thickness.Mouse);
+                                intersect = Tools.PointLineSegment.intersected(this._state.pitchPoint, common_point, segment.end, Tools.Thickness.Mouse);
                                 if (intersect) {
                                     segment = (_b = this.getLineSegment(common_point, segment.end)) !== null && _b !== void 0 ? _b : this._addLineSegment(common_point, segment.end);
                                 }
                                 else {
-                                    return null;
+                                    throw Error(Tools.Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
                                 }
                             }
-                            intersect = Tools.PointLine.intersected(select_point, other_segment.start, common_point, Tools.Thickness.Mouse);
+                            intersect = Tools.PointLineSegment.intersected(select_point, other_segment.start, common_point, Tools.Thickness.Mouse);
                             if (intersect) {
                                 other_segment = (_c = this.getLineSegment(other_segment.start, common_point)) !== null && _c !== void 0 ? _c : this._addLineSegment(other_segment.start, common_point);
                             }
                             else {
-                                intersect = Tools.PointLine.intersected(select_point, common_point, other_segment.end, Tools.Thickness.Mouse);
+                                intersect = Tools.PointLineSegment.intersected(select_point, common_point, other_segment.end, Tools.Thickness.Mouse);
                                 if (intersect) {
                                     other_segment = (_d = this.getLineSegment(common_point, other_segment.end)) !== null && _d !== void 0 ? _d : this._addLineSegment(common_point, other_segment.end);
                                 }
                                 else {
-                                    return null;
+                                    throw Error(Tools.Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
                                 }
                             }
                         }
@@ -7075,9 +8014,8 @@ var Geoma;
                     }
                 }
                 else {
-                    this.alert(Tools.Resources.string("Отрезки {0} и {1} не содержат общих точек", segment.name, other_segment.name));
+                    throw Error(Tools.Resources.string("Отрезки {0} и {1} не содержат общих точек", segment.name, other_segment.name));
                 }
-                return null;
             };
             Document.prototype.execBisectorState = function (other_segment, select_point) {
                 assert(this._state && this._state.activeItem instanceof Tools.ActiveLineSegment);
@@ -7086,7 +8024,7 @@ var Geoma;
                     var angle_1 = this._data.angles.item(i);
                     if (angle_1.isRelated(segment) && angle_1.isRelated(other_segment)) {
                         if (angle_1.hasBisector) {
-                            this.alert(Tools.Resources.string("Биссектриса угла {0} уже проведена.", angle_1.name));
+                            throw Error(Tools.Resources.string("Биссектриса угла {0} уже проведена.", angle_1.name));
                         }
                         else {
                             angle_1.addBisector();
@@ -7095,19 +8033,17 @@ var Geoma;
                     }
                 }
                 var angle = this.execAngleIndicatorState(other_segment, select_point);
-                if (angle) {
-                    angle.addBisector();
-                    angle.enabled = false;
-                }
+                angle.addBisector();
+                angle.enabled = false;
             };
-            Document.prototype.execParallelLineState = function (other_segment) {
-                assert(this._state && this._state.activeItem instanceof Tools.ActiveLineSegment);
-                var segment = this._state.activeItem;
-                if (segment.belongs(other_segment.start) || segment.belongs(other_segment.end)) {
-                    this.alert(Tools.Resources.string("Отрезки {0} и {1} имеют общую точку и не могут стать ||.", segment.name, other_segment.name));
+            Document.prototype.execParallelLineState = function (other_line) {
+                assert(this._state && this._state.activeItem instanceof Tools.ActiveLineBase);
+                assert(other_line.startPoint instanceof Tools.ActivePointBase && other_line.endPoint instanceof Tools.ActivePointBase);
+                if (this._state.activeItem.belongs(other_line.startPoint) || this._state.activeItem.belongs(other_line.endPoint)) {
+                    this.alert(Tools.Resources.string("Отрезки {0} и {1} имеют общую точку и не могут стать ||.", this._state.activeItem.name, other_line.name));
                 }
                 else {
-                    segment.setParallelTo(other_segment);
+                    this._state.activeItem.setParallelTo(other_line);
                 }
             };
             Document.prototype.execPerpendicularLineState = function (other_segment) {
@@ -7128,24 +8064,52 @@ var Geoma;
                     assert(p);
                     center_point = p;
                 }
-                var can_add_circle = true;
                 if (center_point == pivot_point) {
-                    this.alert(Tools.Resources.string("Нельзя провести окружность к той же точке!"));
-                    can_add_circle = false;
+                    throw Error(Tools.Resources.string("Нельзя провести окружность к той же точке!"));
                 }
                 else {
                     for (var i = 0; i < this._data.circles.length; i++) {
                         var circle = this._data.circles.item(i);
-                        if (circle.kind == kind && circle.point1 == center_point && circle.point2 == pivot_point) {
-                            this.alert(Tools.Resources.string("Окружность {0} уже проведена!", circle.name));
-                            can_add_circle = false;
-                            break;
+                        if (circle.kind == kind) {
+                            switch (kind) {
+                                case Tools.CircleLineKind.Diameter:
+                                    if ((circle.point1 == center_point && circle.point2 == pivot_point) || (circle.point1 == pivot_point && circle.point2 == center_point)) {
+                                        throw Error(Tools.Resources.string("Окружность {0} уже проведена!", circle.name));
+                                    }
+                                    break;
+                                case Tools.CircleLineKind.Radius:
+                                    if (circle.point1 == center_point && circle.point2 == pivot_point) {
+                                        throw Error(Tools.Resources.string("Окружность {0} уже проведена!", circle.name));
+                                    }
+                                    break;
+                                default:
+                                    assert(false);
+                            }
                         }
                     }
                 }
-                if (can_add_circle) {
-                    this._addCircle(kind, center_point, pivot_point);
+                this._addCircle(kind, center_point, pivot_point);
+            };
+            Document.prototype.execLineState = function (end_point) {
+                assert(this._state && this._state.activeItem instanceof Tools.ActivePoint);
+                var start_point = this._state.activeItem;
+                if (!this.getPoint(start_point)) {
+                    var p = this.addPoint(start_point);
+                    assert(p);
+                    start_point = p;
                 }
+                if (start_point == end_point) {
+                    throw Error(Tools.Resources.string("Нельзя провести линию к той же точке!"));
+                }
+                else {
+                    for (var i = 0; i < this._data.lines.length; i++) {
+                        var line = this._data.lines.item(i);
+                        if (line instanceof Tools.ActiveLine && line.belongs(start_point) && line.belongs(end_point)) {
+                            throw Error(Tools.Resources.string("Линия {0} уже проведена!", line.name));
+                        }
+                    }
+                }
+                this._addLine(start_point, end_point);
             };
             Document.prototype.addGroupVisibility = function (start_index, end_index) {
                 var group_no = -1;
@@ -7218,6 +8182,11 @@ var Geoma;
                 }
                 return name;
             };
+            Document.prototype.onTap = function () {
+                Tools.PointTool.showMenu(this);
+                var move_tool = new Tools.MoveTool(this);
+                this.push(move_tool);
+            };
             Document.prototype._addPoint = function (point) {
                 this._data.points.push(point);
             };
@@ -7236,12 +8205,18 @@ var Geoma;
                 this._data.circles.push(circle);
                 return circle;
             };
+            Document.prototype._addLine = function (start_point, end_point, line_width, brush) {
+                var line = new Tools.ActiveLine(start_point, end_point, line_width, brush);
+                this._data.lines.push(line);
+                return line;
+            };
             Document.serializationVersion1 = 1;
             Document.actualSerializationVersion = 2;
             Document._pointNames = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
             Document._chunkSeparator = ";";
             Document._infoSeparatorV1 = "|";
             Document._infoSeparatorV2 = "-";
+            Document._maximalUndoStackSize = 200;
             return Document;
         }(Geoma.Sprite.Container));
         Tools.Document = Document;
@@ -7396,20 +8371,15 @@ var Geoma;
             AngleIndicator.prototype.dispose = function () {
                 _super.prototype.dispose.call(this);
                 if (this._bisector) {
-                    this.removeBisector(this._bisector);
+                    this._removeBisector(this._bisector);
                 }
             };
             AngleIndicator.prototype.addBisector = function () {
-                assert(!this._bisector);
-                this._bisector = new Tools.BisectorLine(this);
+                Tools.UndoTransaction.Do(this, Tools.Resources.string("Показать биссектрисы углов"), this._addBisector);
             };
             AngleIndicator.prototype.removeBisector = function (bisector) {
-                assert(this._bisector == bisector);
-                this._bisector.dispose();
-                delete this._bisector;
-                if (!this.enabled) {
-                    this.document.removeAngle(this);
-                }
+                var _this = this;
+                Tools.UndoTransaction.Do(this, Tools.Resources.string("Удалить биссектрису"), function () { return _this._removeBisector(bisector); });
             };
             AngleIndicator.prototype.serialize = function (context) {
                 var data = [];
@@ -7420,6 +8390,9 @@ var Geoma;
                 }
                 if (!this.enabled) {
                     data.push("d");
+                }
+                if (this._angleName) {
+                    data.push("n" + AngleIndicator._anglesNames.indexOf(this._angleName));
                 }
                 return data;
             };
@@ -7450,16 +8423,26 @@ var Geoma;
                 else {
                     var line1 = context.data.lines.item(toInt(data[index]));
                     var line2 = context.data.lines.item(toInt(data[index + 1]));
+                    assert(line1 instanceof Tools.ActiveLineSegment);
+                    assert(line2 instanceof Tools.ActiveLineSegment);
                     var angle = new AngleIndicator(context.document, line1, line2);
                     for (var i = index + 2; i < data.length; i++) {
-                        switch (data[i]) {
+                        var chunck = data[i];
+                        switch (chunck) {
                             case 'b':
-                                angle.addBisector();
+                                angle._addBisector();
                                 break;
                             case 'd':
                                 angle.enabled = false;
                                 break;
                             default:
+                                if (chunck.length && chunck.charAt(0) == 'n') {
+                                    var p_index = toInt(chunck.substring(1));
+                                    if (p_index >= 0 && p_index < AngleIndicator._anglesNames.length) {
+                                        angle._angleName = AngleIndicator._anglesNames.charAt(p_index);
+                                        break;
+                                    }
+                                }
                                 return null;
                         }
                     }
@@ -7559,10 +8542,15 @@ var Geoma;
                     var menu_item = menu.addMenuItem(Tools.Resources.string("Показать биссектрисы углов"));
                     menu_item.onChecked.bind(this, this.addBisector);
                     menu_item.enabled.addModifier(makeMod(this, function () { return !_this._bisector; }));
-                    var set_name_1 = function (index) { return _this._angleName = AngleIndicator._anglesNames.charAt(index); };
+                    var set_name_1 = function (index) {
+                        var name = AngleIndicator._anglesNames.charAt(index);
+                        Tools.UndoTransaction.Do(_this, Tools.Resources.string("Название угла ({0})", name), function () { return _this._angleName = name; });
+                    };
                     if (this._angleName) {
                         menu_item = menu.addMenuItem(Tools.Resources.string("Имя по умолчанию ({0})", this.realName));
-                        menu_item.onChecked.bind(this, function () { return _this._angleName = undefined; });
+                        menu_item.onChecked.bind(this, function () {
+                            Tools.UndoTransaction.Do(_this, Tools.Resources.string("Название угла ({0})", _this.realName), function () { return _this._angleName = undefined; });
+                        });
                     }
                     var custom_name = menu.addMenuGroup(Tools.Resources.string("Настраиваемое имя"));
                     var stripe = void 0;
@@ -7579,10 +8567,22 @@ var Geoma;
                         _loop_4(i);
                     }
                     menu_item = menu.addMenuItem(Tools.Resources.string("Удалить индикатор угла {0}", this.name));
-                    menu_item.onChecked.bind(this, function () { return doc.removeAngle(_this); });
+                    menu_item.onChecked.bind(this, function () { return _this.document.removeAngle(_this); });
                     menu.show();
                 }
                 _super.prototype.mouseClick.call(this, event);
+            };
+            AngleIndicator.prototype._addBisector = function () {
+                assert(!this._bisector);
+                this._bisector = new Tools.BisectorLine(this);
+            };
+            AngleIndicator.prototype._removeBisector = function (bisector) {
+                assert(this._bisector == bisector);
+                this._bisector.dispose();
+                delete this._bisector;
+                if (!this.enabled) {
+                    this.document.removeAngle(this);
+                }
             };
             AngleIndicator._anglesNames = "αβγδεζηθικλμνξορστυyφχψω";
             return AngleIndicator;
@@ -7597,7 +8597,7 @@ var Geoma;
         var Background = (function (_super) {
             __extends(Background, _super);
             function Background(document) {
-                return _super.call(this, function () { return document.mouseArea.x; }, function () { return document.mouseArea.y; }, function () { return document.mouseArea.w * document.mouseArea.ratio; }, function () { return document.mouseArea.h * document.mouseArea.ratio; }, function () { return Tools.CurrentTheme.BackgroundBrush; }) || this;
+                return _super.call(this, 0, 0, function () { return document.mouseArea.w; }, function () { return document.mouseArea.h; }, function () { return Tools.CurrentTheme.BackgroundBrush; }) || this;
             }
             return Background;
         }(Geoma.Sprite.Rectangle));
