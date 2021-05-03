@@ -26,10 +26,10 @@ module Geoma.Tools
         constructor(document: Document)
         {
             super(
-                () => document.mouseArea.x,
-                () => document.mouseArea.y,
-                () => document.mouseArea.w * document.mouseArea.ratio,
-                () => document.mouseArea.h * document.mouseArea.ratio,
+                0,
+                0,
+                () => document.mouseArea.w,
+                () => document.mouseArea.h,
                 () => CurrentTheme.BackgroundBrush
             );
         }

@@ -96,6 +96,7 @@
     <TypeScriptCompile Include="tools.document.ts" />
     <TypeScriptCompile Include="tools.button.ts" />
     <TypeScriptCompile Include="tools.axes.lines.ts" />
+    <TypeScriptCompile Include="tools.line.ts" />
     <TypeScriptCompile Include="tools.parametric.line.ts" />
     <TypeScriptCompile Include="tools.line.circle.ts" />
     <TypeScriptCompile Include="tools.angle.indicator.ts" />

@@ -51,8 +51,16 @@ module Geoma.Tools
         };
 
         readonly ActiveLineWidth: number = 2;
-        readonly ActiveLineBrush: Sprite.Brush = "SandyBrown";
+        readonly ActiveLineBrush: Sprite.Brush = "Aqua";
         readonly ActiveLineSelectBrush: Sprite.Brush = "Lime";
+
+        readonly ActiveLineSegmentWidth: number = 2;
+        readonly ActiveLineSegmentBrush: Sprite.Brush = "SandyBrown";
+        readonly ActiveLineSegmentSelectBrush: Sprite.Brush = "Lime";
+
+        readonly ParametricLineWidth: number = 2;
+        readonly ParametricLineBrush: Sprite.Brush = "SandyBrown";
+        readonly ParametricLineSelectBrush: Sprite.Brush = "Lime";
 
         readonly ActiveCircleWidth: number = 2;
         readonly ActiveCircleBrush: Sprite.Brush = "SandyBrown";
@@ -104,6 +112,8 @@ module Geoma.Tools
         readonly ToolLineBrush: Brush = "#dd11cc";
         readonly ToolSelectLineBrush: Brush = "Lime";
         readonly ToolSeparatorBrush: Sprite.Brush = "PowderBlue";
+        readonly ToolDisabledBrush: Brush = "#000877";
+        readonly ToolDisabledLineBrush: Brush = "#770088";
 
         readonly AdornerNameBrush: Brush = "#EFFFFF";
         readonly AdornerNameStyle: TextStyle = {
@@ -159,8 +169,16 @@ module Geoma.Tools
         readonly TapShadowBlure: number = 15;
 
         readonly ActiveLineWidth: number = 2;
-        readonly ActiveLineBrush: Brush = "DarkSlateGray";
+        readonly ActiveLineBrush: Brush = "DarkGray";
         readonly ActiveLineSelectBrush: Brush = "OrangeRed";
+
+        readonly ActiveLineSegmentWidth: number = 2;
+        readonly ActiveLineSegmentBrush: Sprite.Brush = "DarkSlateGray";
+        readonly ActiveLineSegmentSelectBrush: Sprite.Brush = "OrangeRed";
+
+        readonly ParametricLineWidth: number = 2;
+        readonly ParametricLineBrush: Sprite.Brush = "DarkSlateGray";
+        readonly ParametricLineSelectBrush: Sprite.Brush = "OrangeRed";
 
         readonly ActiveCircleWidth: number = 2;
         readonly ActiveCircleBrush: Brush = "DarkSlateGray";
@@ -173,6 +191,8 @@ module Geoma.Tools
         readonly ToolBrush: Brush = "LightSkyBlue";
         readonly ToolLineBrush: Brush = "DarkSlateGray";
         readonly ToolSelectLineBrush: Brush = "OrangeRed";
+        readonly ToolDisabledBrush: Brush = "LightSteelBlue";
+        readonly ToolDisabledLineBrush: Brush = "DimGray";
 
         readonly TooltipStyle: TextStyle = {
             font: "18px Arial", textBaseline: "top", direction: "inherit", textAlign: "left"

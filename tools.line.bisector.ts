@@ -28,6 +28,43 @@ module Geoma.Tools
     import binding = Utils.binding;
     import Debug = Sprite.Debug;
 
+    class BisectorLineCalculator
+    {
+        constructor(angle_indicator: AngleIndicator)
+        {
+            this.angleIndicator = angle_indicator;
+            this.drawInfo = { startPoint: Point.empty, endPoint: Point.empty };
+        }
+
+        public evaluate(): void
+        {
+            this.drawInfo = ActiveLineBase.getLineDrawInfo(this.angleIndicator.document, this.angleIndicator.commonPivot, this.angleIndicator.bisectorAngle);
+        }
+
+        public readonly angleIndicator: AngleIndicator;
+        public drawInfo: LineDrawInfo;
+    }
+
+    class BisectorLinePivot implements IPoint
+    {
+        constructor(calculator: BisectorLineCalculator, start: boolean)
+        {
+            this._calculator = calculator;
+            this._start = start;
+        }
+        public get x(): number
+        {
+            return this._start ? this._calculator.drawInfo.startPoint.x : this._calculator.drawInfo.endPoint.x;
+        }
+        public get y(): number
+        {
+            return this._start ? this._calculator.drawInfo.startPoint.y : this._calculator.drawInfo.endPoint.y;
+        }
+
+        private readonly _calculator: BisectorLineCalculator;
+        private readonly _start: boolean;
+    }
+
     export class BisectorLine extends ActiveLineBase
     {
         constructor(
@@ -37,61 +74,53 @@ module Geoma.Tools
             selected_brush: binding<Sprite.Brush> = CurrentTheme.BisectorSelectionBrush
         )
         {
-            class pivot implements IPoint
-            {
-                constructor(angle_indicator: AngleIndicator, start: boolean)
-                {
-                    this._angleIndicator = angle_indicator;
-                    this._start = start;
-                }
-                public get x(): number
-                {
-                    const i = this._angleIndicator;
-                    const a = this._start ? i.bisectorAngle : i.bisectorAngle - Math.PI;
-                    const x = i.commonPivot.x;
-                    const w = i.document.mouseArea.w;
-                    const h = i.document.mouseArea.h;
-                    const r = Math.sqrt(w * w + h * h);
-                    return Math.cos(a) * r + x;
-                }
-                public get y(): number
-                {
-                    const i = this._angleIndicator;
-                    const a = this._start ? i.bisectorAngle : i.bisectorAngle - Math.PI;
-                    const y = i.commonPivot.y;
-                    const w = i.document.mouseArea.w;
-                    const h = i.document.mouseArea.h;
-                    const r = Math.sqrt(w * w + h * h);
-                    return Math.sin(a) * r + y;
-                }
-
-                private readonly _start: boolean;
-                private _angleIndicator: AngleIndicator;
-            }
-
+            const calculator = new BisectorLineCalculator(angle_indicator);
             super(
                 angle_indicator.document,
-                new pivot(angle_indicator, true),
-                new pivot(angle_indicator, false),
+                new BisectorLinePivot(calculator, true),
+                new BisectorLinePivot(calculator, false),
                 line_width,
                 brush,
                 selected_brush
             );
-            this._angleIndicator = angle_indicator;
+
+            this._calculator = calculator;
+            this._beforeDrawListener = this.document.onBeforeDraw.bind(this._calculator, this._calculator.evaluate);
         }
 
         public get moved(): boolean
         {
-            return this._angleIndicator.segment1.moved || this._angleIndicator.segment2.moved;
+            return this._calculator.angleIndicator.segment1.moved || this._calculator.angleIndicator.segment2.moved;
+        }
+        public get isPartOf(): ActiveLineBase | null
+        {
+            throw new Error("Method not implemented.");
         }
 
+        public dispose(): void
+        {
+            if (!this.disposed)
+            {
+                this._beforeDrawListener.dispose();
+                super.dispose();
+            }
+        }
         public move(dx: number, dy: number): void
         {
             assert(false, "Not implemented yet");
         }
         public belongs(p1: ActivePointBase): boolean
         {
-            return this._angleIndicator.commonPivot == p1;
+            return this._calculator.angleIndicator.commonPivot == p1;
+        }
+        public mouseHit(point: IPoint)
+        {
+            return super.mouseHit(point) && PointLine.intersected(
+                point,
+                this._calculator.angleIndicator.center,
+                this.coefficients,
+                Thickness.Mouse
+            );
         }
 
         protected mouseClick(event: MouseEvent): void
@@ -107,13 +136,14 @@ module Geoma.Tools
                     const menu = new Menu(doc, x, y);
 
                     const menu_item = menu.addMenuItem(Resources.string("Удалить биссектрису"));
-                    menu_item.onChecked.bind(this, () => this._angleIndicator.removeBisector(this));
+                    menu_item.onChecked.bind(this, () => this._calculator.angleIndicator.removeBisector(this));
                     menu.show();
                 }
             }
             super.mouseClick(event);
         }
 
-        private _angleIndicator: AngleIndicator;
+        private readonly _calculator: BisectorLineCalculator;
+        private readonly _beforeDrawListener: IEventListener<BeforeDrawEvent>;
     }
 }

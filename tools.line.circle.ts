@@ -151,6 +151,7 @@ module Geoma.Tools
         {
             if (!this.disposed)
             {
+                this._transaction?.rollback();
                 this._mouseDownListener.dispose();
                 this._mouseUpListener.dispose();
                 super.dispose();
@@ -244,7 +245,7 @@ module Geoma.Tools
                     const p_index = toInt(chunck.substring(1));
                     const point = context.data.points.item(p_index);
                     assert(point instanceof ActiveCommonPoint);
-                    (point as ActiveCommonPoint).addSegment(circle);
+                    (point as ActiveCommonPoint).addGraphLine(circle);
                     circle.addPoint(point);
                 }
                 return circle;
@@ -291,15 +292,26 @@ module Geoma.Tools
         protected mouseMove(event: MouseEvent): void
         {
             super.mouseMove(event);
-            if (this._dragStart && event.buttons != 0)
+            if (this._dragStart)
             {
-                const dpos = Point.sub(this._dragStart, event);
-                if (dpos.x != 0 || dpos.y != 0)
+                if (event.buttons != 0)
                 {
-                    this.move(dpos.x, dpos.y);
+                    const dpos = Point.sub(this._dragStart, event);
+                    if (dpos.x != 0 || dpos.y != 0)
+                    {
+                        if (!this._transaction)
+                        {
+                            this._transaction = this.document.beginUndo(Resources.string("Перемещение окружности {0}", this.name));
+                        }
+                        this.move(dpos.x, dpos.y);
+                    }
+                    this._dragStart = event;
+                    event.cancelBubble = true;
                 }
-                this._dragStart = event;
-                event.cancelBubble = true;
+                else
+                {
+                    this.mouseUp(event);
+                }
             }
             this.selected = this.mouseHit(event);
             super.mouseMove(event);
@@ -337,7 +349,9 @@ module Geoma.Tools
         {
             if (this._dragStart)
             {
+                this._transaction?.commit();
                 delete this._dragStart;
+                delete this._transaction;
             }
         }
 
@@ -348,5 +362,6 @@ module Geoma.Tools
         private _dragStart?: IPoint;
         private _mouseDownListener: IEventListener<MouseEvent>;
         private _mouseUpListener: IEventListener<MouseEvent>;
+        private _transaction?: UndoTransaction;
     }
 }

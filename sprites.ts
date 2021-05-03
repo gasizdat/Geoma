@@ -141,6 +141,10 @@ module Geoma.Sprite
             assert(index != -1);
             this._sprites.splice(index, 1);
         }
+        public contains(sprite: Sprite): boolean
+        {
+            return this._sprites.indexOf(sprite) > -1;
+        }
         public addX(modifier: modifier<number>)
         {
             for (const sprite of this._sprites)

@@ -74,7 +74,7 @@ module Geoma.Tools
                 }
             }
         }
-        public addSegment(segment: GraphLine): void
+        public addGraphLine(segment: GraphLine): void
         {
             assert(!this._line2);
             this._intersection?.dispose();
@@ -129,7 +129,7 @@ module Geoma.Tools
 
             if (line)
             {
-                this.addSegment(line);
+                this.addGraphLine(line);
             }
             else
             {
@@ -165,7 +165,7 @@ module Geoma.Tools
                         return null;
                     }
                 }
-                const point = new ActiveCommonPoint(context.document, toInt(data[index]), toInt(data[index + 1]), group_no);
+                const point = new ActiveCommonPoint(context.document, parseFloat(data[index]), parseFloat(data[index + 1]), group_no);
                 point.setName(data[index + 2]);
                 return point;
             }

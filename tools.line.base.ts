@@ -25,7 +25,7 @@ module Geoma.Tools
     import binding = Utils.binding;
     import Debug = Sprite.Debug;
 
-    export type LineSegmentCoefficients = { k: number; b: number; }
+    export type LineCoefficients = { k: number; b: number; }
 
     export type CircleLineIntersection = { p1?: IPoint; p2?: IPoint; }
 
@@ -40,6 +40,12 @@ module Geoma.Tools
     export interface SegmentFixInfo extends SegmentInfo
     {
         length: number;
+    }
+
+    export interface LineDrawInfo
+    {
+        readonly startPoint: IPoint;
+        readonly endPoint: IPoint;
     }
 
     export abstract class ActiveLineBase extends DocumentSprite<Sprite.Sprite> implements ILine
@@ -91,7 +97,7 @@ module Geoma.Tools
         {
             return ActiveLineBase.getAngle(this._startPoint.x, this._startPoint.y, this._endPoint.x, this._endPoint.y);
         }
-        public get coefficients(): LineSegmentCoefficients | null
+        public get coefficients(): LineCoefficients | null
         {
             return ActiveLineBase.getCoefficients(
                 this._startPoint.x,
@@ -118,6 +124,7 @@ module Geoma.Tools
             return this._endPoint;
         }
         public abstract get moved(): boolean;
+        public abstract get isPartOf(): ActiveLineBase | null;
 
         public readonly lineWidth: property<number>;
         public readonly brush: property<Sprite.Brush>;
@@ -210,11 +217,29 @@ module Geoma.Tools
                 assert(false);
             }
         }
-        public static getY(x: number, coefficients: LineSegmentCoefficients): number
+        /**
+         * Minimal offset around of pivot coords to rotate line by the given angle
+         * @param value - target angle
+         * @param pivot_x - x of pivot point
+         * @param pivot_y - y of pivot point
+         * @param x2 - x of moved point
+         * @param y2 - y of moved point
+         */
+        public static setAngle(value: number, pivot_x: number, pivot_y: number, x2: number, y2: number): IPoint
+        {
+            const dx = pivot_x - x2;
+            const dy = pivot_y - y2;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const x1 = pivot_x + Math.cos(value) * length;
+            const y1 = pivot_y + Math.sin(value) * length;
+            return Point.make(x2 - x1, y2 - y1);
+        }
+
+        public static getY(x: number, coefficients: LineCoefficients): number
         {
             return coefficients.k * x + coefficients.b;
         }
-        public static getX(y: number, coefficients: LineSegmentCoefficients): number
+        public static getX(y: number, coefficients: LineCoefficients): number
         {
             return (y - coefficients.b) / coefficients.k;
         }
@@ -225,7 +250,7 @@ module Geoma.Tools
         * @param x2 - end x of line segment
         * @param y2 - end y of line segment
         */
-        public static getCoefficients(x1: number, y1: number, x2: number, y2: number): LineSegmentCoefficients | null
+        public static getCoefficients(x1: number, y1: number, x2: number, y2: number): LineCoefficients | null
         {
             const dx = x2 - x1;
             if (dx)
@@ -241,14 +266,60 @@ module Geoma.Tools
             }
         }
 
+        public static getLineDrawInfo(document: Document, pivot: IPoint, angle: number): LineDrawInfo
+        {
+            const offset = document.mouseArea.offset;
+            const viewport_w = document.mouseArea.w;
+            const viewport_h = document.mouseArea.h;
+            const tan_angle = Math.tan(angle);
+            if (tan_angle == 0)
+            {
+                return { startPoint: Point.make(offset.x - viewport_w, pivot.y), endPoint: Point.make(offset.x + viewport_w * 2, pivot.y) };
+            }
+
+            const x0 = pivot.x - offset.x;
+            const y0 = pivot.y - offset.y;
+
+            let x1 = x0 - y0 / tan_angle;
+            let y1 = 0;
+
+            if (x1 < 0)
+            {
+                y1 -= x1 * tan_angle;
+                x1 = 0;
+            }
+            else if (x1 > viewport_w)
+            {
+                y1 -= (x1 - viewport_w) * tan_angle;
+                x1 = viewport_w;
+            }
+
+            y1 += offset.y;
+            x1 += offset.x;
+
+            let x2 = x0 - (y0 - viewport_h) / tan_angle;
+            let y2 = viewport_h;
+
+            if (x2 < 0)
+            {
+                y2 -= x2 * tan_angle;
+                x2 = 0;
+            }
+            else if (x2 > viewport_w)
+            {
+                y2 -= (x2 - viewport_w) * tan_angle;
+                x2 = viewport_w;
+            }
+
+            y2 += offset.y;
+            x2 += offset.x;
+
+            return { startPoint: Point.make(x1, y1), endPoint: Point.make(x2, y2) };
+        }
+
         public mouseHit(point: IPoint): boolean
         {
-            return this.visible && PointLine.intersected(
-                point,
-                this._startPoint,
-                this._endPoint,
-                Thickness.Mouse
-            );
+            return this.visible;
         }
         public setLength(value: number, fix_point?: IPoint): void
         {
@@ -289,7 +360,7 @@ module Geoma.Tools
         public through(p: ActivePointBase)
         {
             assert(this.belongs(p));
-            if (!PointLine.intersected(p, this.startPoint, this.endPoint, Thickness.Calc))
+            if (!PointLineSegment.intersected(p, this.startPoint, this.endPoint, Thickness.Calc))
             {
                 let dx = this._startPoint.x - p.x;
                 let dy = this._startPoint.y - p.y;
@@ -320,6 +391,53 @@ module Geoma.Tools
         public removePoint(point: ActivePointBase): void
         {
             assert(false, "Not implemented yet");
+        }
+        public setParallelTo(other_segment: ActiveLineBase): void
+        {
+            const parallel_line = other_segment;
+            const start_angle_1 = ActiveLineBase.getAngle(this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y);
+            const end_angle_1 = ActiveLineBase.getAngle(this.endPoint.x, this.endPoint.y, this.startPoint.x, this.startPoint.y);
+            const start_angle_2 = ActiveLineBase.getAngle(other_segment.startPoint.x, other_segment.startPoint.y, other_segment.endPoint.x, other_segment.endPoint.y);
+            const end_angle_2 = ActiveLineBase.getAngle(other_segment.endPoint.x, other_segment.endPoint.y, other_segment.startPoint.x, other_segment.startPoint.y);
+            let rotate_angle_abs = 2 * Math.PI;
+            let rotate_angle: number;
+            let rotate_start = false;
+            if (Math.abs(start_angle_1 - start_angle_2) < rotate_angle_abs)
+            {
+                rotate_start = true;
+                rotate_angle = start_angle_2;
+                rotate_angle_abs = Math.abs(start_angle_1 - start_angle_2);
+            }
+
+            if (Math.abs(start_angle_1 - end_angle_2) < rotate_angle_abs)
+            {
+                rotate_start = true;
+                rotate_angle = end_angle_2;
+                rotate_angle_abs = Math.abs(start_angle_1 - end_angle_2);
+            }
+
+            if (Math.abs(end_angle_1 - start_angle_2) < rotate_angle_abs)
+            {
+                rotate_start = false;
+                rotate_angle = start_angle_2;
+                rotate_angle_abs = Math.abs(end_angle_1 - start_angle_2);
+            }
+
+            if (Math.abs(end_angle_1 - end_angle_2) < rotate_angle_abs)
+            {
+                rotate_start = false;
+                rotate_angle = end_angle_2;
+                rotate_angle_abs = Math.abs(end_angle_1 - end_angle_2);
+            }
+
+            if (rotate_start)
+            {
+                this.setAngle(rotate_angle!, this.startPoint);
+            }
+            else
+            {
+                this.setAngle(rotate_angle!, this.endPoint);
+            }
         }
         public abstract move(dx: number, dy: number): void;
         public abstract belongs(p1: ActivePointBase): boolean;

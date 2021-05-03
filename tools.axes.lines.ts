@@ -165,8 +165,8 @@ module Geoma.Tools
         {
             const data: Array<string> = [];
             data.push(`${this.axesId}`);
-            data.push(`${this.x.toFixed(2)}`);
-            data.push(`${this.y.toFixed(2)}`);
+            data.push(`${this.x}`);
+            data.push(`${this.y}`);
             data.push(`${this.kX}`);
             data.push(`${this.kY}`);
             return data;
@@ -182,12 +182,16 @@ module Geoma.Tools
                     scale = toInt(scale);
                 }
             }
-            const new_scale = this.document.promptNumber(Resources.string("Масштаб по осям x/y, %"), scale);
+            const title = Resources.string("Масштаб по осям x/y, %");
+            const new_scale = this.document.promptNumber(title, scale);
             if (new_scale != undefined)
             {
-                this.kX = 1 / new_scale;
-                this.kY = 1 / new_scale;
-                return true;
+                return UndoTransaction.Do(this, title, () =>
+                {
+                    this.kX = 1 / new_scale;
+                    this.kY = 1 / new_scale;
+                    return true;
+                });
             }
             else
             {
@@ -205,8 +209,8 @@ module Geoma.Tools
                 const axes = new AxesLines(
                     context.document,
                     toInt(data[index++]),
-                    toInt(data[index++]),
-                    toInt(data[index++]),
+                    parseFloat(data[index++]),
+                    parseFloat(data[index++]),
                     parseFloat(data[index++]),
                     parseFloat(data[index++]),
                     () => CurrentTheme.AxesWidth,
@@ -249,7 +253,9 @@ module Geoma.Tools
                 this._lastKx != this.kX ||
                 this._lastKy != this.kY ||
                 this._lastW != this.document.mouseArea.w ||
-                this._lastH != this.document.mouseArea.h
+                this._lastH != this.document.mouseArea.h ||
+                this._lastOffsetX != this.document.mouseArea.offset.x ||
+                this._lastOffsetY != this.document.mouseArea.offset.y
             )
             {
                 this._lastX = this.x;
@@ -258,15 +264,17 @@ module Geoma.Tools
                 this._lastKy = this.kY;
                 this._lastW = this.document.mouseArea.w;
                 this._lastH = this.document.mouseArea.h;
+                this._lastOffsetX = this.document.mouseArea.offset.x;
+                this._lastOffsetY = this.document.mouseArea.offset.y;
                 this._needsCalc.set();
             }
         }
         protected innerDraw(play_ground: PlayGround): void
         {
             play_ground.context2d.beginPath();
-            play_ground.context2d.moveTo(0, this.y);
+            play_ground.context2d.moveTo(play_ground.offset.x, this.y);
             play_ground.context2d.lineTo(play_ground.right, this.y);
-            play_ground.context2d.moveTo(this.x, 0);
+            play_ground.context2d.moveTo(this.x, play_ground.offset.y);
             play_ground.context2d.lineTo(this.x, play_ground.bottom);
             play_ground.context2d.strokeStyle = this.selected ? this.selectedBrush : this.brush;
             play_ground.context2d.lineWidth = this.lineWidth;
@@ -332,16 +340,17 @@ module Geoma.Tools
                 }
                 const bar_text_margin = 2;
                 {
-                    let x_coord = -toInt(this.x / dx);
+                    let x_coord = -toInt((this.x - play_ground.offset.x) / dx);
                     const start_x = this.x + x_coord * dx;
                     x_coord *= grade_x.value;
-                    const end_x = play_ground.w + 1;
+                    const end_x = play_ground.right + 1;
                     const digits = get_digits(grade_x);
                     const exponential = is_exponential(grade_x);
                     let y1: number, y2: number, y3: number;
-                    if (this.y >= 0)
+                    const screen_y = this.y - play_ground.offset.y;
+                    if (screen_y >= 0)
                     {
-                        if (this.y < (play_ground.h - 2 * scale_bar_size))
+                        if (screen_y < (play_ground.h - 2 * scale_bar_size))
                         {
                             y1 = this.y - scale_bar_size / 2;
                             y2 = this.y + scale_bar_size / 2;
@@ -349,16 +358,16 @@ module Geoma.Tools
                         }
                         else
                         {
-                            y1 = play_ground.h - scale_bar_size;
-                            y2 = play_ground.h;
+                            y1 = play_ground.h - scale_bar_size + play_ground.offset.y;
+                            y2 = play_ground.h + play_ground.offset.y;
                             y3 = y1 - scale_bar_size;
                         }
                     }
                     else
                     {
-                        y1 = 0;
-                        y2 = scale_bar_size;
-                        y3 = scale_bar_size + bar_text_margin;
+                        y1 = play_ground.offset.y;
+                        y2 = scale_bar_size + play_ground.offset.y;
+                        y3 = scale_bar_size + bar_text_margin + play_ground.offset.y;
                     }
 
                     for (let x = start_x; x <= end_x; x += dx)
@@ -370,16 +379,17 @@ module Geoma.Tools
                     }
                 }
                 {
-                    let y_coord = toInt(this.y / dy);
+                    let y_coord = toInt((this.y - play_ground.offset.y) / dy);
                     const start_y = this.y - y_coord * dy;
                     y_coord *= grade_y.value;
-                    const end_y = play_ground.h + 1;
+                    const end_y = play_ground.bottom + 1;
                     const digits = get_digits(grade_y);
                     const exponential = is_exponential(grade_y);
                     let x1: number, x2: number, x3: number;
-                    if (this.x >= 0)
+                    const screen_x = this.x - play_ground.offset.x;
+                    if (screen_x >= 0)
                     {
-                        if (this.x < (play_ground.w - 2 * scale_bar_size))
+                        if (screen_x < (play_ground.w - 2 * scale_bar_size))
                         {
                             x1 = this.x - scale_bar_size / 2;
                             x2 = this.x + scale_bar_size / 2;
@@ -387,16 +397,16 @@ module Geoma.Tools
                         }
                         else
                         {
-                            x1 = play_ground.w - scale_bar_size;
-                            x2 = play_ground.w;
+                            x1 = play_ground.w - scale_bar_size + play_ground.offset.x;
+                            x2 = play_ground.w + play_ground.offset.x;
                             x3 = NaN;
                         }
                     }
                     else
                     {
-                        x1 = 0;
-                        x2 = scale_bar_size;
-                        x3 = scale_bar_size + bar_text_margin;
+                        x1 = play_ground.offset.x;
+                        x2 = scale_bar_size + play_ground.offset.x;
+                        x3 = scale_bar_size + bar_text_margin + play_ground.offset.x;
                     }
                     for (let y = start_y; y <= end_y; y += dy)
                     {
@@ -473,9 +483,12 @@ module Geoma.Tools
                             assert(this._axes);
                             if (this._axes._adorners.visible)
                             {
-                                this._axes.kX *= this._x_multiplier;
-                                this._axes.kY *= this._y_multiplier;
-                                return true;
+                                return UndoTransaction.Do(this, Resources.string("Масштабирование осей"), () =>
+                                {
+                                    this._axes.kX *= this._x_multiplier;
+                                    this._axes.kY *= this._y_multiplier;
+                                    return true;
+                                });
                             }
                             else
                             {
@@ -574,6 +587,8 @@ module Geoma.Tools
         private _lastKy?: number;
         private _lastW?: number;
         private _lastH?: number;
+        private _lastOffsetX?: number;
+        private _lastOffsetY?: number;
 
         private static _adornerMargins: number = 10;
     }

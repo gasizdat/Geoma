@@ -200,23 +200,16 @@ module Geoma.Tools
             super.dispose();
             if (this._bisector)
             {
-                this.removeBisector(this._bisector);
+                this._removeBisector(this._bisector);
             }
         }
         public addBisector(): void
         {
-            assert(!this._bisector);
-            this._bisector = new BisectorLine(this);
+            UndoTransaction.Do(this, Resources.string("Показать биссектрисы углов"), this._addBisector);
         }
         public removeBisector(bisector: BisectorLine): void
         {
-            assert(this._bisector == bisector);
-            this._bisector.dispose();
-            delete this._bisector;
-            if (!this.enabled)
-            {
-                this.document.removeAngle(this);
-            }
+            UndoTransaction.Do(this, Resources.string("Удалить биссектрису"), () => this._removeBisector(bisector));
         }
         public serialize(context: SerializationContext): Array<string>
         {
@@ -230,6 +223,10 @@ module Geoma.Tools
             if (!this.enabled)
             {
                 data.push(`d`);
+            }
+            if (this._angleName)
+            {
+                data.push(`n${AngleIndicator._anglesNames.indexOf(this._angleName)}`);
             }
             return data;
         }
@@ -271,18 +268,30 @@ module Geoma.Tools
             {
                 const line1 = context.data.lines.item(toInt(data[index]));
                 const line2 = context.data.lines.item(toInt(data[index + 1]));
+                assert(line1 instanceof ActiveLineSegment);
+                assert(line2 instanceof ActiveLineSegment);
                 const angle = new AngleIndicator(context.document, line1, line2);
                 for (let i = index + 2; i < data.length; i++)
                 {
-                    switch (data[i])
+                    const chunck = data[i];
+                    switch (chunck)
                     {
                         case 'b':
-                            angle.addBisector();
+                            angle._addBisector();
                             break;
                         case 'd':
                             angle.enabled = false;
                             break;
                         default:
+                            if (chunck.length && chunck.charAt(0) == 'n')
+                            {
+                                const p_index = toInt(chunck.substring(1));
+                                if (p_index >= 0 && p_index < AngleIndicator._anglesNames.length)
+                                {
+                                    angle._angleName = AngleIndicator._anglesNames.charAt(p_index);
+                                    break;
+                                }
+                            }
                             return null;
                     }
                 }
@@ -418,11 +427,18 @@ module Geoma.Tools
                 menu_item.onChecked.bind(this, this.addBisector);
                 menu_item.enabled.addModifier(makeMod(this, () => !this._bisector));
 
-                const set_name = (index: number) => this._angleName = AngleIndicator._anglesNames.charAt(index);
+                const set_name = (index: number) =>
+                {
+                    const name = AngleIndicator._anglesNames.charAt(index);
+                    UndoTransaction.Do(this, Resources.string("Название угла ({0})", name), () => this._angleName = name);
+                };
                 if (this._angleName)
                 {
                     menu_item = menu.addMenuItem(Resources.string("Имя по умолчанию ({0})", this.realName));
-                    menu_item.onChecked.bind(this, () => this._angleName = undefined);
+                    menu_item.onChecked.bind(this, () =>
+                    {
+                        UndoTransaction.Do(this, Resources.string("Название угла ({0})", this.realName), () => this._angleName = undefined);
+                    });
                 }
 
                 const custom_name = menu.addMenuGroup(Resources.string("Настраиваемое имя"));
@@ -439,11 +455,27 @@ module Geoma.Tools
                 }
 
                 menu_item = menu.addMenuItem(Resources.string("Удалить индикатор угла {0}", this.name));
-                menu_item.onChecked.bind(this, () => doc.removeAngle(this));
+                menu_item.onChecked.bind(this, () => this.document.removeAngle(this));
 
                 menu.show();
             }
             super.mouseClick(event);
+        }
+
+        private _addBisector(): void
+        {
+            assert(!this._bisector);
+            this._bisector = new BisectorLine(this);
+        }
+        private _removeBisector(bisector: BisectorLine): void
+        {
+            assert(this._bisector == bisector);
+            this._bisector.dispose();
+            delete this._bisector;
+            if (!this.enabled)
+            {
+                this.document.removeAngle(this);
+            }
         }
 
         private _angleName?: string;

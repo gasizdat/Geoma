@@ -25,11 +25,27 @@ module Geoma.Tools
 
     abstract class ToolBase extends ActivePointBase
     {
-        constructor(document: Document, x: number, y: number, radius: number, line_width: number, name: binding<string>)
+        constructor(document: Document, x: number, y: number, radius: number, line_width: number, name: binding<string>, enabled: property<boolean> = new property<boolean>(true))
         {
-            super(document, x, y, radius, line_width, () => CurrentTheme.ToolBrush, () => CurrentTheme.ToolLineBrush, () => CurrentTheme.ToolSelectLineBrush);
+            super(
+                document,
+                x,
+                y,
+                radius,
+                line_width,
+                () => enabled.value ? CurrentTheme.ToolBrush : CurrentTheme.ToolDisabledBrush,
+                () => enabled.value ? CurrentTheme.ToolLineBrush : CurrentTheme.ToolDisabledLineBrush,
+                () => enabled.value ? CurrentTheme.ToolSelectLineBrush : CurrentTheme.ToolDisabledLineBrush
+            );
             this.setName(name, () => CurrentTheme.ToolNameBrush, () => CurrentTheme.ToolNameStyle);
         }
+
+        public mouseHit(point: IPoint): boolean
+        {
+            return super.mouseHit(Point.sub(point, this.document.mouseArea.offset));
+        }
+
+        protected enabled: boolean = true;
     }
 
     export class PointTool extends ToolBase
@@ -73,6 +89,9 @@ module Geoma.Tools
 
             let menu_item = menu.addMenuItem(Resources.string("Создать точку"))
             menu_item.onChecked.bind(this, () => document.addPoint(Point.make(x, y)));
+
+            menu_item = menu.addMenuItem(Resources.string("Создать линию..."));
+            menu_item.onChecked.bind(this, () => document.setLineState(new ActivePoint(document, x, y)));
 
             menu_item = menu.addMenuItem(Resources.string("Создать отрезок..."));
             menu_item.onChecked.bind(this, () => document.setLineSegmentState(new ActivePoint(document, x, y)));
@@ -137,28 +156,42 @@ module Geoma.Tools
         public static get LocalStorageKeys(): Array<string>
         {
             const names: Array<string> = [];
+            let has_autosave = false;
             for (let i = 0; i < window.localStorage.length; i++)
             {
                 const doc_name = window.localStorage.key(i);
                 if (doc_name != null)
                 {
-                    names.push(doc_name);
+                    if (FileTool._autosavedDocumentName == doc_name)
+                    {
+                        has_autosave = true;
+                    }
+                    else
+                    {
+                        names.push(doc_name);
+                    }
                 }
             }
             names.sort(Utils.CompareCaseInsensitive);
+            if (has_autosave)
+            {
+                names.splice(0, 0, FileTool._autosavedDocumentName);
+            }
             return names;
+        }
+        public static saveLastState(data: string)
+        {
+            window.localStorage.setItem(FileTool._autosavedDocumentName, data);
         }
 
         protected mouseClick(event: MouseEvent): void
         {
             if (this.mouseHit(event) && this.document.canShowMenu(this))
             {
-                const x = this.boundingBox.right;
-                const y = this.boundingBox.bottom;
-                const menu = new Menu(this.document, x, y);
+                const menu = new Menu(this.document, this.x + this.document.mouseArea.offset.x, this.bottom + this.document.mouseArea.offset.y);
 
                 let menu_item = menu.addMenuItem(Resources.string("Новый"));
-                menu_item.onChecked.bind(this.document, this.document.newDocument);
+                menu_item.onChecked.bind(this.document, this.document.new);
 
                 const open_group = menu.addMenuGroup(Resources.string("Открыть"));
 
@@ -176,19 +209,30 @@ module Geoma.Tools
                     {
                         continue;
                     }
-                    menu_item = open_group.addMenuItem(name);
-                    menu_item.onChecked.bind(this, this.openCommand);
+                    else if (name == FileTool._autosavedDocumentName)
+                    {
+                        menu_item = open_group.addMenuItem(Resources.string("Автоматическое сохранение"));
+                        menu_item.onChecked.bind(this, (event: CustomEvent<MenuItem>) => this.openCommand(event, FileTool._autosavedDocumentName));
 
-                    menu_item = delete_group.addMenuItem(name);
-                    menu_item.onChecked.bind(this, this.removeCommand);
+                        menu_item = delete_group.addMenuItem(Resources.string("Автоматическое сохранение"));
+                        menu_item.onChecked.bind(this, (event: CustomEvent<MenuItem>) => this.removeCommand(event, FileTool._autosavedDocumentName));
+                    }
+                    else
+                    {
+                        menu_item = open_group.addMenuItem(name);
+                        menu_item.onChecked.bind(this, this.openCommand);
+
+                        menu_item = delete_group.addMenuItem(name);
+                        menu_item.onChecked.bind(this, this.removeCommand);
+                    }
                 }
 
                 menu.show();
             }
         }
-        protected openCommand(event: CustomEvent<MenuItem>): void
+        protected openCommand(event: CustomEvent<MenuItem>, file_name?: string): void
         {
-            const data = window.localStorage.getItem(event.detail.tooltip);
+            const data = window.localStorage.getItem(file_name ?? event.detail.tooltip);
             if (data && data.length)
             {
                 this.document.open(data);
@@ -200,9 +244,9 @@ module Geoma.Tools
                 this.removeCommand(event);
             }
         }
-        protected removeCommand(event: CustomEvent<MenuItem>): void
+        protected removeCommand(event: CustomEvent<MenuItem>, file_name?: string): void
         {
-            window.localStorage.removeItem(event.detail.tooltip);
+            window.localStorage.removeItem(file_name ?? event.detail.tooltip);
         }
         protected saveCommand(): void
         {
@@ -231,6 +275,8 @@ module Geoma.Tools
                 });
             }
         }
+
+        private static readonly _autosavedDocumentName: string = "{44ED56BE-46A8-4C51-8726-E1D6B4696A38}";
     }
 
     interface Settings
@@ -296,9 +342,7 @@ module Geoma.Tools
         {
             if (this.mouseHit(event) && this.document.canShowMenu(this))
             {
-                const x = this.boundingBox.right;
-                const y = this.boundingBox.bottom;
-                const menu = new Menu(this.document, x, y);
+                const menu = new Menu(this.document, this.x + this.document.mouseArea.offset.x, this.bottom + this.document.mouseArea.offset.y);
 
                 const language_group = menu.addMenuGroup("Язык (Language)");
 
@@ -338,6 +382,48 @@ module Geoma.Tools
         }
 
         private static readonly _settingsVersion: number = 1;
+    }
+
+    export class UndoTool extends ToolBase
+    {
+        constructor(document: Document, x: number, y: number, radius: number = 5, line_width: number = 2)
+        {
+            super(document, x, y, radius, line_width, () => Resources.string("Отмена"), new property<boolean>(() => document.canUndo(), false));
+            
+            const icon_line_width = 2;
+            const undo_point = Point.make(x - radius + icon_line_width + line_width / 2 + 2, y - radius + icon_line_width + line_width / 2 + 2);
+            const undo_icon = new Sprite.Polyshape(undo_point.x, undo_point.y, icon_line_width, makeMod(this, () => this.lineBrush), 1);
+            undo_icon.addPolygon(new Polygon.CustomPath(undo_point, "m17.026,22.957c10.957-11.421-2.326-20.865-10.384-13.309l2.464,2.352h-9.106v-8.947l2.232,2.229c14.794-13.203,31.51,7.051,14.794,17.675z"));
+            this.item.push(undo_icon);
+        }
+        protected mouseClick(event: MouseEvent): void
+        {
+            if (this.mouseHit(event) && this.document.canUndo())
+            {
+                this.document.undo();
+            }
+        }
+    }
+
+    export class RedoTool extends ToolBase
+    {
+        constructor(document: Document, x: number, y: number, radius: number = 5, line_width: number = 2)
+        {
+            super(document, x, y, radius, line_width, () => Resources.string("Повтор"), new property<boolean>(() => document.canRedo(), false));
+
+            const icon_line_width = 2;
+            const redo_point = Point.make(x - radius + icon_line_width + line_width / 2 + 2, y - radius + icon_line_width + line_width / 2 + 2);
+            const redo_icon = new Sprite.Polyshape(redo_point.x, redo_point.y, icon_line_width, makeMod(this, () => this.lineBrush), 1);
+            redo_icon.addPolygon(new Polygon.CustomPath(redo_point, "m6.974,22.957c-10.957-11.421,2.326-20.865,10.384-13.309l-2.464,2.352h9.106v-8.947l-2.232,2.229c-14.794-13.203-31.51,7.051-14.794,17.675z"));
+            this.item.push(redo_icon);
+        }
+        protected mouseClick(event: MouseEvent): void
+        {
+            if (this.mouseHit(event) && this.document.canRedo())
+            {
+                this.document.redo();
+            }
+        }
     }
 
     export class TapTool extends DocumentSprite<Sprite.Sprite>
@@ -462,4 +548,111 @@ module Geoma.Tools
         private _startTicks?: number;
         private static readonly _transparent: string = "rgba(0,0,0,0)";
     }
+
+    export class MoveTool extends DocumentSprite<Container<Sprite.Sprite>>
+    {
+        constructor(document: Document)
+        {
+            super(document, new Container<Sprite.Sprite>(), true);
+            this._position = Point.make(document.mouseArea.mousePoint.x, document.mouseArea.mousePoint.y - MoveTool._IconSize - Thickness.Mouse - 1);
+            const x = makeMod(this, () => this._position.x);
+            const y = makeMod(this, () => this._position.y);
+            const icon_path = new Polygon.CustomPath(
+                Point.make(MoveTool._IconSize, MoveTool._IconSize),
+                "M500,10C229.8,10,10,229.8,10,500c0,270.2,219.8,490,490,490s490-219.8,490-490C990,229.8,770.2,10,500,10z M500,930.7C262.5,930.7,69.3,737.5,69.3,500C69.3,262.5,262.5,69.3,500,69.3c237.5,0,430.7,193.2,430.7,430.7C930.7,737.5,737.5,930.7,500,930.7z M541.9,500l100.6,100.6l6.2-40.7l58.6,8.9L689,689l-120.2,18.3l-8.9-58.6l40.7-6.2L500,541.9L398.9,643l37.8,5.8l-8.9,58.6l-120.1-18.3l-18.3-120.2L348,560l6.6,43.5L458.1,500L354.6,396.5l-6.6,43.5l-58.6-8.9L307.6,311l120.2-18.3l8.9,58.6l-37.7,5.7l101,101l100.6-100.6l-40.7-6.2l8.9-58.6L689,311l18.3,120.2l-58.6,8.9l-6.2-40.7L541.9,500z"
+            );
+            const icon_stroke = new Sprite.Polyline(x, y, CurrentTheme.TapLineWidth, CurrentTheme.TapBrush, MoveTool._IconSize / 1000);
+            icon_stroke.addPolygon(icon_path);
+            icon_stroke.addVisible(makeMod(this, () => !this._startDrag && !this.mouseHit(this.document.mouseArea.mousePoint)));
+            const icon = new Sprite.Polyshape(x, y, CurrentTheme.TapLineWidth, CurrentTheme.TapBrush, MoveTool._IconSize / 1000);
+            icon.addPolygon(icon_path);
+            icon.addVisible(() => !icon_stroke.visible);
+
+            this.item.push(icon_stroke);
+            this.item.push(icon);
+
+            this._mouseDownListener = document.mouseArea.onMouseDown.bind(this, this.mouseDown, true);
+            this._mouseUpListener = document.mouseArea.onMouseUp.bind(this, this.mouseUp, true);
+            
+        }
+
+        public dispose(): void
+        {
+            if (!this.disposed)
+            {
+                this._transaction?.rollback();
+                this._mouseDownListener.dispose();
+                this._mouseUpListener.dispose();
+                super.dispose();
+                this.document.remove(this);
+            }
+        }
+
+        protected get isActive(): boolean
+        {
+            return this.item.last?.visible == true;
+        }
+        protected innerDraw(play_ground: PlayGround): void
+        {
+            super.innerDraw(play_ground);
+        }
+        protected mouseMove(event: MouseEvent): void
+        {
+            super.mouseMove(event);
+            if (this._startDrag)
+            {
+                if (event.buttons > 0)
+                {
+                    this.selected = true;
+                    const dp = Point.add(Point.sub(this._startDrag, event), this.document.mouseArea.offset);
+                    if (!this._transaction)
+                    {
+                        this._transaction = this.document.beginUndo(Resources.string("Перемещение страницы"));
+                    }
+                    this.document.mouseArea.setOffset(dp.x, dp.y);
+                }
+                else
+                {
+                    this.selected = false;
+                    this._position = Point.sub(event, Point.make(MoveTool._IconSize / 2, MoveTool._IconSize / 2));
+                }
+            }
+            event.cancelBubble = this.isActive;
+        }
+        protected mouseDown(event: MouseEvent): void
+        {
+            if (this.mouseHit(event))
+            {
+                this._startDrag = event;
+                Document.forceCloseMenu(this);
+            }
+            else
+            {
+                this.dispose();
+            }
+            event.cancelBubble = this.isActive;
+        }
+        protected mouseUp(event: MouseEvent): void
+        {
+            if (this._startDrag && !this.selected)
+            {
+                const dp = Point.sub(this._startDrag, event);
+                if ((dp.x * dp.x + dp.y * dp.y) <= (Thickness.Mouse * Thickness.Mouse))
+                {
+                    this._transaction?.commit();
+                    delete this._transaction;
+                    this.dispose();
+                }
+            }
+            event.cancelBubble = this.isActive;
+        }
+
+        private _startDrag?: IPoint;
+        private _mouseDownListener: IEventListener<MouseEvent>;
+        private _mouseUpListener: IEventListener<MouseEvent>;
+        private _position: IPoint;
+        private _transaction?: UndoTransaction;
+        static readonly _IconSize: number = 40;
+    }
+
 }

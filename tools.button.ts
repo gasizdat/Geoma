@@ -39,8 +39,8 @@ module Geoma.Tools
             this._hPadding = makeProp(horizontal_padding, 10);
             this._vPadding = makeProp(vertical_padding, 10);
             this._mouseDown = false;
-            this._mouseDownListener = this.document.mouseArea.onMouseDown.bind(this, this.mouseDown);
-            this._mouseUpListener = this.document.mouseArea.onMouseUp.bind(this, this.mouseUp);
+            this._mouseDownListener = this.document.mouseArea.onMouseDown.bind(this, this.mouseDown, forward_event);
+            this._mouseUpListener = this.document.mouseArea.onMouseUp.bind(this, this.mouseUp, forward_event);
             this.backgroundBrush = makeProp(CurrentTheme.ButtonBackgroundBrush);
             this.backgroundSelectBrush = makeProp(CurrentTheme.ButtonSelectedBrush);
             this.foregroundBrush = makeProp(CurrentTheme.ButtonItemTextBrush);

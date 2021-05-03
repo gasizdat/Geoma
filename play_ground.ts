@@ -91,6 +91,8 @@ module Geoma
             }
 
             this.invalidate();
+            this.addX(Utils.makeMod(this, (value: number) => value - this.offset.x));
+            this.addY(Utils.makeMod(this, (value: number) => value - this.offset.y));
             this.addW(Utils.makeMod(this, () => Math.trunc(this._canvas.width / this.ratio)));
             this.addH(Utils.makeMod(this, () => Math.trunc(this._canvas.height / this.ratio)));
 
@@ -99,6 +101,18 @@ module Geoma
             this._context2d = context2d;
         }
 
+        public get right(): number
+        {
+            return this.x + this.w + this.offset.x * 2;
+        }
+        public get bottom(): number
+        {
+            return this.y + this.h + this.offset.y * 2;
+        }
+        public get offset(): IPoint
+        {
+            return this._offset;
+        }
         public get touchInterface(): boolean
         {
             return this._touchInterface;
@@ -132,6 +146,10 @@ module Geoma
                 this._canvas.height = parent.clientHeight * ratio;
             }
         }
+        public setOffset(dx: number, dy: number): void
+        {
+            this._offset = Point.make(dx, dy);
+        }
         public static getPosition(el: HTMLElement): IPoint
         {
             let x = 0;
@@ -151,7 +169,9 @@ module Geoma
 
         protected updateMouseEvent(event: MouseEvent): MouseEvent
         {
-            if (event.x == event.offsetX && event.y == event.offsetY)
+            const offset_x = event.offsetX + this.offset.x;
+            const offset_y = event.offsetY + this.offset.y;
+            if (event.x == offset_x && event.y == offset_y)
             {
                 return event;
             }
@@ -164,8 +184,8 @@ module Geoma
                     button: event.button,
                     buttons: event.buttons,
                     cancelable: event.cancelable,
-                    clientX: event.offsetX,
-                    clientY: event.offsetY,
+                    clientX: offset_x,
+                    clientY: offset_y,
                     ctrlKey: event.ctrlKey,
                     detail: event.detail,
                     metaKey: event.metaKey,
@@ -233,5 +253,6 @@ module Geoma
         private readonly _context2d: CanvasRenderingContext2D;
         private _mousePoint: IPoint = Point.make(0, 0);
         private _downPoint: IPoint = Point.make(0, 0);
+        private _offset: IPoint = Point.make(0, 0);
     }
 }

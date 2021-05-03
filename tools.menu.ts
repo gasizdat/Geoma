@@ -464,13 +464,21 @@ module Geoma.Tools
         protected innerDraw(play_ground: PlayGround): void
         {
             super.innerDraw(play_ground);
-            if (this.bottom > play_ground.bottom)
+            if ((this.bottom + 10) > play_ground.bottom)
             {
-                this._dy = this.bottom - play_ground.bottom + 10;
+                const dy = this.bottom - play_ground.bottom;
+                if (dy > this._dy)
+                {
+                    this._dy = dy;
+                }
             }
-            if (this.right > play_ground.right)
+            if ((this.right + 10) > play_ground.right)
             {
-                this._dx = this.right - play_ground.right + 10;
+                const dx = this.right - play_ground.right;
+                if (dx > this._dx)
+                {
+                    this._dx = dx;
+                }
             }
         }
 

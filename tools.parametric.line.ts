@@ -510,6 +510,7 @@ module Geoma.Tools
         {
             if (!this.disposed)
             {
+                this._transaction?.rollback();
                 this._mouseDownListener.dispose();
                 this._mouseUpListener.dispose();
                 if (this.selected)
@@ -521,17 +522,18 @@ module Geoma.Tools
         }
         public screenY(screen_x: number): number
         {
-            if (screen_x >= 0 && screen_x < this._screenSamples.length)
+            const offset_screen_x = screen_x - this.document.mouseArea.offset.x;
+            if (offset_screen_x >= 0 && offset_screen_x < this._screenSamples.length)
             {
-                return this._screenSamples[toInt(screen_x)];
+                return this._screenSamples[toInt(offset_screen_x)];
             }
             else
             {
-                for (let x = screen_x - (this._derivativeLevel * 2); x < screen_x; x++)
+                for (let x = offset_screen_x - (this._derivativeLevel * 2); x < offset_screen_x; x++)
                 {
                     this.getY(this.axes.fromScreenX(x));
                 }
-                return this.axes.toScreenY(this.getY(this.axes.fromScreenX(screen_x)));
+                return this.axes.toScreenY(this.getY(this.axes.fromScreenX(offset_screen_x)));
             }
         }
         public getFunction(name: string): Function | null
@@ -608,7 +610,7 @@ module Geoma.Tools
             {
                 if (event.detail)
                 {
-                    this.code = event.detail;
+                    UndoTransaction.Do(this, Resources.string("Редактирование функции {0}", this.code.text), () => { this.code = event.detail! });
                 }
                 this.document.remove(dialog);
                 dialog.dispose();
@@ -631,13 +633,8 @@ module Geoma.Tools
         }
         public addPoint(point: ActiveCommonPoint): void
         {
-            assert(!this.belongs(point));
             assert(this.mouseHit(point));
-            if (!this._points)
-            {
-                this._points = [];
-            }
-            this._points.push(point);
+            this._addPoint(point);
         }
         public removePoint(point: ActiveCommonPoint): void
         {
@@ -673,9 +670,9 @@ module Geoma.Tools
             {
                 const line = new ParametricLine(
                     context.document,
-                    () => CurrentTheme.ActiveLineWidth,
-                    () => CurrentTheme.ActiveLineBrush,
-                    () => CurrentTheme.ActiveLineSelectBrush,
+                    () => CurrentTheme.ParametricLineWidth,
+                    () => CurrentTheme.ParametricLineBrush,
+                    () => CurrentTheme.ParametricLineSelectBrush,
                     context.data.axes.item(toInt(data[index++]))
                 );
                 const points = new Array<ActiveCommonPoint>();
@@ -693,11 +690,11 @@ module Geoma.Tools
                 }
                 if (points.length)
                 {
-                    line.updateSamples(context.document.mouseArea.h);
+                    line.updateSamples(context.document.mouseArea);
                     for (const point of points)
                     {
-                        point.addSegment(line);
-                        line.addPoint(point);
+                        point.addGraphLine(line);
+                        line._addPoint(point);
                     }
                 }
                 return line;
@@ -728,15 +725,15 @@ module Geoma.Tools
                 return level;
             }
         }
-        protected updateSamples(height: number): void 
+        protected updateSamples(mouse_area: IMouseArea): void 
         {
             let needs_move = false;
             const draw_path = new Path2D();
             const samples = new Array<number>();
             const dx: number = this.dx;
             const minimum_dx: number = 1e-11;
-            const offscreen_top = -height;
-            const offscreen_bottom = 2 * height;
+            const offscreen_top = - (mouse_area.h - mouse_area.offset.y);
+            const offscreen_bottom = (2 * mouse_area.h) + mouse_area.offset.y;
 
             const line_to = (x: number, y: number): void =>
             {
@@ -750,7 +747,7 @@ module Geoma.Tools
                     draw_path.lineTo(x, y);
                 }
 
-                const integer_x = toInt(x);
+                const integer_x = Math.floor(x) - mouse_area.offset.x;
                 assert(samples.length > integer_x);
                 samples[integer_x] = y;
             }
@@ -867,9 +864,10 @@ module Geoma.Tools
             let last_sign: graph_sign = 0;
             let last_is_nan = true;
             let last_y: number = NaN;
-            for (let x = 0; x < this.document.mouseArea.w; x += dx)
+            const last_x = this.document.mouseArea.w + mouse_area.offset.x;
+            for (let x = mouse_area.offset.x; x < last_x; x += dx)
             {
-                const integer_x = samples.length == Math.floor(x);
+                const integer_x = (samples.length + mouse_area.offset.x) == Math.floor(x);
                 const y = this.axes.toScreenY(this.getY(this.axes.fromScreenX(x)));
                 if (integer_x)
                 {
@@ -951,7 +949,7 @@ module Geoma.Tools
         {
             if (this.axes.needsCalc.get(this.code.text) || !this._drawPath)
             {
-                this.updateSamples(play_ground.h);
+                this.updateSamples(play_ground);
                 assert(this._drawPath);
             }
 
@@ -978,13 +976,11 @@ module Geoma.Tools
                     let menu_item = menu.addMenuItem(Resources.string("Точность..."));
                     menu_item.onChecked.bind(this, () =>
                     {
-                        const dx = this.document.promptNumber(
-                            Resources.string("Приращение аргумента x функции {0}", this.code.text),
-                            this.dx
-                        );
+                        const title = Resources.string("Приращение аргумента x функции {0}", this.code.text);
+                        const dx = this.document.promptNumber(title, this.dx);
                         if (dx != undefined && dx != null)
                         {
-                            this.dx = dx;
+                            UndoTransaction.Do(this, title, ()=> this.dx = dx);
                         }
                     });
 
@@ -997,7 +993,7 @@ module Geoma.Tools
                     menu_item = menu.addMenuItem(Resources.string("Добавить точку"));
                     menu_item.onChecked.bind(this, () => doc.addPoint(Point.make(x, y)));
 
-                    menu_item = menu.addMenuItem(Resources.string("Удалить прямую {0}", this.name));
+                    menu_item = menu.addMenuItem(Resources.string("Удалить график {0}", this.code.text));
                     menu_item.onChecked.bind(this, () => doc.removeParametricLine(this));
 
                     menu.show();
@@ -1010,15 +1006,26 @@ module Geoma.Tools
             super.mouseMove(event);
             this.selected = this.mouseHit(event);
 
-            if (this._dragStart && event.buttons != 0)
+            if (this._dragStart)
             {
-                const dpos = Point.sub(this._dragStart, event);
-                if (dpos.x != 0 || dpos.y != 0)
+                if (event.buttons != 0)
                 {
-                    this.move(dpos.x, dpos.y);
+                    const dpos = Point.sub(this._dragStart, event);
+                    if (dpos.x != 0 || dpos.y != 0)
+                    {
+                        if (!this._transaction)
+                        {
+                            this._transaction = this.document.beginUndo(Resources.string("Перемещение функции {0}", this.code.text));
+                        }
+                        this.move(dpos.x, dpos.y);
+                    }
+                    this._dragStart = event;
+                    event.cancelBubble = true;
                 }
-                this._dragStart = event;
-                event.cancelBubble = true;
+                else
+                {
+                    this.mouseUp(event);
+                }
             }
         }
         protected mouseDown(event: MouseEvent): void
@@ -1032,7 +1039,9 @@ module Geoma.Tools
         {
             if (this._dragStart)
             {
+                this._transaction?.commit();
                 delete this._dragStart;
+                delete this._transaction;
             }
         }
         protected getY(x: number): number
@@ -1040,6 +1049,16 @@ module Geoma.Tools
             this._argX = x;
             this._argY = this._function();
             return this._argY;
+        }
+
+        private _addPoint(point: ActiveCommonPoint): void
+        {
+            assert(!this.belongs(point));
+            if (!this._points)
+            {
+                this._points = [];
+            }
+            this._points.push(point);
         }
 
         private _code?: CodeElement;
@@ -1056,5 +1075,6 @@ module Geoma.Tools
         private _drawPath?: Path2D;
         private _mouseDownListener: IEventListener<MouseEvent>;
         private _mouseUpListener: IEventListener<MouseEvent>;
+        private _transaction?: UndoTransaction;
     }
 }

@@ -14,6 +14,9 @@ module Geoma
         readonly w: number;
         readonly h: number;
         readonly ratio: number;
+        readonly offset: IPoint;
+
+        setOffset(dx: number, dy: number): void;
     }
 
     export interface IEventListener<TEvent extends Event>

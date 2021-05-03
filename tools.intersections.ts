@@ -59,7 +59,7 @@ module Geoma.Tools
             {
                 if (line1 instanceof ActiveLineBase)
                 {
-                    return PointLine.intersection(point, line1.startPoint, line1.endPoint);
+                    return PointLineSegment.intersection(point, line1.startPoint, line1.endPoint);
                 }
                 else if (line1 instanceof ActiveCircleLine)
                 {
@@ -98,7 +98,7 @@ module Geoma.Tools
             {
                 if (line1 instanceof ActiveLineSegment)
                 {
-                    return new PointLine(point, line1);
+                    return new PointLineSegment(point, line1);
                 }
                 else if (line1 instanceof ActiveCircleLine)
                 {
@@ -108,10 +108,14 @@ module Geoma.Tools
                 {
                     return new PointParametric(point, line1);
                 }
+                else if (line1 instanceof ActiveLine)
+                {
+                    return new PointLine(point, line1);
+                }
             }
             else if (line1 instanceof ActiveLineBase)
             {
-                if (line2 instanceof ActiveLineSegment)
+                if (line2 instanceof ActiveLineBase)
                 {
                     return new LineLine(point, line1, line2);
                 }
@@ -149,11 +153,179 @@ module Geoma.Tools
         private _startPoint: IPoint;
     }
 
+    enum LocusType { outerStart = 1, innerStart, innerEnd, outerEnd };
     export class PointLine extends Intersection
     {
         constructor(point: IPoint, line: ActiveLineBase)
         {
-            super(PointLine.intersection(point, line.startPoint, line.endPoint));
+            super(PointLine.intersection(point, line.startPoint, line.coefficients));
+            this._line = line;
+            this.updateLocusInfo(point);
+
+            this._intersection = makeProp(makeMod(this, (): IPoint =>
+            {
+                const c = LineCircle.intersection(
+                    this._line,
+                    {
+                        center: this._center,
+                        radius: this._locusRadius
+                    }
+                );
+                assert(c.p1 && c.p2);
+                switch (this._locus)
+                {
+                    case LocusType.outerStart:
+                        if (this.locus(c.p1) == LocusType.outerStart)
+                        {
+                            return c.p1;
+                        }
+                        else
+                        {
+                            return c.p2;
+                        }
+                    case LocusType.innerStart:
+                        if (this.locus(c.p1) == LocusType.outerStart)
+                        {
+                            return c.p2;
+                        }
+                        else
+                        {
+                            return c.p1;
+                        }
+                    case LocusType.innerEnd:
+                        if (this.locus(c.p1) == LocusType.outerEnd)
+                        {
+                            return c.p2;
+                        }
+                        else
+                        {
+                            return c.p1;
+                        }
+                    case LocusType.outerEnd:
+                        if (this.locus(c.p1) == LocusType.outerEnd)
+                        {
+                            return c.p1;
+                        }
+                        else
+                        {
+                            return c.p2;
+                        }
+                    default:
+                        assert(false);
+                }
+            }), Point.empty);
+        }
+
+        public get point(): IPoint 
+        {
+            return this._intersection.value;
+        }
+
+        public dispose(): void
+        {
+            if (!this.disposed)
+            {
+                super.dispose();
+                this._intersection.reset();
+            }
+        }
+        public move(dx: number, dy: number): void
+        {
+            this.updateLocusInfo(Point.sub(this.point, Point.make(dx, dy)));
+        }
+
+        public static intersection(point: IPoint, pivot_point: IPoint, coefficient: LineCoefficients | null): IPoint
+        {
+            if (coefficient)
+            {
+                return Point.make(point.x, ActiveLineBase.getY(point.x, coefficient));
+            }
+            else
+            {
+                return Point.make(pivot_point.x, point.y);
+            }
+        }
+        public static intersected(point: IPoint, pivot_point: IPoint, coefficient: LineCoefficients | null, sensitivity: number): boolean
+        {
+            assert(sensitivity >= 0);
+
+            if (coefficient)
+            {
+                const y = ActiveLineBase.getY(point.x, coefficient);
+                if (Math.abs(y - point.y) <= sensitivity)
+                {
+                    return true;
+                }
+                else
+                {
+                    const x = ActiveLineBase.getX(point.y, coefficient);
+                    if (Math.abs(x - point.x) <= sensitivity)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                return Math.abs(point.x - pivot_point.x) <= sensitivity;
+            }
+        }
+
+        protected updateLocusInfo(point: IPoint): void
+        {
+            this._locus = this.locus(point);
+            const dp = Point.sub(point, this._center);
+            this._locusRadius = Math.sqrt(dp.x * dp.x + dp.y * dp.y);
+        }
+        protected locus(point: IPoint): LocusType
+        {
+            // -------(x1)------(start)------(x2)----------(x3)------(end)------(x4)------
+            // ---[outerStart]-----*-----[innerStart]---[innerEnd]-----*-----[outerEnd]---
+            const line_length = this._line.length;
+            const dp_start = Point.sub(this._line.startPoint, point);
+            const start_length = Math.sqrt(dp_start.x * dp_start.x + dp_start.y * dp_start.y);
+            const dp_end = Point.sub(this._line.endPoint, point);
+            const end_length = Math.sqrt(dp_end.x * dp_end.x + dp_end.y * dp_end.y);
+            if (start_length <= line_length && end_length <= line_length)
+            {
+                if (start_length < end_length)
+                {
+                    return LocusType.innerStart;
+                }
+                else
+                {
+                    return LocusType.innerEnd;
+                }
+            }
+            else if (start_length < end_length)
+            {
+                return LocusType.outerStart;
+            }
+            else
+            {
+                return LocusType.outerEnd;
+            }
+        }
+
+        private get _center(): IPoint
+        {
+            return (this._locus == LocusType.innerEnd || this._locus == LocusType.outerEnd) ? this._line.endPoint : this._line.startPoint;
+        }
+        private _line: ActiveLineBase;
+        private _locusRadius!: number;
+        private _locus!: LocusType;
+        private _intersection: property<IPoint>;
+    }
+
+    export class PointLineSegment extends Intersection
+    {
+        constructor(point: IPoint, line: ActiveLineBase)
+        {
+            super(PointLineSegment.intersection(point, line.startPoint, line.endPoint));
             this._line = line;
             const dp = Point.sub(this.startPoint, line.startPoint);
             const length = Math.sqrt(dp.x * dp.x + dp.y * dp.y);
@@ -411,7 +583,7 @@ module Geoma.Tools
                         const x = (Math.sqrt(d) + w) / k2_1;
                         const y = ActiveLineBase.getY(x, coeff);
                         const p1 = Point.make(x, y);
-                        if (PointLine.intersected(p1, line.startPoint, line.endPoint, Thickness.Calc))
+                        if (LineCircle.isPointLineIntersected(p1, line))
                         {
                             ret.p1 = p1;
                         }
@@ -420,7 +592,7 @@ module Geoma.Tools
                         const x = (w - Math.sqrt(d)) / k2_1;
                         const y = ActiveLineBase.getY(x, coeff);
                         const p2 = Point.make(x, y);
-                        if (PointLine.intersected(p2, line.startPoint, line.endPoint, Thickness.Calc))
+                        if (LineCircle.isPointLineIntersected(p2, line))
                         {
                             ret.p2 = p2;
                         }
@@ -442,11 +614,11 @@ module Geoma.Tools
                     const p1y = y0 + h;
                     const p2y = y0 - h;
                     const ret: CircleLineIntersection = {};
-                    if (PointLine.intersected(Point.make(x1, p1y), line.startPoint, line.endPoint, Thickness.Calc))
+                    if (LineCircle.isPointLineIntersected(Point.make(x1, p1y), line))
                     {
                         ret.p1 = Point.make(x1, p1y);
                     }
-                    if (PointLine.intersected(Point.make(x1, p2y), line.startPoint, line.endPoint, Thickness.Calc))
+                    if (LineCircle.isPointLineIntersected(Point.make(x1, p2y), line))
                     {
                         ret.p2 = Point.make(x1, p2y);
                     }
@@ -500,6 +672,22 @@ module Geoma.Tools
             else
             {
                 return ret;
+            }
+        }
+
+        protected static isPointLineIntersected(point: IPoint, line: ActiveLineBase): boolean
+        {
+            if (line instanceof ActiveLineSegment)
+            {
+                return PointLineSegment.intersected(point, line.startPoint, line.endPoint, Thickness.Calc);
+            }
+            else if (line instanceof ActiveLine)
+            {
+                return PointLine.intersected(point, line.startPoint, line.coefficients, Thickness.Calc);
+            }
+            else
+            {
+                return false;
             }
         }
 
@@ -558,7 +746,7 @@ module Geoma.Tools
                     const p1 = Point.make(x, line.screenY(x));
                     x++;
                     const p2 = Point.make(x, line.screenY(x));
-                    if (PointLine.intersected(point, p1, p2, sensitivity))
+                    if (PointLineSegment.intersected(point, p1, p2, sensitivity))
                     {
                         return true;
                     }

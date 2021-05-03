@@ -56,6 +56,7 @@ module Geoma.Tools
         {
             if (!this.disposed)
             {
+                this._transaction?.rollback();
                 this._mouseDownListener.dispose();
                 this._mouseUpListener.dispose();
                 super.dispose();
@@ -69,9 +70,7 @@ module Geoma.Tools
         }
         public serialize(context: SerializationContext): Array<string>
         {
-            const data: Array<string> = [];
-            data.push(this.x.toFixed(2));
-            data.push(this.y.toFixed(2));
+            const data = super.serialize(context);
             data.push(this.name);
             return data;
         }
@@ -88,7 +87,7 @@ module Geoma.Tools
         {
             if (data.length > (index + 2))
             {
-                const point = new ActivePoint(context.document, toInt(data[index]), toInt(data[index + 1]));
+                const point = new ActivePoint(context.document, parseFloat(data[index]), parseFloat(data[index + 1]));
                 point.setName(data[index + 2]);
                 return point;
             }
@@ -118,7 +117,10 @@ module Geoma.Tools
                     const y = doc.mouseArea.mousePoint.y;
                     const menu = new Menu(doc, x, y);
 
-                    let menu_item = menu.addMenuItem(Resources.string("Создать отрезок..."));
+                    let menu_item = menu.addMenuItem(Resources.string("Создать линию..."));
+                    menu_item.onChecked.bind(this, () => doc.setLineState(this));
+
+                    menu_item = menu.addMenuItem(Resources.string("Создать отрезок..."));
                     menu_item.onChecked.bind(this, () => doc.setLineSegmentState(this));
 
                     menu_item = menu.addMenuItem(Resources.string("Создать окружность из центра..."));
@@ -136,15 +138,26 @@ module Geoma.Tools
         }
         protected mouseMove(event: MouseEvent): void
         {
-            if (this._dragStart && event.buttons != 0)
+            if (this._dragStart)
             {
-                const dpos = Point.sub(this._dragStart, event);
-                if (dpos.x != 0 || dpos.y != 0)
+                if (event.buttons != 0)
                 {
-                    this.move(dpos.x, dpos.y);
+                    const dpos = Point.sub(this._dragStart, event);
+                    if (dpos.x != 0 || dpos.y != 0)
+                    {
+                        if (!this._transaction)
+                        {
+                            this._transaction = this.document.beginUndo(Resources.string("Перемещение точки {0}", this.name));
+                        }
+                        this.move(dpos.x, dpos.y);
+                    }
+                    this._dragStart = event;
+                    event.cancelBubble = true;
                 }
-                this._dragStart = event;
-                event.cancelBubble = true;
+                else
+                {
+                    this.mouseUp(event);
+                }
             }
             super.mouseMove(event);
         }
@@ -159,6 +172,8 @@ module Geoma.Tools
         {
             if (this._dragStart)
             {
+                this._transaction?.commit();
+                delete this._transaction;
                 delete this._dragStart;
             }
         }
@@ -169,5 +184,6 @@ module Geoma.Tools
         private _moved: Utils.Pulse;
         private _mouseDownListener: IEventListener<MouseEvent>;
         private _mouseUpListener: IEventListener<MouseEvent>;
+        private _transaction?: UndoTransaction;
     }
 }

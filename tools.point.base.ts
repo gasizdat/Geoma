@@ -88,7 +88,10 @@ module Geoma.Tools
         }
         public serialize(context: SerializationContext): Array<string>
         {
-            assert(false);
+            const data: Array<string> = [];
+            data.push(`${this._line.x + this.item.first!.w / 2 + this._line.lineWidth.value / 2}`);
+            data.push(`${this._line.y + this.item.first!.w / 2 + this._line.lineWidth.value / 2}`);
+            return data;
         }
 
         protected get boundingBox(): Box

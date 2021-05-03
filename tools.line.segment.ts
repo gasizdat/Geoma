@@ -33,9 +33,9 @@ module Geoma.Tools
         constructor(
             start: ActivePoint,
             end: ActivePoint,
-            line_width: binding<number> = CurrentTheme.ActiveLineWidth,
-            brush: binding<Sprite.Brush> = CurrentTheme.ActiveLineBrush,
-            selected_brush: binding<Sprite.Brush> = CurrentTheme.ActiveLineSelectBrush
+            line_width: binding<number> = CurrentTheme.ActiveLineSegmentWidth,
+            brush: binding<Sprite.Brush> = CurrentTheme.ActiveLineSegmentBrush,
+            selected_brush: binding<Sprite.Brush> = CurrentTheme.ActiveLineSegmentSelectBrush
         )
         {
             super(
@@ -168,6 +168,22 @@ module Geoma.Tools
             }
             return ret;
         }
+        public get isPartOf(): ActiveLineBase | null
+        {
+            if (this.start instanceof ActiveCommonPoint || this.end instanceof ActiveCommonPoint)
+            {
+                for (let i = 0; i < this.document.lineSegments.length; i++)
+                {
+                    const line = this.document.lineSegments.item(i);
+                    if (line instanceof ActiveLineBase && line.belongs(this.start) && line.belongs(this.end))
+                    {
+                        //The service line segment as part of bigger line segment.
+                        return line;
+                    }
+                }
+            }
+            return null;
+        }
 
         public belongs(p1: ActivePointBase): boolean
         {
@@ -187,68 +203,6 @@ module Geoma.Tools
             }
 
             return false;
-        }
-        public setParallelTo(other_segment: ActiveLineSegment): void
-        {
-            const parallel_line = other_segment;
-            const q1 = this.quadrant;
-            const q2 = parallel_line.quadrant;
-            switch (q2)
-            {
-                case 1:
-                    switch (q1)
-                    {
-                        case 1:
-                        case 2:
-                            this.setAngle(parallel_line.angle);
-                            break;
-                        case 3:
-                        case 4:
-                            this.setAngle(parallel_line.angle - Math.PI);
-                            break;
-                    }
-                    break;
-                case 2:
-                    switch (q1)
-                    {
-                        case 1:
-                        case 2:
-                            this.setAngle(parallel_line.angle);
-                            break;
-                        case 3:
-                        case 4:
-                            this.setAngle(parallel_line.angle, this.end);
-                            break;
-                    }
-                    break;
-                case 3:
-                    switch (q1)
-                    {
-                        case 1:
-                        case 2:
-                            this.setAngle(parallel_line.angle, this.end);
-                            break;
-                        case 3:
-                        case 4:
-                            this.setAngle(parallel_line.angle - Math.PI, this.end);
-                            break;
-                    }
-                    break;
-                case 4:
-                    switch (q1)
-                    {
-                        case 1:
-                        case 2:
-                            this.setAngle(parallel_line.angle, this.end);
-                            break;
-                        case 3:
-                        case 4:
-                            this.setAngle(parallel_line.angle - Math.PI, this.end);
-                            break;
-                    }
-                    break;
-            }
-
         }
         public setPerpendicularTo(other_segment: ActiveLineSegment): void
         {
@@ -270,29 +224,13 @@ module Geoma.Tools
         }
         public setAngle(value: number, pivot_point?: IPoint): void
         {
-            let start: ActivePoint, end: ActivePoint;
-            if (pivot_point)
+            const start_point = pivot_point ?? this.startPoint;
+            const end_poin = (start_point == this.endPoint) ? this.startPoint : this.endPoint;
+            const dp = ActiveLineBase.setAngle(value, start_point.x, start_point.y, end_poin.x, end_poin.y);
+            if (end_poin instanceof ActivePoint)
             {
-                start = pivot_point as ActivePoint;
-                if (start == this.start)
-                {
-                    end = this.end;
-                }
-                else
-                {
-                    end = this.start;
-                }
+                end_poin.move(dp.x, dp.y);
             }
-            else
-            {
-                start = this.start;
-                end = this.end;
-            }
-
-            const l = this.length;
-            const x1 = start.x + Math.cos(value) * l;
-            const y1 = start.y + Math.sin(value) * l;
-            end.move(end.x - x1, end.y - y1);
         }
         public setLength(value: number, fix_point?: IPoint): void
         {
@@ -325,6 +263,7 @@ module Geoma.Tools
         {
             if (!this.disposed)
             {
+                this._transaction?.rollback();
                 this._mouseDownListener.dispose();
                 this._mouseUpListener.dispose();
                 if (this._beforeDrawListener)
@@ -381,6 +320,15 @@ module Geoma.Tools
             this.start.move(dx, dy);
             this.end.move(dx, dy);
         }
+        public mouseHit(point: IPoint)
+        {
+            return super.mouseHit(point) && PointLineSegment.intersected(
+                 point,
+                 this.startPoint,
+                 this.endPoint,
+                 Thickness.Mouse
+             )
+        }
         public serialize(context: SerializationContext): Array<string>
         {
             const data: Array<string> = [];
@@ -423,7 +371,7 @@ module Geoma.Tools
                         const p_index = toInt(chunck.substring(1));
                         const point = context.data.points.item(p_index);
                         assert(point instanceof ActiveCommonPoint);
-                        (point as ActiveCommonPoint).addSegment(line);
+                        (point as ActiveCommonPoint).addGraphLine(line);
                         line.addPoint(point);
                     }
                     else
@@ -437,15 +385,26 @@ module Geoma.Tools
 
         protected mouseMove(event: MouseEvent): void
         {
-            if (this._dragStart && event.buttons != 0)
+            if (this._dragStart)
             {
-                const dpos = Point.sub(this._dragStart, event);
-                if (dpos.x != 0 || dpos.y != 0)
+                if (event.buttons != 0)
                 {
-                    this.move(dpos.x, dpos.y);
+                    const dpos = Point.sub(this._dragStart, event);
+                    if (dpos.x != 0 || dpos.y != 0)
+                    {
+                        if (!this._transaction)
+                        {
+                            this._transaction = this.document.beginUndo(Resources.string("Перемещение сегмента {0}", this.name));
+                        }
+                        this.move(dpos.x, dpos.y);
+                    }
+                    this._dragStart = event;
+                    event.cancelBubble = true;
                 }
-                this._dragStart = event;
-                event.cancelBubble = true;
+                else
+                {
+                    this.mouseUp(event);
+                }
             }
             super.mouseMove(event);
         }
@@ -504,7 +463,7 @@ module Geoma.Tools
                     menu_item = menu.addMenuItem(Resources.string("Добавить точку"));
                     menu_item.onChecked.bind(this, () => doc.addPoint(Point.make(x, y)));
 
-                    menu_item = menu.addMenuItem(Resources.string("Удалить прямую {0}", this.name));
+                    menu_item = menu.addMenuItem(Resources.string("Удалить отрезок {0}", this.name));
                     menu_item.onChecked.bind(this, () => doc.removeLineSegment(this));
 
                     menu.show();
@@ -523,7 +482,9 @@ module Geoma.Tools
         {
             if (this._dragStart)
             {
+                this._transaction?.commit();
                 delete this._dragStart;
+                delete this._transaction;
             }
         }
         protected beforeDraw(event: BeforeDrawEvent)
@@ -588,5 +549,6 @@ module Geoma.Tools
         private _dragStart?: IPoint;
         private _fixed?: SegmentFixInfo;
         private _points?: Array<ActiveCommonPoint>;
+        private _transaction?: UndoTransaction;
     }
 }
