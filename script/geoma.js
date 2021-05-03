@@ -8225,8 +8225,8 @@ var Geoma;
 var playGround;
 var mainDocument;
 var GeomaApplicationVersion = 0;
-var GeomaFeatureVersion = 1;
-var GeomaFixVersion = 2;
+var GeomaFeatureVersion = 2;
+var GeomaFixVersion = 1;
 window.onload = function () {
     document.title = document.title + " v" + GeomaApplicationVersion + "." + GeomaFeatureVersion + "." + GeomaFixVersion;
     var canvas = document.getElementById('playArea');
