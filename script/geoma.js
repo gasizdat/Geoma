@@ -2393,7 +2393,9 @@ var Geoma;
                 if (enabled === void 0) { enabled = new property(true); }
                 var _this = _super.call(this, document, x, y, radius, line_width, function () { return enabled.value ? Tools.CurrentTheme.ToolBrush : Tools.CurrentTheme.ToolDisabledBrush; }, function () { return enabled.value ? Tools.CurrentTheme.ToolLineBrush : Tools.CurrentTheme.ToolDisabledLineBrush; }, function () { return enabled.value ? Tools.CurrentTheme.ToolSelectLineBrush : Tools.CurrentTheme.ToolDisabledLineBrush; }) || this;
                 _this.enabled = true;
-                _this.setName(name, function () { return Tools.CurrentTheme.ToolNameBrush; }, function () { return Tools.CurrentTheme.ToolNameStyle; });
+                if (document.mouseArea instanceof Geoma.PlayGround && !document.mouseArea.touchInterface) {
+                    _this.setName(name, function () { return Tools.CurrentTheme.ToolNameBrush; }, function () { return Tools.CurrentTheme.ToolNameStyle; });
+                }
                 return _this;
             }
             ToolBase.prototype.mouseHit = function (point) {
@@ -2817,6 +2819,14 @@ var Geoma;
                 icon.addVisible(function () { return !icon_stroke.visible; });
                 _this.item.push(icon_stroke);
                 _this.item.push(icon);
+                _this._touchInterface = document.mouseArea instanceof Geoma.PlayGround && document.mouseArea.touchInterface;
+                if (_this._touchInterface) {
+                    var stop_icon_path = new Geoma.Polygon.CustomPath(Point.make(MoveTool._IconSize, MoveTool._IconSize), "M90.914,5.296c6.927-7.034,18.188-7.065,25.154-0.068 c6.961,6.995,6.991,18.369,0.068,25.397L85.743,61.452l30.425,30.855c6.866,6.978,6.773,18.28-0.208,25.247 c-6.983,6.964-18.21,6.946-25.074-0.031L60.669,86.881L30.395,117.58c-6.927,7.034-18.188,7.065-25.154,0.068 c-6.961-6.995-6.992-18.369-0.068-25.397l30.393-30.827L5.142,30.568c-6.867-6.978-6.773-18.28,0.208-25.247 c6.983-6.963,18.21-6.946,25.074,0.031l30.217,30.643L90.914,5.296L90.914,5.296z");
+                    var stop_move_icon = new Geoma.Sprite.Polyshape(x, y, Tools.CurrentTheme.TapLineWidth, "Red", MoveTool._IconSize / 500);
+                    stop_move_icon.addX(function (value) { return value + MoveTool._IconSize; });
+                    stop_move_icon.addPolygon(stop_icon_path);
+                    _this.item.push(stop_move_icon);
+                }
                 _this._mouseDownListener = document.mouseArea.onMouseDown.bind(_this, _this.mouseDown, true);
                 _this._mouseUpListener = document.mouseArea.onMouseUp.bind(_this, _this.mouseUp, true);
                 return _this;
@@ -2846,12 +2856,17 @@ var Geoma;
                 _super.prototype.mouseMove.call(this, event);
                 if (this._startDrag) {
                     if (event.buttons > 0) {
-                        this.selected = true;
-                        var dp = Point.add(Point.sub(this._startDrag, event), this.document.mouseArea.offset);
-                        if (!this._transaction) {
-                            this._transaction = this.document.beginUndo(Tools.Resources.string("Перемещение страницы"));
+                        if (this._touchInterface && this.mouseHit(event) && event.x >= this.middleX) {
+                            this.endDrag();
                         }
-                        this.document.mouseArea.setOffset(dp.x, dp.y);
+                        else {
+                            this.selected = true;
+                            var dp = Point.add(Point.sub(this._startDrag, event), this.document.mouseArea.offset);
+                            if (!this._transaction) {
+                                this._transaction = this.document.beginUndo(Tools.Resources.string("Перемещение страницы"));
+                            }
+                            this.document.mouseArea.setOffset(dp.x, dp.y);
+                        }
                     }
                     else {
                         this.selected = false;
@@ -2871,16 +2886,19 @@ var Geoma;
                 event.cancelBubble = this.isActive;
             };
             MoveTool.prototype.mouseUp = function (event) {
-                var _a;
                 if (this._startDrag && !this.selected) {
                     var dp = Point.sub(this._startDrag, event);
                     if ((dp.x * dp.x + dp.y * dp.y) <= (Tools.Thickness.Mouse * Tools.Thickness.Mouse)) {
-                        (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.commit();
-                        delete this._transaction;
-                        this.dispose();
+                        this.endDrag();
                     }
                 }
                 event.cancelBubble = this.isActive;
+            };
+            MoveTool.prototype.endDrag = function () {
+                var _a;
+                (_a = this._transaction) === null || _a === void 0 ? void 0 : _a.commit();
+                delete this._transaction;
+                this.dispose();
             };
             MoveTool._IconSize = 40;
             return MoveTool;
@@ -4925,7 +4943,7 @@ var Geoma;
             };
             ParametricLine.prototype.showExpressionEditor = function () {
                 var _this = this;
-                var dialog = new Tools.ExpressionDialog(this.document, makeMod(this, function () { return (_this.document.mouseArea.x + _this.document.mouseArea.w / 2 - _this.document.mouseArea.w / 10) / _this.document.mouseArea.ratio; }), makeMod(this, function () { return (_this.document.mouseArea.y + _this.document.mouseArea.h / 2 - _this.document.mouseArea.h / 10) / _this.document.mouseArea.ratio; }), this.code);
+                var dialog = new Tools.ExpressionDialog(this.document, makeMod(this, function () { return (_this.document.mouseArea.offset.x + _this.document.mouseArea.w / 2 - _this.document.mouseArea.w / 10) / _this.document.mouseArea.ratio; }), makeMod(this, function () { return (_this.document.mouseArea.offset.y + _this.document.mouseArea.h / 2 - _this.document.mouseArea.h / 10) / _this.document.mouseArea.ratio; }), this.code);
                 dialog.onEnter.bind(this, function (event) {
                     if (event.detail) {
                         Tools.UndoTransaction.Do(_this, Tools.Resources.string("Редактирование функции {0}", _this.code.text), function () { _this.code = event.detail; });
@@ -7372,7 +7390,7 @@ var Geoma;
             };
             Document.prototype.addParametricLine = function (point, axes) {
                 var _this = this;
-                var dialog = new Tools.ExpressionDialog(this, makeMod(this, function () { return (_this.mouseArea.x + _this.mouseArea.w / 2 - _this.mouseArea.w / 10) / _this.mouseArea.ratio; }), makeMod(this, function () { return (_this.mouseArea.y + _this.mouseArea.h / 2 - _this.mouseArea.h / 10) / _this.mouseArea.ratio; }));
+                var dialog = new Tools.ExpressionDialog(this, makeMod(this, function () { return (_this.mouseArea.offset.x + _this.mouseArea.w / 2 - _this.mouseArea.w / 10) / _this.mouseArea.ratio; }), makeMod(this, function () { return (_this.mouseArea.offset.y + _this.mouseArea.h / 2 - _this.mouseArea.h / 10) / _this.mouseArea.ratio; }));
                 dialog.onEnter.bind(this, function (event) {
                     if (event.detail) {
                         var transaction = _this.beginUndo("Добавление функции");
@@ -8226,7 +8244,7 @@ var playGround;
 var mainDocument;
 var GeomaApplicationVersion = 0;
 var GeomaFeatureVersion = 2;
-var GeomaFixVersion = 1;
+var GeomaFixVersion = 2;
 window.onload = function () {
     document.title = document.title + " v" + GeomaApplicationVersion + "." + GeomaFeatureVersion + "." + GeomaFixVersion;
     var canvas = document.getElementById('playArea');
