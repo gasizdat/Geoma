@@ -10,7 +10,7 @@ let mainDocument: Geoma.Tools.Document;
 
 const GeomaApplicationVersion: number = 0;
 const GeomaFeatureVersion: number = 2;
-const GeomaFixVersion: number = 1;
+const GeomaFixVersion: number = 2;
 
 window.onload = () =>
 {

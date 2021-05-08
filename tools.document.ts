@@ -597,8 +597,8 @@ module Geoma.Tools
         {
             const dialog = new ExpressionDialog(
                 this,
-                makeMod(this, () => (this.mouseArea.x + this.mouseArea.w / 2 - this.mouseArea.w / 10) / this.mouseArea.ratio),
-                makeMod(this, () => (this.mouseArea.y + this.mouseArea.h / 2 - this.mouseArea.h / 10) / this.mouseArea.ratio)
+                makeMod(this, () => (this.mouseArea.offset.x + this.mouseArea.w / 2 - this.mouseArea.w / 10) / this.mouseArea.ratio),
+                makeMod(this, () => (this.mouseArea.offset.y + this.mouseArea.h / 2 - this.mouseArea.h / 10) / this.mouseArea.ratio)
             );
             dialog.onEnter.bind(this, (event: CustomEvent<CodeElement | undefined>) => 
             {
