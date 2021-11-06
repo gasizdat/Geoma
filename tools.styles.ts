@@ -93,7 +93,7 @@ module Geoma.Tools
         readonly AngleIndicatorSelectionBorderBrush: Sprite.Brush = "DarkTurquoise";
         readonly AngleIndicatorStrokeBrush: Brush = "White";
         readonly AngleIndicatorStrokeWidth: number = 0;
-        readonly AngleIndicatorPrecision: number = 0;
+        readonly AngleIndicatorPrecision: number = 2;
 
         readonly BisectorBrush: Sprite.Brush = "DarkTurquoise";
         readonly BisectorSelectionBrush: Sprite.Brush = "Lime";
@@ -129,6 +129,14 @@ module Geoma.Tools
         readonly FormulaSampleTextBrush: Brush = "SandyBrown";
         readonly FormulaSampleTextStyle: CanvasTextDrawingStyles = {
             font: "12px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+        };
+
+        readonly CoordinatesPrecision: number = 2;
+
+        readonly PropertyTextBrush: Brush = "DarkTurquoise";
+        readonly PropertySelectedTextBrush: Brush = "Lime";
+        readonly PropertyTextStyle: CanvasTextDrawingStyles = {
+            font: "10px Arial", textBaseline: "hanging", direction: "inherit", textAlign: "left"
         };
     }
 
@@ -232,7 +240,7 @@ module Geoma.Tools
         readonly AngleIndicatorSelectionBorderBrush: Brush = "DarkSlateGray";
         readonly AngleIndicatorStrokeBrush: Brush = "White";
         readonly AngleIndicatorStrokeWidth: number = 2;
-        readonly AngleIndicatorPrecision: number = 0;
+        readonly AngleIndicatorPrecision: number = 2;
 
         readonly BisectorBrush: Brush = "DarkSlateGray";
         readonly BisectorSelectionBrush: Brush = "OrangeRed";
@@ -242,6 +250,14 @@ module Geoma.Tools
         readonly FormulaSampleTextBrush: Brush = "Gray";
         readonly FormulaSampleTextStyle: CanvasTextDrawingStyles = {
             font: "12px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+        };
+
+        readonly CoordinatesPrecision: number = 2;
+
+        readonly PropertyTextBrush: Brush = "DarkSlateGray";
+        readonly PropertySelectedTextBrush: Brush = "OrangeRed";
+        readonly PropertyTextStyle: CanvasTextDrawingStyles = {
+            font: "10px Arial", textBaseline: "hanging", direction: "inherit", textAlign: "left"
         };
     }
 

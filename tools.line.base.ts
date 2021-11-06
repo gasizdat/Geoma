@@ -13,17 +13,11 @@
 
 module Geoma.Tools
 {
-    import makeMod = Utils.makeMod;
     import makeProp = Utils.makeProp;
-    import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export type LineCoefficients = { k: number; b: number; }
 
@@ -52,8 +46,8 @@ module Geoma.Tools
     {
         constructor(
             document: Document,
-            start: IPoint,
-            end: IPoint,
+            start: ActivePointBase,
+            end: ActivePointBase,
             line_width: binding<number>,
             brush: binding<Sprite.Brush>,
             selected_brush: binding<Sprite.Brush>
@@ -61,7 +55,7 @@ module Geoma.Tools
         {
             class stub extends Sprite.Sprite
             {
-                protected innerDraw(play_ground: PlayGround): void
+                protected innerDraw(__play_ground: PlayGround): void
                 {
                     throw new Error("Method not implemented.");
                 }
@@ -115,16 +109,17 @@ module Geoma.Tools
                 y2: this._endPoint.y
             };
         }
-        public get startPoint(): IPoint
+        public get startPoint(): ActivePointBase
         {
             return this._startPoint;
         }
-        public get endPoint(): IPoint
+        public get endPoint(): ActivePointBase
         {
             return this._endPoint;
         }
         public abstract get moved(): boolean;
         public abstract get isPartOf(): ActiveLineBase | null;
+        public abstract get points(): Array<ActivePointBase>;
 
         public readonly lineWidth: property<number>;
         public readonly brush: property<Sprite.Brush>;
@@ -177,45 +172,70 @@ module Geoma.Tools
             * @param y2 - y of opposite point of line two
             */
         public static getAngle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number): number
+        public static getAngle(line1: ActiveLineBase, line2: ActiveLineBase): number;
         public static getAngle(...args: any[]): number
         {
-            const x0 = args[0] as number, y0 = args[1] as number, x1 = args[2] as number, y1 = args[3] as number;
-            if (args.length == 4)
+            switch (args.length)
             {
-                const q = ActiveLineBase.getQuadrant(x0, y0, x1, y1);
-                switch (q)
-                {
-                    case 1:
-                        return (2 * Math.PI) - Math.atan((y0 - y1) / (x1 - x0));
-                    case 2:
-                        return Math.atan((y1 - y0) / (x1 - x0));
-                    case 3:
-                        return (Math.PI / 2) + Math.atan((x0 - x1) / (y1 - y0));
-                    default:
-                        return Math.PI + Math.atan((y0 - y1) / (x0 - x1));
-                }
+                case 2:
+                    {
+                        const line1 = args[0] as ActiveLineBase;
+                        const line2 = args[1] as ActiveLineBase;
+                        const k1 = line1.coefficients ? line1.coefficients.k : 0;
+                        const k2 = line2.coefficients ? line2.coefficients.k : 0;
 
-                //return Math.atan2(y1 - y0, x1 - x0);
+                        const ret = Math.atan((k2 - k1) / (1 + (k1 * k2)));
+                        if (ret < 0)
+                        {
+                            return Math.PI + ret;
+                        }
+                        else
+                        {
+                            return ret;
+                        }
+                    }
+                case 4:
+                    {
+                        const x0 = args[0] as number, y0 = args[1] as number, x1 = args[2] as number, y1 = args[3] as number;
+                        const q = ActiveLineBase.getQuadrant(x0, y0, x1, y1);
+                        switch (q)
+                        {
+                            case 1:
+                                return (2 * Math.PI) - Math.atan((y0 - y1) / (x1 - x0));
+                            case 2:
+                                return Math.atan((y1 - y0) / (x1 - x0));
+                            case 3:
+                                return (Math.PI / 2) + Math.atan((x0 - x1) / (y1 - y0));
+                            default:
+                                return Math.PI + Math.atan((y0 - y1) / (x0 - x1));
+                        }
+                    }
+                case 6:
+                    {
+                        const x0 = args[0] as number, y0 = args[1] as number, x1 = args[2] as number, y1 = args[3] as number;
+                        const x2 = args[4] as number, y2 = args[5] as number;
+                        const a1 = this.getAngle(x0, y0, x1, y1);
+                        const a2 = this.getAngle(x0, y0, x2, y2);
+                        const a = Math.abs(a1 - a2);
+                        if (a > Math.PI)
+                        {
+                            return 2 * Math.PI - a;
+                        }
+                        else
+                        {
+                            return a;
+                        }
+                    }
+                default:
+                    {
+                        assert(false);
+                    }
             }
-            else if (args.length == 6)
-            {
-                const x2 = args[4] as number, y2 = args[5] as number;
-                const a1 = this.getAngle(x0, y0, x1, y1);
-                const a2 = this.getAngle(x0, y0, x2, y2);
-                const a = Math.abs(a1 - a2);
-                if (a > Math.PI)
-                {
-                    return 2 * Math.PI - a;
-                }
-                else
-                {
-                    return a;
-                }
-            }
-            else
-            {
-                assert(false);
-            }
+        }
+        public static getLength(p1: IPoint, p2: IPoint): number
+        {
+            const p = Point.sub(p1, p2);
+            return Math.sqrt(p.x * p.x + p.y * p.y);
         }
         /**
          * Minimal offset around of pivot coords to rotate line by the given angle
@@ -234,7 +254,6 @@ module Geoma.Tools
             const y1 = pivot_y + Math.sin(value) * length;
             return Point.make(x2 - x1, y2 - y1);
         }
-
         public static getY(x: number, coefficients: LineCoefficients): number
         {
             return coefficients.k * x + coefficients.b;
@@ -244,7 +263,7 @@ module Geoma.Tools
             return (y - coefficients.b) / coefficients.k;
         }
         /**
-        * Line segment formula coeficients
+        * Line segment formula coefficients
         * @param x1 - start x of line segment
         * @param y1 - start y of line segment
         * @param x2 - end x of line segment
@@ -265,7 +284,6 @@ module Geoma.Tools
                 return null;
             }
         }
-
         public static getLineDrawInfo(document: Document, pivot: IPoint, angle: number): LineDrawInfo
         {
             const offset = document.mouseArea.offset;
@@ -316,12 +334,22 @@ module Geoma.Tools
 
             return { startPoint: Point.make(x1, y1), endPoint: Point.make(x2, y2) };
         }
+        public static getPoint(start_point: IPoint, end_point: IPoint, length: number): IPoint
+        {
+            const this_length = this.getLength(start_point, end_point);
 
-        public mouseHit(point: IPoint): boolean
+            return Utils.Point.make
+                (
+                    start_point.x + (length * (end_point.x - start_point.x) / this_length),
+                    start_point.y + (length * (end_point.y - start_point.y) / this_length)
+                );
+        }
+
+        public mouseHit(__point: IPoint): boolean
         {
             return this.visible;
         }
-        public setLength(value: number, fix_point?: IPoint): void
+        public setLength(__value: number, __fix_point?: IPoint): void
         {
             assert(false, "Not implemented yet");
         }
@@ -353,13 +381,13 @@ module Geoma.Tools
             }
             return ActiveLineBase.getAngle(start.x, start.y, end.x, end.y);
         }
-        public setAngle(value: number, pivot_point?: IPoint)
+        public setAngle(__value: number, __pivot_point?: IPoint)
         {
             assert(false, "Not implemented yet");
         }
         public through(p: ActivePointBase)
         {
-            assert(this.belongs(p));
+            assert(this.isRelated(p));
             if (!PointLineSegment.intersected(p, this.startPoint, this.endPoint, Thickness.Calc))
             {
                 let dx = this._startPoint.x - p.x;
@@ -384,17 +412,16 @@ module Geoma.Tools
         {
             return this._startPoint == point || this._endPoint == point;
         }
-        public addPoint(point: ActivePointBase): void
+        public addPoint(__point: ActivePointBase): void
         {
             assert(false, "Not implemented yet");
         }
-        public removePoint(point: ActivePointBase): void
+        public removePoint(__point: ActivePointBase): void
         {
             assert(false, "Not implemented yet");
         }
         public setParallelTo(other_segment: ActiveLineBase): void
         {
-            const parallel_line = other_segment;
             const start_angle_1 = ActiveLineBase.getAngle(this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y);
             const end_angle_1 = ActiveLineBase.getAngle(this.endPoint.x, this.endPoint.y, this.startPoint.x, this.startPoint.y);
             const start_angle_2 = ActiveLineBase.getAngle(other_segment.startPoint.x, other_segment.startPoint.y, other_segment.endPoint.x, other_segment.endPoint.y);
@@ -439,8 +466,88 @@ module Geoma.Tools
                 this.setAngle(rotate_angle!, this.endPoint);
             }
         }
+        public getPoint(pivot: IPoint, length: number): IPoint
+        {
+            assert(this.isPivot(pivot));
+
+            const p2 = pivot == this.startPoint ? this.endPoint : this.startPoint;
+            return ActiveLineBase.getPoint(pivot, p2, length);
+        }
+        public isRelated(p: ActivePointBase): boolean
+        {
+            return this.points.includes(p);
+        }
+        public getNearestPoints(point: IPoint): Array<ActivePointBase>
+        {
+            const ret = new Array<ActivePointBase>();
+            const i = PointLine.intersection(point, this.startPoint, this.coefficients);
+            let p1: ActivePointBase | null = null;
+            let l1: number | null = null;
+            let p2: ActivePointBase | null = null;
+            let l2: number | null = null;
+
+            const is_between = (p1: IPoint, l1: number, p2: IPoint, l2: number): boolean =>
+            {
+                const p1p2_len = ActiveLineBase.getLength(p1, p2);
+                return p1p2_len >= l1 && p1p2_len >= l2;
+            };
+
+            for (const p of this.points)
+            {
+                const len = ActiveLineBase.getLength(i, p);
+                if (l1 === null)
+                {
+                    l1 = len;
+                    p1 = p;
+                }
+                else if (l2 === null)
+                {
+                    assert(p1);
+                    if (is_between(p1, l1, p, len))
+                    {
+                        l2 = len;
+                        p2 = p;
+                    }
+                    else if (l1 > len)
+                    {
+                        l1 = len;
+                        p1 = p;
+                    }
+                }
+                else 
+                {
+                    assert(p1);
+                    assert(p2);
+                    if (is_between(p1, l1, p, len) && ActiveLineBase.getLength(p1, p2) > ActiveLineBase.getLength(p1, p))
+                    {
+                        p2 = p;
+                        l2 = len;
+                    }
+                    else if (is_between(p, len, p2, l2) && ActiveLineBase.getLength(p1, p2) > ActiveLineBase.getLength(p, p2))
+                    {
+                        p1 = p;
+                        l1 = len;
+                    }
+                }
+            }
+            if (l1 !== null)
+            {
+                assert(p1);
+                if (l2 !== null)
+                {
+                    assert(p2);
+                    ret.push(p1);
+                    ret.push(p2);
+                }
+                else
+                {
+                    ret.push(p1);
+                }
+            }
+
+            return ret;
+        }
         public abstract move(dx: number, dy: number): void;
-        public abstract belongs(p1: ActivePointBase): boolean;
 
         protected innerDraw(play_ground: PlayGround): void
         {
@@ -457,7 +564,7 @@ module Geoma.Tools
             super.mouseMove(event);
         }
 
-        private readonly _startPoint: IPoint;
-        private readonly _endPoint: IPoint;
+        private readonly _startPoint: ActivePointBase;
+        private readonly _endPoint: ActivePointBase;
     }
 }

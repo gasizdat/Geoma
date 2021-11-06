@@ -17,6 +17,7 @@
 /// <reference path="tools.parametric.line.ts" />
 /// <reference path="tools.formula.editor.ts" />
 /// <reference path="tools.line.ts" />
+/// <reference path="tools.properties.ts" />
 
 module Geoma.Tools
 {
@@ -25,11 +26,7 @@ module Geoma.Tools
     import Point = Utils.Point;
     import assert = Utils.assert;
     import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
-    import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
         
     type DocState =
@@ -217,9 +214,21 @@ module Geoma.Tools
         {
             return this._data.points;
         }
-        public get lineSegments(): Sprite.Container
+        public get lines(): Sprite.Container
         {
             return this._data.lines;
+        }
+        public get angles(): Sprite.Container
+        {
+            return this._data.angles;
+        }
+        public get circles(): Sprite.Container
+        {
+            return this._data.circles;
+        }
+        public get parametrics(): Sprite.Container
+        {
+            return this._data.parametric;
         }
         public get onBeforeDraw(): MulticastEvent<BeforeDrawEvent>
         {
@@ -271,6 +280,23 @@ module Geoma.Tools
                 super.dispose();
             }
         }
+        public getGroup(point: ActivePointBase): Array<ActivePointBase>
+        {
+            const ret = new Array<ActivePointBase>(point);
+            if (point instanceof ActiveCommonPoint)
+            {
+                const group_no = point.groupNo;
+                for (let i = 0; i < this._data.points.length; i++)
+                {
+                    const p = this._data.points.item(i);
+                    if (p != point && p instanceof ActiveCommonPoint && p.groupNo == group_no)
+                    {
+                        ret.push(p);
+                    }
+                }
+            }
+            return ret;
+        }
         public getParametricLines(axes: AxesLines): Array<ParametricLine>
         {
             const ret = new Array<ParametricLine>();
@@ -299,6 +325,10 @@ module Geoma.Tools
         {
             return this.getLine<ActiveLineSegment>([ActiveLineSegment], p1, p2);
         }
+        public getActiveLine(p1: IPoint, p2?: IPoint): ActiveLine | null
+        {
+            return this.getLine<ActiveLine>([ActiveLine], p1, p2);
+        }
         public getLine<TLine extends ActiveLineBase>(lineCtors: { new(...args: any[]): TLine }[], p1: IPoint, p2?: IPoint): TLine | null
         {
             if (!p2)
@@ -306,15 +336,17 @@ module Geoma.Tools
                 for (let i = 0; i < this._data.lines.length; i++)
                 {
                     const line = this._data.lines.item(i);
-                    if (line.mouseHit(p1))
+                    if (line.mouseHit(p1) && Utils.isInstanceOfAny(lineCtors, line))
                     {
-                        for (let i = 0; i < lineCtors.length; i++)
-                        {
-                            if (line instanceof lineCtors[i])
-                            {
-                                return line;
-                            }
-                        }
+                        return line as TLine;
+                    }
+                }
+                for (let i = 0; i < this._data.angles.length; i++)
+                {
+                    const bisector = this._data.angles.item(i).bisector;
+                    if (bisector?.mouseHit(p1) && Utils.isInstanceOfAny(lineCtors, bisector))
+                    {
+                        return bisector as TLine;
                     }
                 }
             }
@@ -323,15 +355,17 @@ module Geoma.Tools
                 for (let i = 0; i < this._data.lines.length; i++)
                 {
                     const line = this._data.lines.item(i);
-                    if (line.isPivot(p1) && line.isPivot(p2))
+                    if (line.isPivot(p1) && line.isPivot(p2) && Utils.isInstanceOfAny(lineCtors, line))
                     {
-                        for (let i = 0; i < lineCtors.length; i++)
-                        {
-                            if (line instanceof lineCtors[i])
-                            {
-                                return line;
-                            }
-                        }
+                        return line as TLine;
+                    }
+                }
+                for (let i = 0; i < this._data.angles.length; i++)
+                {
+                    const bisector = this._data.angles.item(i).bisector;
+                    if (bisector?.mouseHit(p1) && Utils.isInstanceOfAny(lineCtors, bisector))
+                    {
+                        return bisector as TLine;
                     }
                 }
             }
@@ -344,7 +378,7 @@ module Geoma.Tools
                 const transaction = this.beginUndo(Resources.string("Удалить индикатор угла {0}", angle.name));
                 try
                 {
-                    if (angle.hasBisector && !force)
+                    if (angle.bisector && !force)
                     {
                         angle.enabled = false;
                     }
@@ -362,7 +396,24 @@ module Geoma.Tools
                 }
             }
         }
-        public getAngleIndicators(point: ActivePoint): Array<AngleIndicator>
+        public getEngleIndicatorOrder(indicator: AngleIndicator): number
+        {
+            let ret = 0;
+            for (let i = 0; i < this._data.angles.length; i++)
+            {
+                const sibling_indicator = this._data.angles.item(i);
+                if (sibling_indicator == indicator)
+                {
+                    break;
+                }
+                else if (indicator.commonPivot == sibling_indicator.commonPivot)
+                {
+                    ret++;
+                }
+            }
+            return ret;
+        }
+        public getAngleIndicators(point: ActivePointBase): Array<AngleIndicator>
         {
             const ret: Array<AngleIndicator> = [];
             for (let i = 0; i < this._data.angles.length; i++)
@@ -558,12 +609,12 @@ module Geoma.Tools
             this.addToolTip(Resources.string("Выберите вторую точку"));
             this._state = { action: "line segment", activeItem: point, pitchPoint: point };
         }
-        public setAngleIndicatorState(segment: ActiveLineSegment, pitch_point: IPoint): void
+        public setAngleIndicatorState(segment: ActiveLineBase, pitch_point: IPoint): void
         {
             this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, Resources.string("Выберите вторую прямую"));
             this._state = { action: "angle indicator", activeItem: segment, pitchPoint: pitch_point };
         }
-        public setBisectorState(segment: ActiveLineSegment, pitch_point: IPoint): void
+        public setBisectorState(segment: ActiveLineBase, pitch_point: IPoint): void
         {
             this._tooltip = new Tooltip(() => this._mouseArea.mousePoint.x, () => this._mouseArea.mousePoint.y, Resources.string("Выберите вторую прямую"));
             this._state = { action: "bisector", activeItem: segment, pitchPoint: pitch_point };
@@ -597,8 +648,8 @@ module Geoma.Tools
         {
             const dialog = new ExpressionDialog(
                 this,
-                makeMod(this, () => (this.mouseArea.offset.x + this.mouseArea.w / 2 - this.mouseArea.w / 10) / this.mouseArea.ratio),
-                makeMod(this, () => (this.mouseArea.offset.y + this.mouseArea.h / 2 - this.mouseArea.h / 10) / this.mouseArea.ratio)
+                makeMod(this, () => this.mouseArea.offset.x + (this.mouseArea.w / 2 - this.mouseArea.w / 10) / this.mouseArea.ratio),
+                makeMod(this, () => this.mouseArea.offset.y + (this.mouseArea.h / 2 - this.mouseArea.h / 10) / this.mouseArea.ratio)
             );
             dialog.onEnter.bind(this, (event: CustomEvent<CodeElement | undefined>) => 
             {
@@ -675,6 +726,16 @@ module Geoma.Tools
                     graph.selected = true;
                 }
             }
+            for (let i = 0; i < this._data.angles.length; i++)
+            {
+                const angle = this._data.angles.item(i);
+                if (angle.bisector && angle.bisector.mouseHit(point))
+                {
+                    lines.push(angle.bisector);
+                    angle.bisector.selected = true;
+                }
+            }
+
             this._groupNo++;
             if (lines.length == 0)
             {
@@ -749,6 +810,22 @@ module Geoma.Tools
                 }
             }
             return null;
+        }
+        public onOffProperties(): boolean
+        {
+            const property_name = "{5ECB60E4-4092-45AB-86C1-FBA76AD7ECB0}";
+            for (let i = 0; i < this.length; i++)
+            {
+                if (this.item(i).name == property_name)
+                {
+                    this.remove(this.item(i));
+                    return false;
+                }
+            }
+            const properties = new Properties(this, 10, this._tools.bottom + 20);
+            properties.name = property_name;
+            this.push(properties);
+            return true;
         }
         public new(): void
         {
@@ -993,7 +1070,10 @@ module Geoma.Tools
             {
                 this._data.dispose();
                 this._data = old_data;
-                this.alert(ex.toString());
+                if (ex instanceof Object)
+                {
+                    this.alert(ex.toString());
+                }
                 return;
             }
 
@@ -1230,6 +1310,15 @@ module Geoma.Tools
                                     transaction = this.beginUndo(Resources.string("Отобразить угол"));
                                     this.execAngleIndicatorState(other_segment, event);
                                 }
+                                else
+                                {
+                                    const other_line = this.getActiveLine(event);
+                                    if (other_line)
+                                    {
+                                        transaction = this.beginUndo(Resources.string("Отобразить угол"));
+                                        this.execAngleIndicatorState(other_line, event);
+                                    }
+                                }
                             }
                             break;
                         case "bisector":
@@ -1239,6 +1328,15 @@ module Geoma.Tools
                                 {
                                     transaction = this.beginUndo(Resources.string("Показать биссектрисы углов"));
                                     this.execBisectorState(other_segment, event);
+                                }
+                                else
+                                {
+                                    const other_line = this.getActiveLine(event);
+                                    if (other_line)
+                                    {
+                                        transaction = this.beginUndo(Resources.string("Показать биссектрисы углов"));
+                                        this.execBisectorState(other_line, event);
+                                    }
                                 }
                             }
                             break;
@@ -1314,7 +1412,7 @@ module Geoma.Tools
                 for (let i = 0; i < this._data.lines.length; i++)
                 {
                     const line = this._data.lines.item(i);
-                    if (line.belongs(start_point) && line.belongs(end_point))
+                    if (line.isRelated(start_point) && line.isRelated(end_point))
                     {
                         throw Error(Resources.string("Отрезок {0} уже проведен!", line.name));
                     }
@@ -1323,125 +1421,106 @@ module Geoma.Tools
 
             this._addLineSegment(start_point, end_point);
         }
-        protected execAngleIndicatorState(other_segment: ActiveLineSegment, select_point: IPoint): AngleIndicator
+        protected execAngleIndicatorState(segment2: ActiveLineBase, sel_point2: IPoint): AngleIndicator
         {
-            assert(this._state && this._state.activeItem instanceof ActiveLineSegment);
-            let segment = this._state.activeItem as ActiveLineSegment;
+            assert(this._state && this._state.activeItem instanceof ActiveLineBase);
+            const segment1 = this._state.activeItem as ActiveLineBase;
             let common_point: ActivePointBase | undefined;
-            for (const point of other_segment.points)
+            for (const start_point of segment1.points)
             {
-                if (segment.belongs(point))
+                for (const end_point of segment2.points)
                 {
-                    common_point = point;
+                    if (start_point == end_point)
+                    {
+                        common_point = start_point;
+                        break;
+                    }
+                }
+                if (common_point)
+                {
                     break;
                 }
             }
+
             if (common_point)
             {
-                if (segment == other_segment)
+                let p1: ActivePointBase | undefined;
+                let p2: ActivePointBase | undefined;
+                for (const p of segment1.getNearestPoints(this._state.pitchPoint!))
+                {
+                    if (p != common_point)
+                    {
+                        if (!p1 || ActiveLineBase.getLength(common_point, p1) > ActiveLineBase.getLength(common_point, p))
+                        {
+                            p1 = p;
+                        }                        
+                    }
+                }
+                if (!p1)
+                {
+                    assert(this._state.pitchPoint);
+                    const new_point = this.addPoint(this._state.pitchPoint);
+                    assert(new_point);
+                    p1 = new_point;
+                }
+
+                for (const p of segment2.getNearestPoints(sel_point2))
+                {
+                    if (p != common_point)
+                    {
+                        if (!p2 || ActiveLineBase.getLength(common_point, p2) > ActiveLineBase.getLength(common_point, p))
+                        {
+                            p2 = p;
+                        }
+                    }
+                }
+                if (!p2)
+                {
+                    const new_point = this.addPoint(sel_point2);
+                    assert(new_point);
+                    p2 = new_point;
+                }
+
+                for (const angle of this.getAngleIndicators(common_point))
+                {
+                    if (angle.isRelated(p1) && angle.isRelated(p2))
+                    {
+                        if (angle.enabled)
+                        {
+                            throw Error(Resources.string("Угол {0} уже обозначен.", AngleIndicator.getAngleName(common_point, p1, p2)));
+                        }
+                        else
+                        {
+                            angle.enabled = true;
+                            return angle;
+                        }
+                    }
+                }
+
+                if (common_point == p1 || common_point == p2 || p1 == p2)
                 {
                     throw Error(Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
                 }
                 else
                 {
-                    for (let i = 0; i < this._data.angles.length; i++)
-                    {
-                        const angle = this._data.angles.item(i);
-                        if ((angle.segment1 == segment && angle.segment2 == other_segment) ||
-                            (angle.segment1 == other_segment && angle.segment2 == segment))
-                        {
-                            if (!angle.enabled)
-                            {
-                                angle.enabled = true;
-                                return angle;
-                            }
-                            else
-                            {
-                                throw Error(Resources.string("Угол между прямыми {0} и {1} уже обозначен.", segment.name, other_segment.name));
-                            }
-                        }
-                    }
-                    if (common_point instanceof ActiveCommonPoint)
-                    {
-                        assert(this._state.pitchPoint);
-                        let intersect = PointLineSegment.intersected(
-                            this._state.pitchPoint,
-                            segment.start,
-                            common_point,
-                            Thickness.Mouse
-                        );
-                        if (intersect)
-                        {
-                            segment = this.getLineSegment(segment.start, common_point) ??
-                                this._addLineSegment(segment.start, common_point);
-                        }
-                        else
-                        {
-                            intersect = PointLineSegment.intersected(
-                                this._state.pitchPoint,
-                                common_point,
-                                segment.end,
-                                Thickness.Mouse
-                            );
-                            if (intersect)
-                            {
-                                segment = this.getLineSegment(common_point, segment.end) ??
-                                    this._addLineSegment(common_point, segment.end);
-                            }
-                            else
-                            {
-                                throw Error(Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
-                            }
-                        }
-
-                        intersect = PointLineSegment.intersected(
-                            select_point,
-                            other_segment.start,
-                            common_point,
-                            Thickness.Mouse
-                        );
-                        if (intersect)
-                        {
-                            other_segment = this.getLineSegment(other_segment.start, common_point) ??
-                                this._addLineSegment(other_segment.start, common_point);
-                        }
-                        else
-                        {
-                            intersect = PointLineSegment.intersected(
-                                select_point,
-                                common_point,
-                                other_segment.end,
-                                Thickness.Mouse
-                            );
-                            if (intersect)
-                            {
-                                other_segment = this.getLineSegment(common_point, other_segment.end) ??
-                                    this._addLineSegment(common_point, other_segment.end);
-                            }
-                            else
-                            {
-                                throw Error(Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
-                            }
-                        }
-                    }
-                    return this._addAngleIndicator(segment, other_segment);
+                    return this._addAngleIndicator(common_point, p1, p2);
                 }
             }
             else
             {
-                throw Error(Resources.string("Отрезки {0} и {1} не содержат общих точек", segment.name, other_segment.name));
+                throw Error(Resources.string("Угол может быть обозначен только между различными прямыми, имеющими одну общую точку."));
             }
         }
-        protected execBisectorState(other_segment: ActiveLineSegment, select_point: IPoint): void
+        protected execBisectorState(other_line: ActiveLineBase, select_point: IPoint): void
         {
-            assert(this._state && this._state.activeItem instanceof ActiveLineSegment);
-            const segment = this._state.activeItem as ActiveLineSegment;
+            assert(this._state?.activeItem);
+            const one_line = this._state.activeItem as ActiveLineBase;
             for (let i = 0; i < this._data.angles.length; i++)
             {
                 const angle = this._data.angles.item(i);
-                if (angle.isRelated(segment) && angle.isRelated(other_segment))
+                if (angle.isRelated(one_line) && angle.isRelated(other_line))
                 {
-                    if (angle.hasBisector)
+                    if (angle.bisector)
                     {
                         throw Error(Resources.string("Биссектриса угла {0} уже проведена.", angle.name));
                     }
@@ -1452,7 +1531,7 @@ module Geoma.Tools
                     return;
                 }
             }
-            const angle = this.execAngleIndicatorState(other_segment, select_point);
+            const angle = this.execAngleIndicatorState(other_line, select_point);
             angle.addBisector();
             angle.enabled = false;
         }
@@ -1460,7 +1539,7 @@ module Geoma.Tools
         {
             assert(this._state && this._state.activeItem instanceof ActiveLineBase);
             assert(other_line.startPoint instanceof ActivePointBase && other_line.endPoint instanceof ActivePointBase);
-            if (this._state.activeItem.belongs(other_line.startPoint) || this._state.activeItem.belongs(other_line.endPoint))
+            if (this._state.activeItem.isRelated(other_line.startPoint) || this._state.activeItem.isRelated(other_line.endPoint))
             {
                 this.alert(Resources.string("Отрезки {0} и {1} имеют общую точку и не могут стать ||.", this._state.activeItem.name, other_line.name));
             }
@@ -1473,7 +1552,7 @@ module Geoma.Tools
         {
             assert(this._state && this._state.activeItem instanceof ActiveLineSegment);
             const segment = this._state.activeItem as ActiveLineSegment;
-            if (!segment.belongs(other_segment.start) && !segment.belongs(other_segment.end))
+            if (!segment.isRelated(other_segment.start) && !segment.isRelated(other_segment.end))
             {
                 this.alert(Resources.string("Отрезки {0} и {1} не имеют общей точки и не могут стать ⟂.", segment.name, other_segment.name));
             }
@@ -1545,7 +1624,7 @@ module Geoma.Tools
                 for (let i = 0; i < this._data.lines.length; i++)
                 {
                     const line = this._data.lines.item(i);
-                    if (line instanceof ActiveLine && line.belongs(start_point) && line.belongs(end_point))
+                    if (line instanceof ActiveLine && line.isRelated(start_point) && line.isRelated(end_point))
                     {
                         throw Error(Resources.string("Линия {0} уже проведена!", line.name));
                     }
@@ -1560,7 +1639,6 @@ module Geoma.Tools
             const groups = new Array<ActiveCommonPoint>();
             for (let i = start_index; i < end_index; i++)
             {
-                const current_index = i;
                 const p = this._data.points.item(i) as ActiveCommonPoint;
                 if (group_no == -1)
                 {
@@ -1573,38 +1651,41 @@ module Geoma.Tools
             {
                 //must be a constant, because it's must closure unique references to each point
                 const point = this._data.points.item(i);
-                point.addVisible((value: boolean) =>
+                if (point instanceof ActiveCommonPoint)
                 {
-                    for (const sibling_point of groups)
+                    point.addGroupVisibility((value: boolean) =>
                     {
-                        if (point == sibling_point)
+                        for (const sibling_point of groups)
                         {
-                            break;
+                            if (point == sibling_point)
+                            {
+                                break;
+                            }
+                            else if (!sibling_point.disposed &&
+                                sibling_point.visible &&
+                                point.mouseHit(sibling_point)
+                            )
+                            {
+                                return false;
+                            }
                         }
-                        else if (!sibling_point.disposed &&
-                            sibling_point.visible &&
-                            point.mouseHit(sibling_point)
-                        )
-                        {
-                            return false;
-                        }
-                    }
-                    return value;
-                });
+                        return value;
+                    });
+                }
             }
         }
         protected canRemovePoint(point: ActivePoint): boolean
         {
             for (let i = 0; i < this._data.lines.length; i++)
             {
-                if (this._data.lines.item(i).belongs(point))
+                if (this._data.lines.item(i).isRelated(point))
                 {
                     return false;
                 }
             }
             for (let i = 0; i < this._data.circles.length; i++)
             {
-                if (this._data.circles.item(i).belongs(point))
+                if (this._data.circles.item(i).isRelated(point))
                 {
                     return false;
                 }
@@ -1661,9 +1742,9 @@ module Geoma.Tools
             this._data.lines.push(segment);
             return segment;
         }
-        private _addAngleIndicator(line1: ActiveLineSegment, line2: ActiveLineSegment): AngleIndicator
+        private _addAngleIndicator(p0: ActivePointBase, p1: ActivePointBase, p2: ActivePointBase): AngleIndicator
         {
-            const indicator = new AngleIndicator(this, line1, line2);
+            const indicator = new AngleIndicator(this, p0, p1, p2);
             this._data.angles.push(indicator);
             return indicator;
         }

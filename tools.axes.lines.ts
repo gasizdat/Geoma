@@ -20,12 +20,8 @@ module Geoma.Tools
     import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export class AxesLines extends DocumentSprite<Sprite.Sprite>
     {
@@ -43,7 +39,7 @@ module Geoma.Tools
         {
             class stub extends Sprite.Sprite
             {
-                protected innerDraw(play_ground: PlayGround): void
+                protected innerDraw(__play_ground: PlayGround): void
                 {
                     throw new Error("Method not implemented.");
                 }
@@ -161,7 +157,7 @@ module Geoma.Tools
         {
             return this._moved.get(receiptor);
         }
-        public serialize(context: SerializationContext): Array<string>
+        public serialize(__context: SerializationContext): Array<string>
         {
             const data: Array<string> = [];
             data.push(`${this.axesId}`);
@@ -246,7 +242,7 @@ module Geoma.Tools
             }
             return { value: toInt(ret) * k, mantiss: mantiss };
         }
-        protected beforeDraw(event: BeforeDrawEvent): void
+        protected beforeDraw(__event: BeforeDrawEvent): void
         {
             if (this._lastX != this.x ||
                 this._lastY != this.y ||

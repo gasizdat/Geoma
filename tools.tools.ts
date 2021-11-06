@@ -13,15 +13,11 @@ module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
     import makeProp = Utils.makeProp;
-    import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
     import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     abstract class ToolBase extends ActivePointBase
     {
@@ -46,6 +42,10 @@ module Geoma.Tools
         public mouseHit(point: IPoint): boolean
         {
             return super.mouseHit(Point.sub(point, this.document.mouseArea.offset));
+        }
+        public moved(_receiptor: string): boolean
+        {
+            return false;
         }
 
         protected enabled: boolean = true;
@@ -287,6 +287,7 @@ module Geoma.Tools
         version: number;
         themeName?: string;
         languageId?: UiLanguage;
+        showProperties?: boolean;
     }
 
     export class SettingsTool extends ToolBase
@@ -310,6 +311,10 @@ module Geoma.Tools
                         break;
                 }
                 Resources.language = settings.languageId ?? UiLanguage.enUs;
+                if (settings.showProperties)
+                {
+                    this.document.onOffProperties();
+                }
             }
             const icon_line_width = 2;
             const gear_point = Point.make(x - radius + icon_line_width + line_width / 2, y - radius + icon_line_width + line_width / 2);
@@ -350,10 +355,10 @@ module Geoma.Tools
                 const language_group = menu.addMenuGroup("Язык (Language)");
 
                 let menu_item = language_group.addMenuItem("Русский");
-                menu_item.onChecked.bind(this, () => Resources.language = UiLanguage.ruRu);
+                menu_item.onChecked.bind(this, () => this.setLanguage(UiLanguage.ruRu));
 
                 menu_item = language_group.addMenuItem("English (US)");
-                menu_item.onChecked.bind(this, () => Resources.language = UiLanguage.enUs);
+                menu_item.onChecked.bind(this, () => this.setLanguage(UiLanguage.enUs));
 
                 const theme_group = menu.addMenuGroup(Resources.string("Тема"));
 
@@ -362,6 +367,9 @@ module Geoma.Tools
 
                 menu_item = theme_group.addMenuItem(Resources.string("Тёмная"));
                 menu_item.onChecked.bind(this, () => this.setTheme(DefaultTheme));
+
+                menu_item = menu.addMenuItem(Resources.string("Свойства"));
+                menu_item.onChecked.bind(this, () => this.onOffProperties());
 
                 menu.show();
             }
@@ -381,6 +389,13 @@ module Geoma.Tools
             Resources.language = language;
             const settings = this.settings;
             settings.languageId = language;
+            this.settings = settings;
+        }
+
+        protected onOffProperties(): void
+        {
+            const settings = this.settings;
+            settings.showProperties = this.document.onOffProperties();
             this.settings = settings;
         }
 
@@ -442,7 +457,7 @@ module Geoma.Tools
         {
             class stub extends Sprite.Sprite
             {
-                protected innerDraw(play_ground: PlayGround): void
+                protected innerDraw(__play_ground: PlayGround): void
                 {
                     throw new Error("Method not implemented.");
                 }
@@ -515,7 +530,7 @@ module Geoma.Tools
                 this.selected = true;
             }
         }
-        protected mouseUp(event: MouseEvent): void
+        protected mouseUp(__event: MouseEvent): void
         {
             this.visible = false;
             this.selected = false;
@@ -549,7 +564,6 @@ module Geoma.Tools
         private _radius: property<number>;
         private _brush: property<Sprite.Brush>;
         private _startTicks?: number;
-        private static readonly _transparent: string = "rgba(0,0,0,0)";
     }
 
     export class MoveTool extends DocumentSprite<Container<Sprite.Sprite>>

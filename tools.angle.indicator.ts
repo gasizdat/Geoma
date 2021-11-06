@@ -21,14 +21,8 @@ module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
     import toInt = Utils.toInt;
-    import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
-    import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export enum AngleDirection
     {
@@ -38,134 +32,80 @@ module Geoma.Tools
 
     export class AngleIndicator extends DocumentSprite<Sprite.Container> implements ICircle
     {
-        constructor(document: Document, s1: ActiveLineSegment, s2: ActiveLineSegment)
+        constructor(document: Document, p0: ActivePointBase, p1: ActivePointBase, p2: ActivePointBase)
         {
+            assert(p0 != p1 && p0 != p2 && p1 != p2);
             super(document, new Sprite.Container());
-            this.segment1 = s1;
-            this.segment2 = s2;
             this.enabled = true;
+            this.commonPivot = p0;
+            this._p1 = p1;
+            this._p2 = p2;
+            this.addVisible(makeMod(this, (value: boolean) => value && this.commonPivot.visible && this._p1.visible && this._p2.visible));
 
-            if (s1.start == s2.start)
-            {
-                this.commonPivot = s1.start;
-                this._p1 = s1.end;
-                this._p2 = s2.end;
-            }
-            else if (s1.start == s2.end)
-            {
-                this.commonPivot = s1.start;
-                this._p1 = s1.end;
-                this._p2 = s2.start;
-            }
-            else if (s1.end == s2.start)
-            {
-                this.commonPivot = s1.end;
-                this._p1 = s1.start;
-                this._p2 = s2.end;
-            }
-            else
-            {
-                this.commonPivot = s1.end;
-                this._p1 = s1.start;
-                this._p2 = s2.start;
-            }
-            assert(this.commonPivot != this._p1 && this.commonPivot != this._p2 && this._p1 != this._p2);
-            assert(s2.belongs(this.commonPivot));
+            this._selectionRadius = Utils.makeProp<number>(makeMod(this, () => 30 + 15 * this.document.getEngleIndicatorOrder(this)), 30);
 
-            this.addVisible(makeMod(this, (value: boolean) => value && this.commonPivot.visible));
-
-            const indicators = this.document.getAngleIndicators(this.commonPivot).length;
-            this._selectionRadius = 30 + 15 * indicators;
-
-            this._angle = new Utils.ModifiableProperty<number>(makeMod(
-                this,
+            this._angle = new Utils.ModifiableProperty<number>(
+                makeMod(this,
                 () => ActiveLineSegment.getAngle(this.commonPivot.x, this.commonPivot.y, this._p1.x, this._p1.y, this._p2.x, this._p2.y)
             ), 0);
-            this._startAngle = new Utils.ModifiableProperty<number>(makeMod(
-                this,
+            this._startAngle = new Utils.ModifiableProperty<number>(
+                makeMod(this,
                 () => ActiveLineSegment.getAngle(this.commonPivot.x, this.commonPivot.y, this._p1.x, this._p1.y)
             ), 0);
-            this._endAngle = new Utils.ModifiableProperty<number>(makeMod(
-                this,
+            this._endAngle = new Utils.ModifiableProperty<number>(
+                makeMod(this,
                 () => ActiveLineSegment.getAngle(this.commonPivot.x, this.commonPivot.y, this._p2.x, this._p2.y)
             ), 0);
-            this._textAngle = new Utils.ModifiableProperty<number>(makeMod(
-                this,
+            this._textAngle = new Utils.ModifiableProperty<number>(
+                makeMod(this,
                 () =>
                 {
-                    const anticlockwise = this._angleDirection.value;
-                    if (anticlockwise)
+                    switch(this.angleDirection)
                     {
-                        return this._startAngle.value - this.angle / 2;
-                    }
-                    else
-                    {
-                        return this._startAngle.value + this.angle / 2;
+                        case AngleDirection.clockwise:
+                            return this.startAngle + this.angle / 2;
+                        default:
+                            return this.startAngle - this.angle / 2;
                     }
                 }
             ), 0);
-            this._angleDirection = new Utils.ModifiableProperty<AngleDirection>(makeMod(this,
-                () => AngleIndicator.angleDifDirection(this._startAngle.value, this._endAngle.value)
+            this._angleDirection = new Utils.ModifiableProperty<AngleDirection>(
+                makeMod(this, () => AngleIndicator.angleDifDirection(this.startAngle, this.endAngle)
             ), AngleDirection.clockwise);
-            this._bisectorAngle = new Utils.ModifiableProperty<number>(makeMod(
-                this,
-                () => (this._startAngle.value + this._endAngle.value) / 2
-            ), 0);
             const text = new Sprite.Text(
-                makeMod(this, () => Math.cos(this._textAngle.value) * this._selectionRadius + this.commonPivot.x),
-                makeMod(this, () => Math.sin(this._textAngle.value) * this._selectionRadius + this.commonPivot.y),
+                makeMod(this, () => Math.cos(this.textAngle) * this.radius + this.commonPivot.x),
+                makeMod(this, () => Math.sin(this.textAngle) * this.radius + this.commonPivot.y),
                 undefined,
                 undefined,
                 makeMod(this, () => this.selected ? CurrentTheme.AngleNameSelectBrush : CurrentTheme.AngleNameBrush),
                 () => CurrentTheme.AngleNameStyle,
-                makeMod(this, () => this._angleName ? this._angleName : `${Utils.toDeg(this.angle).toFixed(CurrentTheme.AngleIndicatorPrecision)}°`)
+                makeMod(this, () => this._angleName ? this._angleName : `${Utils.toFixed(Utils.toDeg(this.angle), CurrentTheme.AngleIndicatorPrecision)}°`)
             );
             text.strokeBrush.addModifier(() => CurrentTheme.AngleIndicatorStrokeBrush);
             text.strokeWidth.addModifier(() => CurrentTheme.AngleIndicatorStrokeWidth);
-
-            const visible_mod = makeMod(this, () => this.selected);
-            const x_mod = makeMod(this, () => this.commonPivot.x - this._selectionRadius);
-            const y_mod = makeMod(this, () => this.commonPivot.y - this._selectionRadius);
-            const ellipse = new Polygon.Ellipse(
-                Geoma.Utils.Point.make(this._selectionRadius, this._selectionRadius),
-                this._selectionRadius,
-                this._selectionRadius,
-                0,
-                2 * Math.PI
-            );
-            const selection_back = new Sprite.Polyshape(
-                x_mod,
-                y_mod,
-                undefined,
-                () => CurrentTheme.AngleIndicatorSelectionBrush
-            );
-            selection_back.alpha = 0.1;
-            selection_back.addVisible(visible_mod);
-            selection_back.addPolygon(ellipse);
-            const selection_border = new Sprite.Polyline(
-                x_mod,
-                y_mod,
-                1,
-                () => CurrentTheme.AngleIndicatorSelectionBorderBrush
-            );
-            selection_border.addVisible(visible_mod);
-            selection_border.addPolygon(ellipse);
-
-            this.item.push(selection_back);
-            this.item.push(selection_border);
             this.item.push(text);
         }
 
-        public readonly segment1: ActiveLineSegment;
-        public readonly segment2: ActiveLineSegment;
-        public readonly commonPivot: ActivePoint;
+        public readonly commonPivot: ActivePointBase;
         public get angle(): number
         {
             return this._angle.value;
         }
-        public get bisectorAngle(): number
+        public get textAngle(): number
         {
-            return this._bisectorAngle.value;
+            return this._textAngle.value;
+        }
+        public get startAngle(): number
+        {
+            return this._startAngle.value;
+        }
+        public get endAngle(): number
+        {
+            return this._endAngle.value;
+        }
+        public get angleDirection(): AngleDirection
+        {
+            return this._angleDirection.value;
         }
         public get name(): string
         {
@@ -176,9 +116,9 @@ module Geoma.Tools
             assert(!this._angleName);
             this._angleName = name;
         }
-        public get hasBisector(): boolean
+        public get realName(): string
         {
-            return this._bisector != null;
+            return AngleIndicator.getAngleName(this.commonPivot, this._p1, this._p2);
         }
         public get center(): IPoint
         {
@@ -186,14 +126,33 @@ module Geoma.Tools
         }
         public get radius(): number
         {
-            return this._selectionRadius;
+            return this._selectionRadius.value;
+        }
+        public get moved(): boolean
+        {
+            return this.commonPivot.moved(this.realName) || this._p1.moved(this.realName) || this._p2.moved(this.realName);
+        }
+        public get bisector(): ActiveLineBase | null
+        {
+            return this._bisector ? this._bisector : null;
         }
 
         public enabled: boolean;
 
         public isRelated(sprite: Sprite.Sprite): boolean
         {
-            return this.commonPivot == sprite || this.segment1 == sprite || this.segment2 == sprite;
+            if (sprite instanceof ActivePointBase)
+            {
+                return this.commonPivot == sprite || this._p1 == sprite || this._p2 == sprite;
+            }
+            else if (sprite instanceof ActiveLineBase)
+            {
+                return sprite.isRelated(this.commonPivot) && (sprite.isRelated(this._p1) || sprite.isRelated(this._p2));
+            }
+            else
+            {
+                assert(false, "TODO");
+            }
         }
         public dispose(): void
         {
@@ -214,11 +173,19 @@ module Geoma.Tools
         public serialize(context: SerializationContext): Array<string>
         {
             const data: Array<string> = [];
-            data.push(context.lines[this.segment1.name].toString());
-            data.push(context.lines[this.segment2.name].toString());
-            if (this.hasBisector)
+            data.push(context.points[this.commonPivot.name].toString());
+            data.push(context.points[this._p1.name].toString());
+            data.push(context.points[this._p2.name].toString());
+            if (this.bisector)
             {
-                data.push(`b`);
+                data.push(`b${this.bisector.points.length - 1}`);
+                for (const p of this.bisector.points)
+                {
+                    if (p != this.commonPivot)
+                    {
+                        data.push(context.points[p.name].toString());
+                    }
+                }
             }
             if (!this.enabled)
             {
@@ -260,54 +227,68 @@ module Geoma.Tools
         }
         public static deserialize(context: DesializationContext, data: Array<string>, index: number): AngleIndicator | null
         {
-            if (data.length < (index + 1))
+            if (data.length < (index + 2))
             {
                 return null;
             }
             else
             {
-                const line1 = context.data.lines.item(toInt(data[index]));
-                const line2 = context.data.lines.item(toInt(data[index + 1]));
-                assert(line1 instanceof ActiveLineSegment);
-                assert(line2 instanceof ActiveLineSegment);
-                const angle = new AngleIndicator(context.document, line1, line2);
-                for (let i = index + 2; i < data.length; i++)
+                const p0 = context.data.points.item(toInt(data[index++]));
+                const p1 = context.data.points.item(toInt(data[index++]));
+                const p2 = context.data.points.item(toInt(data[index++]));
+                const angle = new AngleIndicator(context.document, p0, p1, p2);
+                for (; index < data.length; index++)
                 {
-                    const chunck = data[i];
-                    switch (chunck)
+                    const chunck = data[index];
+                    assert(chunck.length);
+                    const prefix = chunck.charAt(0);
+                    switch (prefix)
                     {
                         case 'b':
-                            angle._addBisector();
+                            const bisector = angle._addBisector();
+                            const common_points = toInt(chunck.substring(1));
+                            for (let i = 0; i < common_points; i++)
+                            {
+                                index++;
+                                if (index >= data.length)
+                                {
+                                    return null;
+                                }
+                                else
+                                {
+                                    const p = context.data.points.item(toInt(data[index]));
+                                    assert(p instanceof ActiveCommonPoint);
+                                    p.addGraphLine(bisector);
+                                    bisector.addPoint(p);
+                                }
+                            }
                             break;
                         case 'd':
                             angle.enabled = false;
                             break;
-                        default:
-                            if (chunck.length && chunck.charAt(0) == 'n')
+                        case 'n':
+                            const p_index = toInt(chunck.substring(1));
+                            if (p_index >= 0 && p_index < AngleIndicator._anglesNames.length)
                             {
-                                const p_index = toInt(chunck.substring(1));
-                                if (p_index >= 0 && p_index < AngleIndicator._anglesNames.length)
-                                {
-                                    angle._angleName = AngleIndicator._anglesNames.charAt(p_index);
-                                    break;
-                                }
+                                angle._angleName = AngleIndicator._anglesNames.charAt(p_index);
                             }
-                            return null;
+                            break;
+                        default:
+                            assert(false);
                     }
                 }
                 return angle;
             }
         }
-
-        protected get realName(): string
+        public static getAngleName(p0: ActivePointBase, p1: ActivePointBase, p2: ActivePointBase): string
         {
-            if (this._p1.name < this._p2.name)
+            if (p1.name < p2.name)
             {
-                return `∠${this._p1.name}${this.commonPivot.name}${this._p2.name}`;
+                return `∠${AngleIndicator._getName(p1)}${AngleIndicator._getName(p0)}${AngleIndicator._getName(p2)}`;
             }
             else
             {
-                return `∠${this._p2.name}${this.commonPivot.name}${this._p1.name}`;
+                return `∠${AngleIndicator._getName(p2)}${AngleIndicator._getName(p0)}${AngleIndicator._getName(p1)}`;
             }
         }
 
@@ -315,7 +296,7 @@ module Geoma.Tools
         {
             const dx = event.x - this.commonPivot.x;
             const dy = event.y - this.commonPivot.y;
-            return this.enabled && (dx * dx + dy * dy) <= (this._selectionRadius * this._selectionRadius);
+            return this.enabled && (dx * dx + dy * dy) <= (this.radius * this.radius);
         }
         protected innerDraw(play_ground: PlayGround): void
         {
@@ -328,66 +309,92 @@ module Geoma.Tools
             {
                 const x = this.commonPivot.x;
                 const y = this.commonPivot.y;
+                const select_brush_alpha = 0.3;
+                const selection_border = ()=>
+                {
+                    play_ground.context2d.beginPath();
+                    play_ground.context2d.strokeStyle = CurrentTheme.AngleIndicatorBrush;
+                    play_ground.context2d.lineWidth = CurrentTheme.AngleIndicatorLineWidth;
+                    play_ground.context2d.arc(
+                        x,
+                        y,
+                        this.radius,
+                        this.startAngle,
+                        this.endAngle,
+                        this.angleDirection != AngleDirection.anticlockwise
+                    );
+                    play_ground.context2d.stroke();
+                    play_ground.context2d.closePath();
+                };
 
                 play_ground.context2d.beginPath();
 
-                if (Math.abs(Math.round(Utils.toDeg(this._angle.value)) - 90) < 0.01)
+                if (Math.abs(Math.round(Utils.toDeg(this.angle)) - 90) < 0.01)
                 {
-                    const i1 = LineCircle.intersection(this.segment1, this);
-                    const i2 = LineCircle.intersection(this.segment2, this);
-                    const p1 = i1.p1 ?? i1.p2;
-                    const p2 = i2.p1 ?? i2.p2;
 
-                    if (p1 && p2)
+                    const p1 = ActiveLineBase.getPoint(this.commonPivot, this._p1, this.radius);
+                    const p2 = ActiveLineBase.getPoint(this.commonPivot, this._p2, this.radius);
+
+                    if (this.selected)
                     {
-                        if (this.selected)
-                        {
-                            play_ground.context2d.beginPath();
-                            play_ground.context2d.fillStyle = CurrentTheme.AngleIndicatorSelectionBrush;
-                            play_ground.context2d.moveTo(p1.x, p1.y);
-                            play_ground.context2d.lineTo(p1.x + p2.x - x, p1.y + p2.y - y);
-                            play_ground.context2d.lineTo(p2.x, p2.y);
-                            play_ground.context2d.lineTo(x, y);
-                            play_ground.context2d.closePath();
-                            play_ground.context2d.fill();
-                        }
-                        else
-                        {
-                            play_ground.context2d.beginPath();
-                            play_ground.context2d.strokeStyle = CurrentTheme.AngleIndicatorBrush;
-                            play_ground.context2d.lineWidth = CurrentTheme.AngleIndicatorLineWidth;
-                            play_ground.context2d.moveTo(p1.x, p1.y);
-                            play_ground.context2d.lineTo(p1.x + p2.x - x, p1.y + p2.y - y);
-                            play_ground.context2d.lineTo(p2.x, p2.y);
-                            play_ground.context2d.stroke();
-                        }
+                        const global_alpha = play_ground.context2d.globalAlpha;
+                        play_ground.context2d.globalAlpha = select_brush_alpha;
+                        play_ground.context2d.beginPath();
+                        play_ground.context2d.fillStyle = CurrentTheme.AngleIndicatorSelectionBrush;
+                        play_ground.context2d.moveTo(p1.x, p1.y);
+                        play_ground.context2d.lineTo(p1.x + p2.x - x, p1.y + p2.y - y);
+                        play_ground.context2d.lineTo(p2.x, p2.y);
+                        play_ground.context2d.lineTo(x, y);
+                        play_ground.context2d.fill();
+
+                        selection_border.apply(this);
+                           
+                        play_ground.context2d.globalAlpha = global_alpha;
+                        play_ground.context2d.closePath();
                     }
-                }
-                else if (this.selected)
-                {
-                    play_ground.context2d.fillStyle = CurrentTheme.AngleIndicatorSelectionBrush;
-                    play_ground.context2d.arc(
-                        this.commonPivot.x,
-                        this.commonPivot.y,
-                        this._selectionRadius,
-                        this._startAngle.value,
-                        this._endAngle.value,
-                        this._angleDirection.value == AngleDirection.anticlockwise
-                    );
-                    play_ground.context2d.lineTo(this.commonPivot.x, this.commonPivot.y);
-                    play_ground.context2d.fill();
+
+                    play_ground.context2d.beginPath();
+                    play_ground.context2d.strokeStyle = CurrentTheme.AngleIndicatorBrush;
+                    play_ground.context2d.lineWidth = CurrentTheme.AngleIndicatorLineWidth;
+                    play_ground.context2d.moveTo(p1.x, p1.y);
+                    play_ground.context2d.lineTo(p1.x + p2.x - x, p1.y + p2.y - y);
+                    play_ground.context2d.lineTo(p2.x, p2.y);
+                    play_ground.context2d.stroke();
                 }
                 else
                 {
+                    if (this.selected)
+                    {
+                        const global_alpha = play_ground.context2d.globalAlpha;
+                        play_ground.context2d.globalAlpha = select_brush_alpha;
+                        play_ground.context2d.fillStyle = CurrentTheme.AngleIndicatorSelectionBrush;
+                        play_ground.context2d.arc(
+                            this.commonPivot.x,
+                            this.commonPivot.y,
+                            this.radius,
+                            this.startAngle,
+                            this.endAngle,
+                            this.angleDirection == AngleDirection.anticlockwise
+                        );
+                        play_ground.context2d.lineTo(this.commonPivot.x, this.commonPivot.y);
+                        play_ground.context2d.fill();
+                        play_ground.context2d.closePath();
+
+                        selection_border.apply(this);
+
+                        play_ground.context2d.globalAlpha = global_alpha;
+                        play_ground.context2d.beginPath();
+                    }
+
                     play_ground.context2d.strokeStyle = CurrentTheme.AngleIndicatorBrush;
                     play_ground.context2d.lineWidth = CurrentTheme.AngleIndicatorLineWidth;
                     play_ground.context2d.arc(
                         this.commonPivot.x,
                         this.commonPivot.y,
-                        this._selectionRadius,
-                        this._startAngle.value,
-                        this._endAngle.value,
-                        this._angleDirection.value == AngleDirection.anticlockwise
+                        this.radius,
+                        this.startAngle,
+                        this.endAngle,
+                        this.angleDirection == AngleDirection.anticlockwise
                     );
                     play_ground.context2d.stroke();
                 }
@@ -400,10 +407,9 @@ module Geoma.Tools
             let can_select = this.canSelect(event);
             if (can_select)
             {
-                const min_sel_radius = this._selectionRadius;
                 for (const indicator of this.document.getAngleIndicators(this.commonPivot))
                 {
-                    if (indicator != this && indicator.canSelect(event) && indicator._selectionRadius < min_sel_radius)
+                    if (indicator != this && indicator.canSelect(event) && indicator.radius < this.radius)
                     {
                         can_select = false;
                         break;
@@ -462,10 +468,11 @@ module Geoma.Tools
             super.mouseClick(event);
         }
 
-        private _addBisector(): void
+        private _addBisector(): BisectorLine
         {
             assert(!this._bisector);
             this._bisector = new BisectorLine(this);
+            return this._bisector;
         }
         private _removeBisector(bisector: BisectorLine): void
         {
@@ -477,18 +484,35 @@ module Geoma.Tools
                 this.document.removeAngle(this);
             }
         }
+        private static _getName(point: ActivePointBase): string
+        {
+            //TODO point in group may hidden by other point(s)
+            /*if (point instanceof ActiveCommonPoint)
+            {
+                if (point.hidden)
+                {
+                    for (const other_point of point.document.getGroup(point))
+                    {
+                        if (!(other_point as ActiveCommonPoint).hidden && other_point.mouseHit(point))
+                        {
+                            return other_point.name;
+                        }
+                    }
+                }
+            }*/
+            return point.name;
+        }
 
         private _angleName?: string;
-        private _angle: property<number>;
-        private _startAngle: property<number>;
-        private _endAngle: property<number>;
-        private _textAngle: property<number>;
-        private _angleDirection: property<AngleDirection>;
-        private _bisectorAngle: property<number>;
-        private _p1: ActivePoint;
-        private _p2: ActivePoint;
         private _bisector?: BisectorLine;
-        private readonly _selectionRadius: number;
+        private readonly _angle: property<number>;
+        private readonly _startAngle: property<number>;
+        private readonly _endAngle: property<number>;
+        private readonly _textAngle: property<number>;
+        private readonly _angleDirection: property<AngleDirection>;
+        private readonly _p1: ActivePointBase;
+        private readonly _p2: ActivePointBase;
+        private readonly _selectionRadius: property<number>;
         private static readonly _anglesNames: string = "αβγδεζηθικλμνξορστυyφχψω";
     }
 }

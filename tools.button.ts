@@ -11,16 +11,9 @@ module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
     import makeProp = Utils.makeProp;
-    import toInt = Utils.toInt;
-    import Point = Utils.Point;
-    import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import Brush = Sprite.Brush;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export abstract class Button extends DocumentSprite<Sprite.Container>
     {
@@ -111,7 +104,7 @@ module Geoma.Tools
             this._mouseDown = this.mouseHit(event);
             event.cancelBubble = this._mouseDown;
         }
-        protected mouseUp(event: MouseEvent): void
+        protected mouseUp(__event: MouseEvent): void
         {
             this._mouseDown = false;
         }

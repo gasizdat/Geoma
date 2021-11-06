@@ -19,8 +19,7 @@ module Geoma
             const mouse_pointed_device = ("onmousemove" in window);
             const touch_screen_device =
                 ("ontouchstart" in window) ||
-                (navigator.maxTouchPoints > 0) ||
-                (navigator.msMaxTouchPoints > 0);
+                (navigator.maxTouchPoints > 0);
 
             if (touch_screen_device)
             {
@@ -28,7 +27,6 @@ module Geoma
                 console.log("The touchsreen device.");
                 this._canvas.ontouchmove = ((touch_event: TouchEvent) =>
                 {
-                    const document = this._canvas.ownerDocument;
                     for (let i = 0; i < touch_event.targetTouches.length; i++)
                     {
                         const touch = touch_event.targetTouches[i];
@@ -39,7 +37,6 @@ module Geoma
                 }).bind(this);
                 this._canvas.ontouchstart = ((touch_event: TouchEvent) =>
                 {
-                    const document = this._canvas.ownerDocument;
                     for (let i = 0; i < touch_event.targetTouches.length; i++)
                     {
                         const touch = touch_event.targetTouches[i];
@@ -59,7 +56,6 @@ module Geoma
                 }).bind(this);
                 this._canvas.ontouchend = ((touch_event: TouchEvent) =>
                 {
-                    const document = this._canvas.ownerDocument;
                     for (let i = 0; i < touch_event.changedTouches.length; i++)
                     {
                         const touch = touch_event.changedTouches[i];

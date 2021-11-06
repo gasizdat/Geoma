@@ -15,15 +15,8 @@
 module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
-    import toInt = Utils.toInt;
     import Point = Utils.Point;
-    import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
-    import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export class ActivePoint extends ActivePointBase
     {
@@ -74,14 +67,14 @@ module Geoma.Tools
             data.push(this.name);
             return data;
         }
-        public setName(value: string, brush: binding<Sprite.Brush> = () => CurrentTheme.AdornerNameBrush, style: binding<CanvasTextDrawingStyles> = () => CurrentTheme.AdornerNameStyle): void
+        public setName(value: string, brush: binding<Sprite.Brush> = () => CurrentTheme.AdornerNameBrush, style: binding<CanvasTextDrawingStyles> = () => CurrentTheme.AdornerNameStyle): Sprite.Text
         {
-            super.setName(value, brush, style);
-            const text = this.item.last as Sprite.Text;
+            const text = super.setName(value, brush, style);
             text.strokeBrush.value = CurrentTheme.AdornerStrokeBrush;
             text.strokeWidth.value = CurrentTheme.AdornerStrokeWidth;
             text.addX(makeMod(this, this.dxModifier));
             text.addY(makeMod(this, this.dyModifier));
+            return text;
         }
         public static deserialize(context: DesializationContext, data: Array<string>, index: number): ActivePoint | null
         {
@@ -138,6 +131,7 @@ module Geoma.Tools
         }
         protected mouseMove(event: MouseEvent): void
         {
+            const selected = this.selected;
             if (this._dragStart)
             {
                 if (event.buttons != 0)
@@ -160,6 +154,19 @@ module Geoma.Tools
                 }
             }
             super.mouseMove(event);
+
+            if (!selected && this.selected)
+            {
+                this.setInfo(makeMod(this,
+                    () => `x: ${Utils.toFixed(this.x, CurrentTheme.CoordinatesPrecision)}, y: ${Utils.toFixed(this.y, CurrentTheme.CoordinatesPrecision)}`),
+                    CurrentTheme.PropertyTextBrush,
+                    CurrentTheme.PropertyTextStyle
+                );
+            }
+            else if (selected && !this.selected)
+            {
+                this.resetInfo();
+            }
         }
         protected mouseDown(event: MouseEvent): void
         {
@@ -168,7 +175,7 @@ module Geoma.Tools
                 this._dragStart = event;
             }
         }
-        protected mouseUp(event: MouseEvent): void
+        protected mouseUp(__event: MouseEvent): void
         {
             if (this._dragStart)
             {

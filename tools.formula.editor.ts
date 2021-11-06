@@ -12,16 +12,9 @@
 module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
-    import makeProp = Utils.makeProp;
-    import toInt = Utils.toInt;
-    import Point = Utils.Point;
     import assert = Utils.assert;
     import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
-    import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     abstract class MenuButton extends Button
     {

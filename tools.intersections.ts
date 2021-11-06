@@ -16,15 +16,9 @@ module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
     import makeProp = Utils.makeProp;
-    import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
-    import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export type GraphLine = ActiveLineBase | ActiveCircleLine | ParametricLine;
 
@@ -70,24 +64,33 @@ module Geoma.Tools
                     return PointParametric.intersection(point, line1);
                 }
             }
-            else if (line1 instanceof ActiveLineBase)
+            else
             {
-                if (line2 instanceof ActiveLineBase)
+                const make_helper = (point: IPoint, line1: GraphLine, line2: GraphLine): IPoint | null =>
                 {
-                    return LineLine.intersection(line1, line2);
+                    if (line1 instanceof ActiveLineBase)
+                    {
+                        if (line2 instanceof ActiveLineBase)
+                        {
+                            return LineLine.intersection(line1, line2);
+                        }
+                        else if (line2 instanceof ActiveCircleLine)
+                        {
+                            const intersection = LineCircle.intersection(line1, line2);
+                            return LineCircle.preferredIntersection(LineCircle.getPreference(point, intersection), intersection);
+                        }
+                    }
+                    return null;
+                };
+
+                let ret = make_helper(point, line1, line2);
+                if (!ret && line2)
+                {
+                    ret = make_helper(point, line2, line1);
                 }
-                else if (line2 instanceof ActiveCircleLine)
+                if (ret)
                 {
-                    const intersection = LineCircle.intersection(line1, line2);
-                    return LineCircle.preferredIntersection(LineCircle.getPreference(point, intersection), intersection);
-                }
-            }
-            else if (line1 instanceof ActiveCircleLine)
-            {
-                if (line2 instanceof ActiveLineBase)
-                {
-                    const intersection = LineCircle.intersection(line2, line1);
-                    return LineCircle.preferredIntersection(LineCircle.getPreference(point, intersection), intersection);
+                    return ret;
                 }
             }
             assert(false, "Not supported");
@@ -113,25 +116,34 @@ module Geoma.Tools
                     return new PointLine(point, line1);
                 }
             }
-            else if (line1 instanceof ActiveLineBase)
+            else
             {
-                if (line2 instanceof ActiveLineBase)
+                const make_helper = (point: ActivePointBase, line1: GraphLine, line2: GraphLine): Intersection | null =>
                 {
-                    return new LineLine(point, line1, line2);
-                }
-                else if (line2 instanceof ActiveCircleLine)
-                {
-                    return new LineCircle(point, line1, line2);
-                }
-            }
-            else if (line1 instanceof ActiveCircleLine)
-            {
-                if (line2 instanceof ActiveLineSegment)
-                {
-                    return new LineCircle(point, line2, line1);
-                }
-            }
+                    if (line1 instanceof ActiveLineBase)
+                    {
+                        if (line2 instanceof ActiveLineBase)
+                        {
+                            return new LineLine(point, line1, line2);
+                        }
+                        else if (line2 instanceof ActiveCircleLine)
+                        {
+                            return new LineCircle(point, line1, line2);
+                        }
+                    }
+                    return null;
+                };
 
+                let ret = make_helper(point, line1, line2);
+                if (!ret && line2)
+                {
+                    ret = make_helper(point, line2, line1);
+                }
+                if (ret)
+                {
+                    return ret;
+                }
+            }
             assert(false, "Not supported");
         }
 
@@ -139,7 +151,7 @@ module Geoma.Tools
         {
             this._disposed = true;
         }
-        public move(dx: number, dy: number): void
+        public move(__dx: number, __dy: number): void
         {
             assert(false, "Not supported");
         }
@@ -437,7 +449,7 @@ module Geoma.Tools
 
     export class LineLine extends Intersection
     {
-        constructor(point: IPoint, line1: ActiveLineBase, line2: ActiveLineBase)
+        constructor(__point: IPoint, line1: ActiveLineBase, line2: ActiveLineBase)
         {
             super(LineLine.intersection(line1, line2));
             this._intersection = makeProp((): IPoint =>
@@ -720,7 +732,7 @@ module Geoma.Tools
             this._intersection.reset();
             super.dispose();
         }
-        public move(dx: number, dy: number): void
+        public move(dx: number, __dy: number): void
         {
             const x = this._line.axes.toScreenX(this._startX) - dx;
             this._startX = this._line.axes.fromScreenX(x);

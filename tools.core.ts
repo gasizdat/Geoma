@@ -7,17 +7,8 @@
 
 module Geoma.Tools
 {
-    import makeMod = Utils.makeMod;
-    import makeProp = Utils.makeProp;
-    import toInt = Utils.toInt;
-    import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
-    import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export abstract class DocumentSprite<TSprite extends Sprite.Sprite> extends Sprite.ProxySprite<TSprite>
     {
@@ -67,10 +58,10 @@ module Geoma.Tools
             }
         }
 
-        protected mouseClick(event: MouseEvent): void
+        protected mouseClick(__event: MouseEvent): void
         {
         }
-        protected mouseMove(event: MouseEvent): void
+        protected mouseMove(__event: MouseEvent): void
         {
         }
         protected innerDraw(play_ground: PlayGround): void

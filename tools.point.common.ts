@@ -16,18 +16,9 @@
 module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
-    import makeProp = Utils.makeProp;
     import toInt = Utils.toInt;
-    import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
-    import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
-    import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
-    type ActiveLine = ActiveLineBase | ActiveCircleLine;
     export class ActiveCommonPoint extends ActivePoint
     {
         constructor(document: Document, x: number, y: number, group_no: number, radius: number = 5, line_width: number = 2)
@@ -36,6 +27,10 @@ module Geoma.Tools
             this.groupNo = group_no;
         }
 
+        public get hidden(): boolean
+        {
+            return this._groupVisibility?.value === false;
+        }
         public readonly groupNo: number;
 
         public dispose(): void
@@ -43,22 +38,17 @@ module Geoma.Tools
             if (!this.disposed)
             {
                 super.dispose();
+                delete this._groupVisibility;
                 if (this._intersection)
                 {
                     this._intersection.dispose();
                     delete this._intersection;
                 }
-                for (let i = 0; i < this.document.points.length; i++)
+                for (const point of this.document.getGroup(this))
                 {
-                    const point = this.document.points.item(i);
-                    if (!point.disposed &&
-                        point instanceof ActiveCommonPoint &&
-                        (point as ActiveCommonPoint).groupNo == this.groupNo &&
-                        point.mouseHit(this)
-                    )
+                    if (!point.disposed && point.mouseHit(this))
                     {
-                        this.document.removePoint(point);
-                        break;
+                        this.document.removePoint(point as ActivePoint);
                     }
                 }
 
@@ -149,6 +139,14 @@ module Geoma.Tools
                 this._intersection!.move(dx, dy);
             }
         }
+        public addGroupVisibility(visibility_modifier: Utils.modifier<boolean>): void
+        {
+            if (!this._groupVisibility)
+            {
+                this._groupVisibility = new Utils.ModifiableProperty<boolean>(true);
+            }
+            this._groupVisibility.addModifier(visibility_modifier);
+        }
         public static deserialize(context: DesializationContext, data: Array<string>, index: number): ActiveCommonPoint | null
         {
             if (data.length > (index + 2))
@@ -197,9 +195,17 @@ module Geoma.Tools
                 return super.dyModifier(value);
             }
         }
+        protected innerDraw(play_ground: PlayGround): void
+        {
+            if (!this.hidden)
+            {
+                super.innerDraw(play_ground);
+            }
+        }
 
         private _line1?: GraphLine;
         private _line2?: GraphLine;
         private _intersection?: Intersection;
+        private _groupVisibility?: Utils.ModifiableProperty<boolean>;
     }
 }

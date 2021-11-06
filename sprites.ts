@@ -9,7 +9,6 @@ module Geoma.Sprite
     import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
     import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
     import Box = Utils.Box;
@@ -416,7 +415,7 @@ module Geoma.Sprite
                 this._dragStart = event;
             }
         }
-        public mouseUp(event: MouseEvent): void
+        public mouseUp(__event: MouseEvent): void
         {
             if (this._dragStart)
             {
@@ -565,6 +564,101 @@ module Geoma.Sprite
         private _height: number = 0;
     }
 
+    export type TextLineInfo = {
+        brush: Brush,
+        style: CanvasTextDrawingStyles,
+        text: string,
+        width?: number,
+        strokeWidth?: number;
+        strokeBrush?: Brush;
+    };
+
+    export class MultiLineText extends Sprite
+    {
+        constructor(x?: binding<number>, y?: binding<number>, line_padding?: binding<number>, fixWidth?: boolean)
+        {
+            super(x, y);
+            this.fixWidth = fixWidth == true;
+            this.textLines = new Array<TextLineInfo>();
+            this._linePadding = makeProp(line_padding, 0);
+
+            this.addW(((value: number) =>
+            {
+                return this.fixWidth ? value : Math.max(value, this._width);
+            }).bind(this));
+            this.addH(((value: number) =>
+            {
+                return Math.max(value, this._height);
+            }).bind(this));
+        }
+
+        public get measuredWidth(): number
+        {
+            return this._measuredWidth;
+        }
+        public readonly textLines: Array<TextLineInfo>;
+        public readonly fixWidth: boolean;
+
+        protected innerDraw(play_ground: PlayGround): void
+        {
+            PlayGround.drawingSprites++;
+            const line_padding = this._linePadding.value;
+            let last_info: TextLineInfo | undefined;
+            let current_x = toInt(this.x);
+            let current_y = toInt(this.y);
+            let current_w = this.fixWidth ? toInt(this.w) : undefined;
+            let w: number = 0;
+            for (const line of this.textLines)
+            {
+                if (!last_info || last_info.brush != line.brush)
+                {
+                    play_ground.context2d.fillStyle = line.brush;
+                }
+                if (!last_info || last_info.style != line.style)
+                {
+                    if (line.style.direction)
+                    {
+                        play_ground.context2d.direction = line.style.direction;
+                    }
+                    if (line.style.font)
+                    {
+                        play_ground.context2d.font = line.style.font;
+                    }
+                    if (line.style.textAlign)
+                    {
+                        play_ground.context2d.textAlign = line.style.textAlign;
+                    }
+                    if (line.style.textBaseline)
+                    {
+                        play_ground.context2d.textBaseline = line.style.textBaseline;
+                    }
+                }
+                if (line.strokeWidth && line.strokeBrush)
+                {
+                    if (!last_info || last_info.strokeWidth != line.strokeWidth || last_info.strokeBrush != line.strokeBrush)
+                    {
+                        play_ground.context2d.strokeStyle = line.strokeBrush;
+                        play_ground.context2d.lineWidth = line.strokeWidth;
+                    }
+                    play_ground.context2d.strokeText(line.text, current_x, current_y, current_w);
+                }
+                play_ground.context2d.fillText(line.text, current_x, current_y, current_w);
+                w = Math.max(w, play_ground.context2d.measureText(line.text).width);
+                const h = play_ground.context2d.measureText("lIqg").actualBoundingBoxDescent;
+                current_y += line_padding + h;
+            }
+
+            this._measuredWidth = w;
+            this._width = current_w ? current_w : w;
+            this._height = current_y - line_padding;
+        }
+
+        private _measuredWidth: number = 0;
+        private _width: number = 0;
+        private _height: number = 0;
+        private _linePadding: property<number>;
+    }
+
     abstract class PolySprite extends Sprite
     {
         /** optional params: x, y, line_width, brush*/
@@ -587,9 +681,8 @@ module Geoma.Sprite
                 this._path = new Path2D();
             }
             this._path.addPath(polygon.path);
-            const dw = this.deltaLineWidth;
-            this.addW(((value: number) => Math.max(value, polygon.box.right) + dw).bind(this));
-            this.addH(((value: number) => Math.max(value, polygon.box.bottom) + dw).bind(this));
+            this.addW(Utils.makeMod(this, (value: number) => Math.max(value, polygon.box.right) + this.lineWidth.value));
+            this.addH(Utils.makeMod(this, (value: number) => Math.max(value, polygon.box.bottom) + this.lineWidth.value));
         }
         public isPointHit(play_ground: PlayGround, point: IPoint): boolean
         {
@@ -634,7 +727,7 @@ module Geoma.Sprite
 
         private get deltaLineWidth(): number
         {
-            return this.lineWidth.value ? (this.lineWidth.value / 2) : 0;
+            return this.lineWidth.value / 2;
         }
 
         private _path?: Path2D;
@@ -661,12 +754,12 @@ module Geoma.Sprite
 
     export abstract class Debug
     {
-        public static dot(play_groun: PlayGround, x: number, y: number)
+        public static dot(play_groun: PlayGround, x: number, y: number, radius: number = 5)
         {
             play_groun.context2d.beginPath();
             play_groun.context2d.moveTo(x, y);
             play_groun.context2d.fillStyle = "Red";
-            play_groun.context2d.arc(x, y, 5, 0, Math.PI * 2);
+            play_groun.context2d.arc(x, y, radius, 0, Math.PI * 2);
             play_groun.context2d.closePath();
             play_groun.context2d.fill();
         }

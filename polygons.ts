@@ -4,12 +4,7 @@
 
 module Geoma.Polygon
 {
-    import getArg = Utils.getArg;
-    import toInt = Utils.toInt;
-    import Point = Utils.Point;
     import assert = Utils.assert;
-    import binding = Utils.binding;
-    import Event = Utils.MulticastEvent;
     import Box = Utils.Box;
 
     export class Ellipse implements IPolygon

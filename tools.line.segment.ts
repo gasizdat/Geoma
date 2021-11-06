@@ -21,12 +21,7 @@ module Geoma.Tools
     import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
-    import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export class ActiveLineSegment extends ActiveLineBase
     {
@@ -79,7 +74,6 @@ module Geoma.Tools
         public set quadrant(value: 1 | 2 | 3 | 4)
         {
             const current_quadrant = this.quadrant;
-            const p1 = this.start;
             const p2 = this.end;
             switch (value)
             {
@@ -172,10 +166,10 @@ module Geoma.Tools
         {
             if (this.start instanceof ActiveCommonPoint || this.end instanceof ActiveCommonPoint)
             {
-                for (let i = 0; i < this.document.lineSegments.length; i++)
+                for (let i = 0; i < this.document.lines.length; i++)
                 {
-                    const line = this.document.lineSegments.item(i);
-                    if (line instanceof ActiveLineBase && line.belongs(this.start) && line.belongs(this.end))
+                    const line = this.document.lines.item(i);
+                    if (this != line && line instanceof ActiveLineBase && line.isRelated(this.start) && line.isRelated(this.end))
                     {
                         //The service line segment as part of bigger line segment.
                         return line;
@@ -184,31 +178,10 @@ module Geoma.Tools
             }
             return null;
         }
-
-        public belongs(p1: ActivePointBase): boolean
-        {
-            if (this.startPoint == p1 || this.endPoint == p1)
-            {
-                return true;
-            }
-            else if (this._points)
-            {
-                for (const point of this._points)
-                {
-                    if (p1 == point)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
         public setPerpendicularTo(other_segment: ActiveLineSegment): void
         {
-            const perpendicular_line = other_segment;
-            const common_point = other_segment.belongs(this.start) ? this.start : this.end;
-            assert(other_segment.belongs(common_point));
+            const common_point = other_segment.isRelated(this.start) ? this.start : this.end;
+            assert(other_segment.isRelated(common_point));
 
             const start_angle = other_segment.getAngle(common_point);
             const end_angle = this.getAngle(common_point);
@@ -298,7 +271,7 @@ module Geoma.Tools
         }
         public addPoint(point: ActiveCommonPoint): void
         {
-            assert(!this.belongs(point));
+            assert(!this.isRelated(point));
             assert(this.mouseHit(point));
             if (!this._points)
             {
@@ -308,7 +281,7 @@ module Geoma.Tools
         }
         public removePoint(point: ActiveCommonPoint): void
         {
-            assert(this.belongs(point));
+            assert(this.isRelated(point));
             assert(this._points);
             const index = this._points.indexOf(point);
             assert(index >= 0);
@@ -419,7 +392,7 @@ module Geoma.Tools
                     const x = doc.mouseArea.mousePoint.x;
                     const y = doc.mouseArea.mousePoint.y;
                     const menu = new Menu(doc, x, y);
-                    const exists_other_segments = makeMod(this, () => doc.lineSegments.length > 1);
+                    const exists_other_segments = makeMod(this, () => doc.lines.length > 1);
 
                     let menu_item = menu.addMenuItem(Resources.string("Обозначить угол..."));
                     menu_item.onChecked.bind(this, () => doc.setAngleIndicatorState(this, event));
@@ -478,7 +451,7 @@ module Geoma.Tools
                 this._dragStart = event;
             }
         }
-        protected mouseUp(event: MouseEvent): void
+        protected mouseUp(__event: MouseEvent): void
         {
             if (this._dragStart)
             {
@@ -487,7 +460,7 @@ module Geoma.Tools
                 delete this._transaction;
             }
         }
-        protected beforeDraw(event: BeforeDrawEvent)
+        protected beforeDraw(__event: BeforeDrawEvent)
         {
             assert(this._fixed);
             const precision = 1;

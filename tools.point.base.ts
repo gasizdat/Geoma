@@ -12,16 +12,11 @@ module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
     import makeProp = Utils.makeProp;
-    import toInt = Utils.toInt;
-    import Point = Utils.Point;
     import assert = Utils.assert;
     import Brush = Sprite.Brush;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
     import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export abstract class ActivePointBase extends DocumentSprite<Sprite.Container> implements IPoint
     {
@@ -79,20 +74,22 @@ module Geoma.Tools
             return this._line.y + this.item.h;
         }
 
-        public setName(value: binding<string>, brush: binding<Brush>, style: binding<CanvasTextDrawingStyles>): void
+        public setName(value: binding<string>, brush: binding<Brush>, style: binding<CanvasTextDrawingStyles>): Sprite.Text
         {
             assert(!this.name);
             this._text = new Sprite.Text(this._line.right + ActivePointBase._textPadding, this.y, 0, 0, brush, style, value);
             this.item.push(this._text);
             this.item.name = this._text.text.value;
+            return this._text;
         }
-        public serialize(context: SerializationContext): Array<string>
+        public serialize(__context: SerializationContext): Array<string>
         {
             const data: Array<string> = [];
             data.push(`${this._line.x + this.item.first!.w / 2 + this._line.lineWidth.value / 2}`);
             data.push(`${this._line.y + this.item.first!.w / 2 + this._line.lineWidth.value / 2}`);
             return data;
         }
+        public abstract moved(receiptor: string): boolean;
 
         protected get boundingBox(): Box
         {
@@ -104,9 +101,33 @@ module Geoma.Tools
             this.selected = this.mouseHit(event);
             super.mouseMove(event);
         }
+        protected setInfo(value: binding<string>, brush: binding<Brush>, style: binding<CanvasTextDrawingStyles>): Sprite.Text
+        {
+            this.resetInfo();
+            const info = new Sprite.Text(
+                makeMod(this, () => this.item.item(this.item.length - 2).x + ActivePointBase._textPadding),
+                makeMod(this, () => this.y - 20), 0, 0, brush, style, value
+            );
+            info.name = ActivePointBase._InfoSpriteName;
+            this.item.push(info);
+            return info;
+        }
+        protected resetInfo(): void
+        {
+            for (let i = 0; i < this.item.length; i++)
+            {
+                if (this.item.item(i).name == ActivePointBase._InfoSpriteName)
+                {
+                    this.item.remove(this.item.item(i));
+                    break;
+                }
+            }
+        }
 
         private readonly _line: Sprite.Polyline;
         private _text?: Sprite.Text;
         private static readonly _textPadding: number = 5;
+        private static readonly _InfoSpriteName = "{17B56627-B5D6-4AA6-8B7A-0C1322A53629}";
+
     }
 }

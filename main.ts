@@ -9,8 +9,8 @@ let playGround: Geoma.PlayGround;
 let mainDocument: Geoma.Tools.Document;
 
 const GeomaApplicationVersion: number = 0;
-const GeomaFeatureVersion: number = 2;
-const GeomaFixVersion: number = 2;
+const GeomaFeatureVersion: number = 3;
+const GeomaFixVersion: number = 1;
 
 window.onload = () =>
 {
@@ -26,7 +26,7 @@ window.onresize = () =>
     playGround.invalidate();
 }
 
-function drawAll(time: number)
+function drawAll(__time: number)
 {
     mainDocument.draw(playGround);
     window.requestAnimationFrame(drawAll);

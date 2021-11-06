@@ -20,12 +20,12 @@ function factorial(value: number): number
     if (!factorialCache.length)
     {
         factorialCache.push(1);
-        for (let i = 1; i <= 100; i++)
+        for (let i = 1; i <= 170; i++)
         {
             factorialCache.push(factorialCache[factorialCache.length - 1] * i);
         }
     }
-    if (value > 100)
+    if (value > 170)
     {
         return Infinity;
     }
@@ -79,12 +79,8 @@ module Geoma.Tools
     import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     type DeserializedCode = { code: CodeElement, index: number };
     export abstract class CodeElement
@@ -457,7 +453,7 @@ module Geoma.Tools
         {
             class stub extends Sprite.Sprite
             {
-                protected innerDraw(play_ground: PlayGround): void
+                protected innerDraw(__play_ground: PlayGround): void
                 {
                     throw new Error("Method not implemented.");
                 }
@@ -577,8 +573,7 @@ module Geoma.Tools
             switch (name)
             {
                 case "x":
-                    assert(false);
-                    break;
+                    throw assert(false);
                 default:
                     assert(this._args[name]);
                     this._args[name].value = value;
@@ -602,8 +597,8 @@ module Geoma.Tools
         {
             const dialog = new ExpressionDialog(
                 this.document,
-                makeMod(this, () => (this.document.mouseArea.offset.x + this.document.mouseArea.w / 2 - this.document.mouseArea.w / 10) / this.document.mouseArea.ratio),
-                makeMod(this, () => (this.document.mouseArea.offset.y + this.document.mouseArea.h / 2 - this.document.mouseArea.h / 10) / this.document.mouseArea.ratio),
+                makeMod(this, () => this.document.mouseArea.offset.x + (this.document.mouseArea.w / 2 - this.document.mouseArea.w / 10) / this.document.mouseArea.ratio),
+                makeMod(this, () => this.document.mouseArea.offset.y + (this.document.mouseArea.h / 2 - this.document.mouseArea.h / 10) / this.document.mouseArea.ratio),
                 this.code
             );
             dialog.onEnter.bind(this, (event: CustomEvent<CodeElement | undefined>) => 
@@ -617,7 +612,7 @@ module Geoma.Tools
             });
             this.document.push(dialog);
         }
-        public belongs(point: ActivePointBase): boolean
+        public isRelated(point: ActivePointBase): boolean
         {
             if (this._points)
             {
@@ -638,7 +633,7 @@ module Geoma.Tools
         }
         public removePoint(point: ActiveCommonPoint): void
         {
-            assert(this.belongs(point));
+            assert(this.isRelated(point));
             assert(this._points);
             const index = this._points.indexOf(point);
             assert(index >= 0);
@@ -1035,7 +1030,7 @@ module Geoma.Tools
                 this._dragStart = event;
             }
         }
-        protected mouseUp(event: MouseEvent): void
+        protected mouseUp(__event: MouseEvent): void
         {
             if (this._dragStart)
             {
@@ -1053,7 +1048,7 @@ module Geoma.Tools
 
         private _addPoint(point: ActiveCommonPoint): void
         {
-            assert(!this.belongs(point));
+            assert(!this.isRelated(point));
             if (!this._points)
             {
                 this._points = [];

@@ -24,12 +24,8 @@ module Geoma.Tools
     import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export enum CircleLineKind
     {
@@ -54,7 +50,7 @@ module Geoma.Tools
             assert(point2);
             class stub extends Sprite.Sprite
             {
-                protected innerDraw(play_ground: PlayGround): void
+                protected innerDraw(__play_ground: PlayGround): void
                 {
                     throw new Error("Method not implemented.");
                 }
@@ -161,7 +157,7 @@ module Geoma.Tools
         {
             return this._point1 == point || this._point2 == point;
         }
-        public belongs(point: ActivePointBase): boolean
+        public isRelated(point: ActivePointBase): boolean
         {
             if (this.isPivot(point))
             {
@@ -185,7 +181,7 @@ module Geoma.Tools
         }
         public addPoint(point: ActiveCommonPoint): void
         {
-            assert(!this.belongs(point));
+            assert(!this.isRelated(point));
             assert(this.mouseHit(point));
             if (!this._points)
             {
@@ -195,7 +191,7 @@ module Geoma.Tools
         }
         public removePoint(point: ActiveCommonPoint): void
         {
-            assert(this.belongs(point));
+            assert(this.isRelated(point));
             assert(this._points);
             const index = this._points.indexOf(point);
             assert(index >= 0);
@@ -345,7 +341,7 @@ module Geoma.Tools
                 this._dragStart = event;
             }
         }
-        protected mouseUp(event: MouseEvent): void
+        protected mouseUp(__event: MouseEvent): void
         {
             if (this._dragStart)
             {

@@ -12,15 +12,10 @@ module Geoma.Tools
 {
     import makeMod = Utils.makeMod;
     import makeProp = Utils.makeProp;
-    import toInt = Utils.toInt;
-    import Point = Utils.Point;
     import assert = Utils.assert;
     import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
     import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     abstract class MenuElementBase<TSprite extends Sprite.Container> extends DocumentSprite<TSprite>
     {
@@ -335,8 +330,7 @@ module Geoma.Tools
         }
         public get clientW(): number
         {
-            assert(false, "Logical error");
-            return 0;
+            throw assert(false, "Logical error");
         }
         public padding: number = 3;
 

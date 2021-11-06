@@ -21,18 +21,13 @@ module Geoma.Tools
     import toInt = Utils.toInt;
     import Point = Utils.Point;
     import assert = Utils.assert;
-    import MulticastEvent = Utils.MulticastEvent;
-    import modifier = Utils.modifier;
-    import property = Utils.ModifiableProperty;
-    import Box = Utils.Box;
     import binding = Utils.binding;
-    import Debug = Sprite.Debug;
 
     export class ActiveLine extends ActiveLineBase
     {
         constructor(
-            start: ActivePoint,
-            end: ActivePoint,
+            start: ActivePointBase,
+            end: ActivePointBase,
             line_width: binding<number> = CurrentTheme.ActiveLineWidth,
             brush: binding<Sprite.Brush> = CurrentTheme.ActiveLineBrush,
             selected_brush: binding<Sprite.Brush> = CurrentTheme.ActiveLineSelectBrush
@@ -46,13 +41,16 @@ module Geoma.Tools
                 brush,
                 selected_brush
             );
-
+            this._points = new Array<ActivePointBase>(this.startPoint, this.endPoint);
         }
 
         public get moved(): boolean 
         {
-            assert(false, "TODO");
-            return false;
+            throw assert(false, "TODO");
+        }
+        public get points(): Array<ActivePointBase>
+        {
+            return this._points;
         }
         public get isPartOf(): ActiveLineBase | null
         {
@@ -80,36 +78,19 @@ module Geoma.Tools
                 {
                     for (const point of this._points)
                     {
-                        point.removeSegment(this);
+                        if (point instanceof ActiveCommonPoint)
+                        {
+                            point.removeSegment(this);
+                        }
                     }
                 }
-                delete this._points;
 
                 super.dispose();
             }
         }
-        public move(dx: number, dy: number): void
+        public move(__dx: number, __dy: number): void
         {
             assert(false, "Not implemented yet");
-        }
-        public belongs(p1: ActivePointBase): boolean 
-        {
-            if (this.startPoint == p1 || this.endPoint == p1)
-            {
-                return true;
-            }
-            else if (this._points)
-            {
-                for (const p of this._points)
-                {
-                    if (p == p1)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
         public serialize(context: SerializationContext): Array<string>
         {
@@ -136,24 +117,22 @@ module Geoma.Tools
                 Thickness.Mouse
             );
         }
-        public addPoint(point: ActiveCommonPoint): void
+        public addPoint(point: ActivePointBase): void
         {
-            assert(!this.belongs(point));
+            assert(!this.isRelated(point));
             assert(this.mouseHit(point));
-            if (!this._points)
-            {
-                this._points = [];
-            }
             this._points.push(point);
         }
-        public removePoint(point: ActiveCommonPoint): void
+        public removePoint(point: ActivePointBase): void
         {
-            assert(this.belongs(point));
-            assert(this._points);
+            assert(this.isRelated(point));
             const index = this._points.indexOf(point);
             assert(index >= 0);
             this._points.splice(index, 1);
-            point.removeSegment(this);
+            if (point instanceof ActiveCommonPoint)
+            {
+                point.removeSegment(this);
+            }
         }
         public static deserialize(context: DesializationContext, data: Array<string>, index: number): ActiveLine | null
         {
@@ -173,9 +152,12 @@ module Geoma.Tools
                     {
                         const p_index = toInt(chunck.substring(1));
                         const point = context.data.points.item(p_index);
-                        assert(point instanceof ActiveCommonPoint);
-                        point.addGraphLine(line);
-                        line.addPoint(point);
+                        if (!line.isRelated(point))
+                        {
+                            assert(point instanceof ActiveCommonPoint);
+                            point.addGraphLine(line);
+                            line.addPoint(point);
+                        }
                     }
                     else
                     {
@@ -197,9 +179,17 @@ module Geoma.Tools
                     const x = doc.mouseArea.mousePoint.x;
                     const y = doc.mouseArea.mousePoint.y;
                     const menu = new Menu(doc, x, y);
-                    const exists_other_segments = makeMod(this, () => doc.lineSegments.length > 1);
+                    const exists_other_segments = makeMod(this, () => doc.lines.length > 1);
 
-                    let menu_item = menu.addMenuItem(Resources.string("Добавить точку"));
+                    let menu_item = menu.addMenuItem(Resources.string("Обозначить угол..."));
+                    menu_item.onChecked.bind(this, () => doc.setAngleIndicatorState(this, event));
+                    menu_item.enabled.addModifier(exists_other_segments);
+
+                    menu_item = menu.addMenuItem(Resources.string("Показать биссектрису угла..."));
+                    menu_item.onChecked.bind(this, () => doc.setBisectorState(this, event));
+                    menu_item.enabled.addModifier(exists_other_segments);
+
+                    menu_item = menu.addMenuItem(Resources.string("Добавить точку"));
                     menu_item.onChecked.bind(this, () => doc.addPoint(Point.make(x, y)));
 
                     menu_item = menu.addMenuItem(Resources.string("Сделать ||..."));
@@ -235,6 +225,6 @@ module Geoma.Tools
             }
         }
 
-        private _points?: Array<ActiveCommonPoint>;
+        private _points: Array<ActivePointBase>;
     }
 }

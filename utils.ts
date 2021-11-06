@@ -10,7 +10,12 @@ module Geoma.Utils
     {
         if (!condition)
         {
-            const alert_message = msg ?? "Logic error. If you see this, then something gone wrong way ):";
+            let alert_message = msg ?? "Logic error. If you see this, then something gone wrong way ):";
+            const stack = (new Error).stack;
+            if (stack)
+            {
+                alert_message += `\n${stack}`;
+            }
             console.log(alert_message);
             window.alert(alert_message);
             throw new AssertionError(alert_message);
@@ -34,6 +39,18 @@ module Geoma.Utils
     export function toDeg(rad: number)
     {
         return rad * 180 / Math.PI;
+    }
+
+    export function isInstanceOfAny<TInstanceType>(ctors: { new(...args: any[]): TInstanceType }[], instance: any): boolean
+    {
+        for (const ctor of ctors)
+        {
+            if (instance instanceof ctor)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     export class MulticastEvent<TEvent extends Event>
@@ -612,6 +629,11 @@ module Geoma.Utils
         {
             return Math.trunc(value);
         }
+    }
+
+    export function toFixed(value: number, digits: number): string
+    {
+        return parseFloat(value.toFixed(digits)).toString();
     }
 
     export function CompareCaseInsensitive(a: string, b: string): number
