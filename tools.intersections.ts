@@ -713,12 +713,33 @@ module Geoma.Tools
         {
             super(PointParametric.intersection(point, line));
             this._line = line;
-            this._startX = line.axes.fromScreenX(this.startPoint.x);
+            //Explanation: snap point coordinates to axes
+            this._startX = this._line.axes.fromScreenX(this.startPoint.x);
+            this._startY = this._line.axes.fromScreenY(this.startPoint.y);
             this._intersection = makeProp(makeMod(this, (): IPoint =>
             {
-                const x = this._line.axes.toScreenX(this._startX);
-                const y = this._line.screenY(x);
-                return PointParametric.intersection(Point.make(x, y), this._line);
+                const screen_x0 = this._line.axes.toScreenX(this._startX);
+                const screen_y1 = this._line.screenY(screen_x0);
+                const p1 = PointParametric.intersectionMain(Point.make(screen_x0, screen_y1), this._line);
+                if (this._line.symmetric)
+                {
+                    const screen_y0 = this._line.axes.toScreenY(this._startY);
+                    const screen_y2 = this._line.screenSymmetricY(screen_x0);
+                    const p2 = PointParametric.intersectionSymmetric(Point.make(screen_x0, screen_y2), this._line);
+                    const point = Point.make(screen_x0, screen_y0);
+                    if (ActiveLineBase.getLength(point, p1) < ActiveLineBase.getLength(point, p2))
+                    {
+                        return p1;
+                    }
+                    else
+                    {
+                        return p2;
+                    }
+                }
+                else
+                {
+                    return p1;
+                }
             }), Point.empty);
         }
 
@@ -732,22 +753,52 @@ module Geoma.Tools
             this._intersection.reset();
             super.dispose();
         }
-        public move(dx: number, __dy: number): void
+        public move(dx: number, dy: number): void
         {
             const x = this._line.axes.toScreenX(this._startX) - dx;
             this._startX = this._line.axes.fromScreenX(x);
+            const y = this._line.axes.toScreenY(this._startY) - dy;
+            this._startY = this._line.axes.fromScreenY(y);
         }
-
         public static intersection(point: IPoint, line: ParametricLine): IPoint
         {
+            const p1 = PointParametric.intersectionMain(point, line);
+            if (line.symmetric)
+            {
+                const p2 = PointParametric.intersectionSymmetric(point, line);
+                if (ActiveLineBase.getLength(point, p1) < ActiveLineBase.getLength(point, p2))
+                {
+                    return p1;
+                }
+                else
+                {
+                    return p2;
+                }
+            }
+            else
+            {
+                return p1;
+            }
+        }
+        public static intersectionMain(point: IPoint, line: ParametricLine): IPoint
+        {
             const y = line.screenY(point.x);
+            return Point.make(point.x, y);
+        }
+        public static intersectionSymmetric(point: IPoint, line: ParametricLine): IPoint
+        {
+            const y = line.screenSymmetricY(point.x);
             return Point.make(point.x, y);
         }
         public static intersected(point: IPoint, line: ParametricLine, sensitivity: number): boolean
         {
             assert(sensitivity);
-            const y = line.screenY(point.x);
-            if (Math.abs(point.y - y) <= sensitivity)
+
+            if (Math.abs(point.y - line.screenY(point.x)) <= sensitivity)
+            {
+                return true;
+            }
+            else if (line.symmetric && Math.abs(point.y - line.screenSymmetricY(point.x)) <= sensitivity)
             {
                 return true;
             }
@@ -769,6 +820,7 @@ module Geoma.Tools
         }
 
         private _startX: number;
+        private _startY: number;
         private _line: ParametricLine;
         private _intersection: property<IPoint>;
     }

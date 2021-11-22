@@ -229,7 +229,7 @@ module Geoma.Tools
     Math.cosh
     Math.tanh
     export type UnaryFunctions =
-        "sin" | "cos" | "tan" |
+        "±" | "sin" | "cos" | "tan" |
         "arcsin" | "arccos" | "arctan" |
         "ln" | "log2" | "log10" |
         "exp" | "√" | "∛" | "∜" | "sign" | "abs" |
@@ -251,6 +251,8 @@ module Geoma.Tools
             let math_function: string;
             switch (this._function)
             {
+                case "±":
+                    return `${this._operand.code}`;
                 case "arccos":
                     math_function = "Math.acos";
                     break;
@@ -501,6 +503,10 @@ module Geoma.Tools
             this._derivativeLevel = ParametricLine.derivativeLevel(this._code);
             delete this._drawPath;
         }
+        public get symmetric(): boolean
+        {
+            return this.code instanceof CodeUnary && this.code.function == "±";
+        }
 
         public dispose()
         {
@@ -531,6 +537,11 @@ module Geoma.Tools
                 }
                 return this.axes.toScreenY(this.getY(this.axes.fromScreenX(offset_screen_x)));
             }
+        }
+        public screenSymmetricY(screen_x: number): number
+        {
+            assert(this.symmetric);
+            return 2 * this.axes.y - this.screenY(screen_x);
         }
         public getFunction(name: string): Function | null
         {
@@ -951,6 +962,20 @@ module Geoma.Tools
             play_ground.context2d.strokeStyle = this.selected ? this.selectedBrush.value : this.brush.value;
             play_ground.context2d.lineWidth = this.lineWidth.value;
             play_ground.context2d.stroke(this._drawPath);
+
+            if (this.symmetric)
+            {
+                const current_transform = play_ground.context2d.getTransform();
+                play_ground.context2d.setTransform(
+                    current_transform.a,
+                    current_transform.b,
+                    current_transform.c,
+                    -current_transform.d,
+                    current_transform.e,
+                    current_transform.f + play_ground.ratio * 2 * this.axes.y);
+                play_ground.context2d.stroke(this._drawPath);
+                play_ground.context2d.setTransform(current_transform);
+            }
         }
         protected axesHit(event: MouseEvent): boolean
         {

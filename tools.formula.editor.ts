@@ -23,7 +23,7 @@ module Geoma.Tools
             y: binding<number>,
             text: binding<string>,
             textBrush?: Sprite.Brush,
-            horizontal_padding: binding<number> = 10,
+            horizontal_padding: binding<number> = 2,
             vertical_padding: binding<number> = 10)
         {
             super(document, x, y, text, horizontal_padding, vertical_padding, true);
@@ -160,7 +160,7 @@ module Geoma.Tools
 
     class CodeUnaryPresenter extends CodePresenter
     {
-        constructor(document: Document, x: binding<number>, y: binding<number>)
+        constructor(document: Document, x: binding<number>, y: binding<number>, func: UnaryFunctions = "sin")
         {
             super(document);
             class UnaryButton extends MenuButton
@@ -190,12 +190,12 @@ module Geoma.Tools
 
             const button = new UnaryButton(this, x, y);
             const left_bracket = new CodeLabel(document, () => button.right, () => button.y, `(`, 0);
-            const placeholder = new CodePlaceholder(document, () => left_bracket.right, y);
+            const placeholder = new CodePlaceholder(document, () => left_bracket.right, y, false);
             const right_bracket = new CodeLabel(document, () => placeholder.right, () => placeholder.y, `)`, 0);
             left_bracket.addPairedLabel(right_bracket);
             right_bracket.addPairedLabel(left_bracket);
 
-            this._function = "sin";
+            this._function = func;
             this.item.push(button);
             this.item.push(left_bracket);
             this.item.push(placeholder);
@@ -248,9 +248,9 @@ module Geoma.Tools
             }
 
             const left_bracket = new CodeLabel(document, x, y, `(`, 0);
-            const operand1 = new CodePlaceholder(document, () => left_bracket.right, y);
+            const operand1 = new CodePlaceholder(document, () => left_bracket.right, y, false);
             const button = new BinaryButton(this, () => operand1.right, () => operand1.y);
-            const operand2 = new CodePlaceholder(document, () => button.right, () => button.y);
+            const operand2 = new CodePlaceholder(document, () => button.right, () => button.y, false);
             const right_bracket = new CodeLabel(document, () => operand2.right, () => operand2.y, `)`, 0);
             left_bracket.addPairedLabel(right_bracket);
             right_bracket.addPairedLabel(left_bracket);
@@ -299,7 +299,7 @@ module Geoma.Tools
 
     class CodePlaceholder extends CodePresenter
     {
-        constructor(document: Document, x: binding<number>, y: binding<number>)
+        constructor(document: Document, x: binding<number>, y: binding<number>, symmetric: boolean)
         {
             super(document);
             class PlaceholderButton extends MenuButton
@@ -313,6 +313,42 @@ module Geoma.Tools
                 {
                     const x_mod = makeMod(this, () => this.right);
                     const y_mod = makeMod(this, () => this.top);
+
+                    if (symmetric)
+                    {
+                        const symmetric_func = `±`;
+                        let item = menu.addMenuItem(symmetric_func);
+                        let presenter: CodePresenter = new CodeUnaryPresenter(document, x_mod, y_mod, symmetric_func);
+                        item.onChecked.bind(this, () =>
+                        {
+                            if (this._owner.codeElement instanceof CodeUnary && this._owner.codeElement.function == symmetric_func)
+                            {
+                                if (this._owner.codeElement.operand instanceof CodeArgument)
+                                {
+                                    presenter = new CodeArgumentPresenter(document, x_mod, y_mod);
+                                    presenter.codeElement = this._owner.codeElement.operand;
+                                }
+                                else if (this._owner.codeElement.operand instanceof CodeUnary)
+                                {
+                                    presenter = new CodeUnaryPresenter(document, x_mod, y_mod);
+                                    presenter.codeElement = this._owner.codeElement.operand;
+                                }
+                                else
+                                {
+                                    assert(this._owner.codeElement.operand instanceof CodeBinary);
+                                    presenter = new CodeBinaryPresenter(document, x_mod, y_mod);
+                                    presenter.codeElement = this._owner.codeElement.operand;
+                                }
+                            }
+                            else
+                            {
+                                const expression = new CodeUnary(symmetric_func, this._owner.codeElement);
+                                presenter.codeElement = expression;
+                            }
+                            this._owner.setPresenter(presenter)
+                        });
+                    }
+
                     let item = menu.addMenuItem(`{arg}`);
                     item.onChecked.bind(this, () => this._owner.setPresenter(new CodeArgumentPresenter(document, x_mod, y_mod)));
 
@@ -445,7 +481,7 @@ module Geoma.Tools
             );
 
             const x_mod = makeMod(this, () => background.x + this._padding);
-            const code = new CodePlaceholder(document, x_mod, makeMod(this, () => background.y + this._padding));
+            const code = new CodePlaceholder(document, x_mod, makeMod(this, () => background.y + this._padding), true);
             const text = new Sprite.Text(
                 x_mod,
                 makeMod(this, () => code.bottom + this._padding),
