@@ -14,14 +14,10 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
+var __spreadArray = (this && this.__spreadArray) || function (to, from) {
+    for (var i = 0, il = from.length, j = to.length; i < il; i++, j++)
+        to[j] = from[i];
+    return to;
 };
 var __assign = (this && this.__assign) || function () {
     __assign = Object.assign || function(t) {
@@ -2394,9 +2390,9 @@ var Geoma;
                 }
                 switch (Resources.language) {
                     case UiLanguage.enUs:
-                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([(_a = Resources.enEnStrings[resource_id]) !== null && _a !== void 0 ? _a : resource_id], args, false));
+                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([(_a = Resources.enEnStrings[resource_id]) !== null && _a !== void 0 ? _a : resource_id], args));
                     case UiLanguage.ruRu:
-                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([resource_id], args, false));
+                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([resource_id], args));
                 }
             };
             Resources.language = UiLanguage.ruRu;
@@ -5028,6 +5024,8 @@ var Geoma;
                 get: function () {
                     var math_function;
                     switch (this._function) {
+                        case "±":
+                            return "" + this._operand.code;
                         case "arccos":
                             math_function = "Math.acos";
                             break;
@@ -5292,6 +5290,13 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
+            Object.defineProperty(ParametricLine.prototype, "symmetric", {
+                get: function () {
+                    return this.code instanceof CodeUnary && this.code.function == "±";
+                },
+                enumerable: false,
+                configurable: true
+            });
             ParametricLine.prototype.dispose = function () {
                 var _a;
                 if (!this.disposed) {
@@ -5315,6 +5320,10 @@ var Geoma;
                     }
                     return this.axes.toScreenY(this.getY(this.axes.fromScreenX(offset_screen_x)));
                 }
+            };
+            ParametricLine.prototype.screenSymmetricY = function (screen_x) {
+                assert(this.symmetric);
+                return 2 * this.axes.y - this.screenY(screen_x);
             };
             ParametricLine.prototype.getFunction = function (name) {
                 if (this._functions) {
@@ -5638,6 +5647,12 @@ var Geoma;
                 play_ground.context2d.strokeStyle = this.selected ? this.selectedBrush.value : this.brush.value;
                 play_ground.context2d.lineWidth = this.lineWidth.value;
                 play_ground.context2d.stroke(this._drawPath);
+                if (this.symmetric) {
+                    var current_transform = play_ground.context2d.getTransform();
+                    play_ground.context2d.setTransform(current_transform.a, current_transform.b, current_transform.c, -current_transform.d, current_transform.e, current_transform.f + play_ground.ratio * 2 * this.axes.y);
+                    play_ground.context2d.stroke(this._drawPath);
+                    play_ground.context2d.setTransform(current_transform);
+                }
             };
             ParametricLine.prototype.axesHit = function (event) {
                 return this.axes.visible && this.axes.mouseHit(event);
@@ -6278,11 +6293,27 @@ var Geoma;
             function PointParametric(point, line) {
                 var _this = _super.call(this, PointParametric.intersection(point, line)) || this;
                 _this._line = line;
-                _this._startX = line.axes.fromScreenX(_this.startPoint.x);
+                _this._startX = _this._line.axes.fromScreenX(_this.startPoint.x);
+                _this._startY = _this._line.axes.fromScreenY(_this.startPoint.y);
                 _this._intersection = makeProp(makeMod(_this, function () {
-                    var x = _this._line.axes.toScreenX(_this._startX);
-                    var y = _this._line.screenY(x);
-                    return PointParametric.intersection(Point.make(x, y), _this._line);
+                    var screen_x0 = _this._line.axes.toScreenX(_this._startX);
+                    var screen_y1 = _this._line.screenY(screen_x0);
+                    var p1 = PointParametric.intersectionMain(Point.make(screen_x0, screen_y1), _this._line);
+                    if (_this._line.symmetric) {
+                        var screen_y0 = _this._line.axes.toScreenY(_this._startY);
+                        var screen_y2 = _this._line.screenSymmetricY(screen_x0);
+                        var p2 = PointParametric.intersectionSymmetric(Point.make(screen_x0, screen_y2), _this._line);
+                        var point_1 = Point.make(screen_x0, screen_y0);
+                        if (Tools.ActiveLineBase.getLength(point_1, p1) < Tools.ActiveLineBase.getLength(point_1, p2)) {
+                            return p1;
+                        }
+                        else {
+                            return p2;
+                        }
+                    }
+                    else {
+                        return p1;
+                    }
                 }), Point.empty);
                 return _this;
             }
@@ -6297,18 +6328,41 @@ var Geoma;
                 this._intersection.reset();
                 _super.prototype.dispose.call(this);
             };
-            PointParametric.prototype.move = function (dx, __dy) {
+            PointParametric.prototype.move = function (dx, dy) {
                 var x = this._line.axes.toScreenX(this._startX) - dx;
                 this._startX = this._line.axes.fromScreenX(x);
+                var y = this._line.axes.toScreenY(this._startY) - dy;
+                this._startY = this._line.axes.fromScreenY(y);
             };
             PointParametric.intersection = function (point, line) {
+                var p1 = PointParametric.intersectionMain(point, line);
+                if (line.symmetric) {
+                    var p2 = PointParametric.intersectionSymmetric(point, line);
+                    if (Tools.ActiveLineBase.getLength(point, p1) < Tools.ActiveLineBase.getLength(point, p2)) {
+                        return p1;
+                    }
+                    else {
+                        return p2;
+                    }
+                }
+                else {
+                    return p1;
+                }
+            };
+            PointParametric.intersectionMain = function (point, line) {
                 var y = line.screenY(point.x);
+                return Point.make(point.x, y);
+            };
+            PointParametric.intersectionSymmetric = function (point, line) {
+                var y = line.screenSymmetricY(point.x);
                 return Point.make(point.x, y);
             };
             PointParametric.intersected = function (point, line, sensitivity) {
                 assert(sensitivity);
-                var y = line.screenY(point.x);
-                if (Math.abs(point.y - y) <= sensitivity) {
+                if (Math.abs(point.y - line.screenY(point.x)) <= sensitivity) {
+                    return true;
+                }
+                else if (line.symmetric && Math.abs(point.y - line.screenSymmetricY(point.x)) <= sensitivity) {
                     return true;
                 }
                 else {
@@ -6798,7 +6852,7 @@ var Geoma;
         var MenuButton = (function (_super) {
             __extends(MenuButton, _super);
             function MenuButton(document, x, y, text, textBrush, horizontal_padding, vertical_padding) {
-                if (horizontal_padding === void 0) { horizontal_padding = 10; }
+                if (horizontal_padding === void 0) { horizontal_padding = 2; }
                 if (vertical_padding === void 0) { vertical_padding = 10; }
                 var _this = _super.call(this, document, x, y, text, horizontal_padding, vertical_padding, true) || this;
                 if (textBrush) {
@@ -6906,7 +6960,8 @@ var Geoma;
         }(CodePresenter));
         var CodeUnaryPresenter = (function (_super) {
             __extends(CodeUnaryPresenter, _super);
-            function CodeUnaryPresenter(document, x, y) {
+            function CodeUnaryPresenter(document, x, y, func) {
+                if (func === void 0) { func = "sin"; }
                 var _this = _super.call(this, document) || this;
                 var UnaryButton = (function (_super) {
                     __extends(UnaryButton, _super);
@@ -6937,11 +6992,11 @@ var Geoma;
                 }(MenuButton));
                 var button = new UnaryButton(_this, x, y);
                 var left_bracket = new CodeLabel(document, function () { return button.right; }, function () { return button.y; }, "(", 0);
-                var placeholder = new CodePlaceholder(document, function () { return left_bracket.right; }, y);
+                var placeholder = new CodePlaceholder(document, function () { return left_bracket.right; }, y, false);
                 var right_bracket = new CodeLabel(document, function () { return placeholder.right; }, function () { return placeholder.y; }, ")", 0);
                 left_bracket.addPairedLabel(right_bracket);
                 right_bracket.addPairedLabel(left_bracket);
-                _this._function = "sin";
+                _this._function = func;
                 _this.item.push(button);
                 _this.item.push(left_bracket);
                 _this.item.push(placeholder);
@@ -6997,9 +7052,9 @@ var Geoma;
                     return BinaryButton;
                 }(MenuButton));
                 var left_bracket = new CodeLabel(document, x, y, "(", 0);
-                var operand1 = new CodePlaceholder(document, function () { return left_bracket.right; }, y);
+                var operand1 = new CodePlaceholder(document, function () { return left_bracket.right; }, y, false);
                 var button = new BinaryButton(_this, function () { return operand1.right; }, function () { return operand1.y; });
-                var operand2 = new CodePlaceholder(document, function () { return button.right; }, function () { return button.y; });
+                var operand2 = new CodePlaceholder(document, function () { return button.right; }, function () { return button.y; }, false);
                 var right_bracket = new CodeLabel(document, function () { return operand2.right; }, function () { return operand2.y; }, ")", 0);
                 left_bracket.addPairedLabel(right_bracket);
                 right_bracket.addPairedLabel(left_bracket);
@@ -7052,7 +7107,7 @@ var Geoma;
         }(CodePresenter));
         var CodePlaceholder = (function (_super) {
             __extends(CodePlaceholder, _super);
-            function CodePlaceholder(document, x, y) {
+            function CodePlaceholder(document, x, y, symmetric) {
                 var _this = _super.call(this, document) || this;
                 var PlaceholderButton = (function (_super) {
                     __extends(PlaceholderButton, _super);
@@ -7065,6 +7120,33 @@ var Geoma;
                         var _this = this;
                         var x_mod = makeMod(this, function () { return _this.right; });
                         var y_mod = makeMod(this, function () { return _this.top; });
+                        if (symmetric) {
+                            var symmetric_func_1 = "\u00B1";
+                            var item_1 = menu.addMenuItem(symmetric_func_1);
+                            var presenter_1 = new CodeUnaryPresenter(document, x_mod, y_mod, symmetric_func_1);
+                            item_1.onChecked.bind(this, function () {
+                                if (_this._owner.codeElement instanceof Tools.CodeUnary && _this._owner.codeElement.function == symmetric_func_1) {
+                                    if (_this._owner.codeElement.operand instanceof Tools.CodeArgument) {
+                                        presenter_1 = new CodeArgumentPresenter(document, x_mod, y_mod);
+                                        presenter_1.codeElement = _this._owner.codeElement.operand;
+                                    }
+                                    else if (_this._owner.codeElement.operand instanceof Tools.CodeUnary) {
+                                        presenter_1 = new CodeUnaryPresenter(document, x_mod, y_mod);
+                                        presenter_1.codeElement = _this._owner.codeElement.operand;
+                                    }
+                                    else {
+                                        assert(_this._owner.codeElement.operand instanceof Tools.CodeBinary);
+                                        presenter_1 = new CodeBinaryPresenter(document, x_mod, y_mod);
+                                        presenter_1.codeElement = _this._owner.codeElement.operand;
+                                    }
+                                }
+                                else {
+                                    var expression = new Tools.CodeUnary(symmetric_func_1, _this._owner.codeElement);
+                                    presenter_1.codeElement = expression;
+                                }
+                                _this._owner.setPresenter(presenter_1);
+                            });
+                        }
                         var item = menu.addMenuItem("{arg}");
                         item.onChecked.bind(this, function () { return _this._owner.setPresenter(new CodeArgumentPresenter(document, x_mod, y_mod)); });
                         item = menu.addMenuItem("f(u)");
@@ -7172,7 +7254,7 @@ var Geoma;
                 }(Tools.Button));
                 var background = new Geoma.Sprite.Rectangle(x, y, 1, 1, function () { return Tools.CurrentTheme.FormulaEditorBackgroundBrush; });
                 var x_mod = makeMod(_this, function () { return background.x + _this._padding; });
-                var code = new CodePlaceholder(document, x_mod, makeMod(_this, function () { return background.y + _this._padding; }));
+                var code = new CodePlaceholder(document, x_mod, makeMod(_this, function () { return background.y + _this._padding; }), true);
                 var text = new Geoma.Sprite.Text(x_mod, makeMod(_this, function () { return code.bottom + _this._padding; }), 0, 0, function () { return Tools.CurrentTheme.FormulaSampleTextBrush; }, function () { return Tools.CurrentTheme.FormulaSampleTextStyle; }, function () {
                     var text = code.codeElement.text;
                     if (text.length > 0 && text.charAt(0) == "(") {
@@ -8741,7 +8823,7 @@ var Geoma;
 var playGround;
 var mainDocument;
 var GeomaApplicationVersion = 0;
-var GeomaFeatureVersion = 3;
+var GeomaFeatureVersion = 4;
 var GeomaFixVersion = 1;
 window.onload = function () {
     document.title = document.title + " v" + GeomaApplicationVersion + "." + GeomaFeatureVersion + "." + GeomaFixVersion;
