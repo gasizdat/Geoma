@@ -149,10 +149,6 @@ module Geoma.Tools
         {
             return this._fixed != null;
         }
-        public get moved(): boolean
-        {
-            return this.start.moved(this.name) || this.end.moved(this.name);
-        }
         public get points(): Array<ActivePointBase>
         {
             const ret = new Array<ActivePointBase>(this.start, this.end);
@@ -292,6 +288,10 @@ module Geoma.Tools
         {
             this.start.move(dx, dy);
             this.end.move(dx, dy);
+        }
+        public isMoved(receiptor: string): boolean
+        {
+            return this.start.isMoved(receiptor) || this.end.isMoved(receiptor);
         }
         public mouseHit(point: IPoint)
         {
@@ -437,7 +437,7 @@ module Geoma.Tools
                     menu_item.onChecked.bind(this, () => doc.addPoint(Point.make(x, y)));
 
                     menu_item = menu.addMenuItem(Resources.string("Удалить отрезок {0}", this.name));
-                    menu_item.onChecked.bind(this, () => doc.removeLineSegment(this));
+                    menu_item.onChecked.bind(this, () => doc.removeLine(this));
 
                     menu.show();
                 }

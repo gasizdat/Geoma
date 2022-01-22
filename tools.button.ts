@@ -70,6 +70,10 @@ module Geoma.Tools
         public readonly foregroundBrush: property<Brush>;
         public readonly foregroundSelectBrush: property<Brush>;
         public readonly textStyle: property<CanvasTextDrawingStyles>;
+        public get isPressed(): boolean
+        {
+            return this._mouseDown;
+        }
 
         public dispose(): void
         {
@@ -79,6 +83,18 @@ module Geoma.Tools
                 this._mouseUpListener.dispose();
                 super.dispose();
             }
+        }
+        public addX(modifier: Utils.modifier<number>): void
+        {
+            this.item.first!.addX(modifier);
+        }
+        public addY(modifier: Utils.modifier<number>): void
+        {
+            this.item.first!.addY(modifier);
+        }
+        public addText(modifier: Utils.modifier<string>): void
+        {
+            (this.item.item(1) as Sprite.Text).text.addModifier(modifier);
         }
 
         protected abstract onClick(): boolean;

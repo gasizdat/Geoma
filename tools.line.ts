@@ -44,10 +44,6 @@ module Geoma.Tools
             this._points = new Array<ActivePointBase>(this.startPoint, this.endPoint);
         }
 
-        public get moved(): boolean 
-        {
-            throw assert(false, "TODO");
-        }
         public get points(): Array<ActivePointBase>
         {
             return this._points;
@@ -78,7 +74,7 @@ module Geoma.Tools
                 {
                     for (const point of this._points)
                     {
-                        if (point instanceof ActiveCommonPoint)
+                        if (!this.isPivot(point) && point instanceof ActiveCommonPoint)
                         {
                             point.removeSegment(this);
                         }
@@ -91,6 +87,10 @@ module Geoma.Tools
         public move(__dx: number, __dy: number): void
         {
             assert(false, "Not implemented yet");
+        }
+        public isMoved(receiptor: string): boolean
+        {
+            return this.startPoint.isMoved(receiptor) || this.endPoint.isMoved(receiptor);
         }
         public serialize(context: SerializationContext): Array<string>
         {

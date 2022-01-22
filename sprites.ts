@@ -2,6 +2,7 @@
 /// <reference path="polygons.ts" />
 /// <reference path="interfaces.ts" />
 /// <reference path="play_ground.ts" />
+/// <reference path="latex.ts" />
 
 module Geoma.Sprite
 {
@@ -41,7 +42,7 @@ module Geoma.Sprite
         }
         public get visible(): boolean
         {
-            return this._visible.value;
+            return this.getVisible();
         }
         public set visible(value: boolean)
         {
@@ -90,6 +91,10 @@ module Geoma.Sprite
         protected resetAlpha(value?: number): void
         {
             this._alpha.reset(value);
+        }
+        protected getVisible(): boolean
+        {
+            return this._visible.value;
         }
 
         private _name: string = "";
@@ -402,7 +407,7 @@ module Geoma.Sprite
                     this._dragStart = event;
                     event.cancelBubble = true;
                 }
-                else 
+                else
                 {
                     this.mouseUp(event);
                 }
@@ -659,6 +664,145 @@ module Geoma.Sprite
         private _linePadding: property<number>;
     }
 
+    export class TextInput extends Sprite
+    {
+        constructor(
+            x?: binding<number>,
+            y?: binding<number>,
+            w?: binding<number>,
+            h?: binding<number>,
+            text?: string,
+            text_brush?: binding<Brush>,
+            text_style?: binding<CanvasTextDrawingStyles>,
+            background_brush?: binding<Brush>,
+            fixWidth?: boolean
+        )
+        {
+            super(x, y, w, h);
+            this._text = text;
+            this._textBrush = makeProp(text_brush, DefaultBrush);
+            this._textStyle = makeProp(text_style, DefaultTextStyle);
+            this._backgroundBrush = makeProp(background_brush, DefaultBrush);
+            if (!fixWidth)
+
+            this.addW(Utils.makeMod(this, (value: number) =>
+            {
+                return Math.max(value, this._textWidth);
+            }));
+        }
+
+        public get visible(): boolean
+        {
+            const visible = super.getVisible();
+            if (this._input)
+            {
+                this._input.style.visibility = visible ? "visible" : "hidden";
+            }
+            return visible;
+        }
+        public get text(): string
+        {
+            return this._input?.value ?? this._text ?? "";
+        }
+        public set text(value: string)
+        {
+            if (this._input)
+            {
+                this._input.value = value;
+            }
+            else
+            {
+                this._text = value;
+            }
+        }
+        public get textWidth(): number
+        {
+            return this._textWidth;
+        }
+        public get textHeight(): number
+        {
+            return this._textHeight;
+        }
+        public readonly onKeyPress = new Utils.MulticastEvent<KeyboardEvent>();
+
+        public dispose(): void
+        {
+            super.dispose();
+            if (this._input)
+            {
+                document.body.removeChild(this._input);
+                delete this._input;
+            }
+        }
+
+        protected innerDraw(play_ground: PlayGround): void 
+        {
+            if (!this._input)
+            {
+                const input = document.createElement("input");
+                input.type = "text";
+                input.onkeyup = Utils.makeMod(this, (event: KeyboardEvent) =>
+                {
+                    event.cancelBubble = !this.onKeyPress.emitEvent(event);
+                    return event;
+                });
+                document.body.appendChild(input);
+                this._input = input;
+                this._input.style.border = "none";
+                this._input.style.outline = "none";
+                this._input.style.position = "absolute";
+                this._input.value = this._text ?? "";
+            }
+
+            const parent = play_ground.context2d.canvas;
+            const style = this._input.style;
+            style.left = TextInput.toHtmlPixels(this.x + parent.offsetLeft);
+            style.top = TextInput.toHtmlPixels(this.y + parent.offsetTop);
+            style.width = TextInput.toHtmlPixels(this.w);
+            style.height = TextInput.toHtmlPixels(this.h);
+            if (this._textBrush)
+            {
+                style.color = `${this._textBrush.value}`;
+            }
+            if (this._backgroundBrush)
+            {
+                style.backgroundColor = `${this._backgroundBrush.value}`;
+            }
+            if (this._textStyle)
+            {
+                const text_style = this._textStyle.value;
+                style.font = text_style.font;
+                style.direction = text_style.direction;
+                style.textAlign = text_style.textAlign;
+
+                play_ground.context2d.direction = text_style.direction;
+                play_ground.context2d.font = text_style.font;
+                play_ground.context2d.textAlign = text_style.textAlign;
+            }
+            else
+            {
+                play_ground.context2d.direction = style.direction as CanvasDirection;
+                play_ground.context2d.font = style.font;
+                play_ground.context2d.textAlign = style.textAlign as CanvasTextAlign;
+            }
+            this._textWidth = play_ground.context2d.measureText(this.text).width;
+            this._textHeight = play_ground.context2d.measureText("lIqg").actualBoundingBoxDescent;
+        }
+
+        protected static toHtmlPixels(value: number): string
+        {
+            return `${value}px`;
+        }
+
+        private _text?: string;
+        private _input?: HTMLInputElement;
+        private _textWidth: number = 0;
+        private _textHeight: number = 0;
+        public readonly _textBrush: property<Brush>;
+        public readonly _backgroundBrush: property<Brush>;
+        public readonly _textStyle: property<CanvasTextDrawingStyles>;
+    }
+
     abstract class PolySprite extends Sprite
     {
         /** optional params: x, y, line_width, brush*/
@@ -762,6 +906,35 @@ module Geoma.Sprite
             play_groun.context2d.arc(x, y, radius, 0, Math.PI * 2);
             play_groun.context2d.closePath();
             play_groun.context2d.fill();
+        }
+    }
+
+    export class LatexContainer extends Sprite
+    {
+        constructor(latex_engine: Geoma.Latex.LatexEngine, formula: binding<string>, x?: binding<number>, y?: binding<number>, scale?: number)
+        {
+            super(x, y);
+
+            this.addW(Utils.makeMod(this, () => (this._renderedImage?.width ?? 0) * this._scale));
+            this.addH(Utils.makeMod(this, () => (this._renderedImage?.height ?? 0) * this._scale));
+
+            this._formula = makeProp<string>(formula, ``);
+            this._scale = scale ?? 1;
+            this._latexEngine = latex_engine;
+        }
+
+        public innerDraw(play_ground: PlayGround)
+        {
+            this._latexEngine.drawLatex(this._formula.value, this.x, this.y, this._scale, play_ground.context2d);
+        }
+
+        private _scale: number;
+        private _formula: property<string>;
+        private _latexEngine: Geoma.Latex.LatexEngine;
+
+        private get _renderedImage(): HTMLImageElement | null
+        {
+            return this._latexEngine.getRenderedImage(this._formula.value) ?? null;
         }
     }
 }

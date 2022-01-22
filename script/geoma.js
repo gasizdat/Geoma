@@ -14,10 +14,14 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
-var __spreadArray = (this && this.__spreadArray) || function (to, from) {
-    for (var i = 0, il = from.length, j = to.length; i < il; i++, j++)
-        to[j] = from[i];
-    return to;
+var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
+    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+        if (ar || !(i in from)) {
+            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+            ar[i] = from[i];
+        }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
 };
 var __assign = (this && this.__assign) || function () {
     __assign = Object.assign || function(t) {
@@ -178,22 +182,42 @@ var Geoma;
             return MulticastEvent;
         }());
         Utils.MulticastEvent = MulticastEvent;
+        var ModuleInteger = (function () {
+            function ModuleInteger(value) {
+                if (value === void 0) { value = 0; }
+                this._value = value;
+            }
+            Object.defineProperty(ModuleInteger.prototype, "value", {
+                get: function () {
+                    return this._value;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            ModuleInteger.prototype.inc = function () {
+                this._value = toInt(this._value) % ModuleInteger._module + 1;
+                return this._value;
+            };
+            ModuleInteger._module = 1000000;
+            return ModuleInteger;
+        }());
+        Utils.ModuleInteger = ModuleInteger;
         var Pulse = (function () {
             function Pulse() {
-                this._revision = 0;
+                this._revision = new ModuleInteger();
                 this._receiptors = {};
             }
             Pulse.prototype.set = function () {
-                this._revision = toInt(this._revision + 1) % 1000000;
+                this._revision.inc();
             };
             Pulse.prototype.get = function (receiptor) {
                 if (this._receiptors[receiptor] == null) {
-                    this._receiptors[receiptor] = this._revision;
-                    return this._revision != 0;
+                    this._receiptors[receiptor] = this._revision.value;
+                    return this._revision.value != 0;
                 }
                 else {
-                    var ret = this._receiptors[receiptor] != this._revision;
-                    this._receiptors[receiptor] = this._revision;
+                    var ret = this._receiptors[receiptor] != this._revision.value;
+                    this._receiptors[receiptor] = this._revision.value;
                     return ret;
                 }
             };
@@ -588,6 +612,77 @@ var Geoma;
 })(Geoma || (Geoma = {}));
 var Geoma;
 (function (Geoma) {
+    var Latex;
+    (function (Latex) {
+        var LatexEngine = (function () {
+            function LatexEngine() {
+                this.disabled = false;
+                this.queue = [];
+                this.existingFormulas = new Map();
+            }
+            LatexEngine.prototype.getRenderedImage = function (formula) {
+                return this.existingFormulas.get(formula);
+            };
+            LatexEngine.prototype.mathContainerUpdate = function () {
+                var _this = this;
+                var container = document.getElementById("mathContainer");
+                if (container) {
+                    var select = container.querySelector("svg");
+                    if (select) {
+                        var data = select.outerHTML;
+                        var DOMURL = window.URL || window.webkitURL || window;
+                        var img_1 = new Image();
+                        var svg = new Blob([data], {
+                            type: 'image/svg+xml;charset=utf-8'
+                        });
+                        var url = DOMURL.createObjectURL(svg);
+                        img_1.onload = (function () {
+                            if (_this.queue.length) {
+                                _this.existingFormulas.set(_this.queue[0].formula, img_1);
+                                _this.drawImageFromQueue();
+                            }
+                        }).bind(this);
+                        img_1.src = url;
+                    }
+                }
+            };
+            LatexEngine.prototype.drawLatex = function (formula, x, y, scale, ctx) {
+                this.queue.push({ formula: formula, x: x, y: y, ctx: ctx, scale: scale });
+                if (this.queue.length == 1) {
+                    this.drawLatexFromQueue();
+                }
+            };
+            LatexEngine.prototype.drawImageFromQueue = function () {
+                var imgData = this.queue[0];
+                var img = this.existingFormulas.get(imgData.formula);
+                imgData.ctx.save();
+                imgData.ctx.transform(1, 0, 0, 1, 0, 0);
+                imgData.ctx.drawImage(img, imgData.x, imgData.y, img.width * imgData.scale, img.height * imgData.scale);
+                imgData.ctx.restore();
+                this.queue.shift();
+                this.drawLatexFromQueue();
+            };
+            LatexEngine.prototype.drawLatexFromQueue = function () {
+                if (this.queue.length) {
+                    var container = document.getElementById("mathContainer");
+                    var imgData = this.queue[0];
+                    if (container) {
+                        if (!this.existingFormulas.has(imgData.formula)) {
+                            container.innerHTML = "$" + imgData.formula + "$";
+                        }
+                        else {
+                            this.drawImageFromQueue();
+                        }
+                    }
+                }
+            };
+            return LatexEngine;
+        }());
+        Latex.LatexEngine = LatexEngine;
+    })(Latex = Geoma.Latex || (Geoma.Latex = {}));
+})(Geoma || (Geoma = {}));
+var Geoma;
+(function (Geoma) {
     var MulticastEvent = Geoma.Utils.MulticastEvent;
     var Point = Geoma.Utils.Point;
     var assert = Geoma.Utils.assert;
@@ -960,7 +1055,7 @@ var Geoma;
             });
             Object.defineProperty(Sprite.prototype, "visible", {
                 get: function () {
-                    return this._visible.value;
+                    return this.getVisible();
                 },
                 set: function (value) {
                     this._visible.value = value;
@@ -989,6 +1084,9 @@ var Geoma;
             };
             Sprite.prototype.resetAlpha = function (value) {
                 this._alpha.reset(value);
+            };
+            Sprite.prototype.getVisible = function () {
+                return this._visible.value;
             };
             return Sprite;
         }(Box));
@@ -1472,6 +1570,123 @@ var Geoma;
             return MultiLineText;
         }(Sprite));
         Sprite_1.MultiLineText = MultiLineText;
+        var TextInput = (function (_super) {
+            __extends(TextInput, _super);
+            function TextInput(x, y, w, h, text, text_brush, text_style, background_brush, fixWidth) {
+                var _this = _super.call(this, x, y, w, h) || this;
+                _this.onKeyPress = new Geoma.Utils.MulticastEvent();
+                _this._textWidth = 0;
+                _this._textHeight = 0;
+                _this._text = text;
+                _this._textBrush = makeProp(text_brush, DefaultBrush);
+                _this._textStyle = makeProp(text_style, DefaultTextStyle);
+                _this._backgroundBrush = makeProp(background_brush, DefaultBrush);
+                if (!fixWidth)
+                    _this.addW(Geoma.Utils.makeMod(_this, function (value) {
+                        return Math.max(value, _this._textWidth);
+                    }));
+                return _this;
+            }
+            Object.defineProperty(TextInput.prototype, "visible", {
+                get: function () {
+                    var visible = _super.prototype.getVisible.call(this);
+                    if (this._input) {
+                        this._input.style.visibility = visible ? "visible" : "hidden";
+                    }
+                    return visible;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(TextInput.prototype, "text", {
+                get: function () {
+                    var _a, _b, _c;
+                    return (_c = (_b = (_a = this._input) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : this._text) !== null && _c !== void 0 ? _c : "";
+                },
+                set: function (value) {
+                    if (this._input) {
+                        this._input.value = value;
+                    }
+                    else {
+                        this._text = value;
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(TextInput.prototype, "textWidth", {
+                get: function () {
+                    return this._textWidth;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(TextInput.prototype, "textHeight", {
+                get: function () {
+                    return this._textHeight;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            TextInput.prototype.dispose = function () {
+                _super.prototype.dispose.call(this);
+                if (this._input) {
+                    document.body.removeChild(this._input);
+                    delete this._input;
+                }
+            };
+            TextInput.prototype.innerDraw = function (play_ground) {
+                var _this = this;
+                var _a;
+                if (!this._input) {
+                    var input = document.createElement("input");
+                    input.type = "text";
+                    input.onkeyup = Geoma.Utils.makeMod(this, function (event) {
+                        event.cancelBubble = !_this.onKeyPress.emitEvent(event);
+                        return event;
+                    });
+                    document.body.appendChild(input);
+                    this._input = input;
+                    this._input.style.border = "none";
+                    this._input.style.outline = "none";
+                    this._input.style.position = "absolute";
+                    this._input.value = (_a = this._text) !== null && _a !== void 0 ? _a : "";
+                }
+                var parent = play_ground.context2d.canvas;
+                var style = this._input.style;
+                style.left = TextInput.toHtmlPixels(this.x + parent.offsetLeft);
+                style.top = TextInput.toHtmlPixels(this.y + parent.offsetTop);
+                style.width = TextInput.toHtmlPixels(this.w);
+                style.height = TextInput.toHtmlPixels(this.h);
+                if (this._textBrush) {
+                    style.color = "" + this._textBrush.value;
+                }
+                if (this._backgroundBrush) {
+                    style.backgroundColor = "" + this._backgroundBrush.value;
+                }
+                if (this._textStyle) {
+                    var text_style = this._textStyle.value;
+                    style.font = text_style.font;
+                    style.direction = text_style.direction;
+                    style.textAlign = text_style.textAlign;
+                    play_ground.context2d.direction = text_style.direction;
+                    play_ground.context2d.font = text_style.font;
+                    play_ground.context2d.textAlign = text_style.textAlign;
+                }
+                else {
+                    play_ground.context2d.direction = style.direction;
+                    play_ground.context2d.font = style.font;
+                    play_ground.context2d.textAlign = style.textAlign;
+                }
+                this._textWidth = play_ground.context2d.measureText(this.text).width;
+                this._textHeight = play_ground.context2d.measureText("lIqg").actualBoundingBoxDescent;
+            };
+            TextInput.toHtmlPixels = function (value) {
+                return value + "px";
+            };
+            return TextInput;
+        }(Sprite));
+        Sprite_1.TextInput = TextInput;
         var PolySprite = (function (_super) {
             __extends(PolySprite, _super);
             function PolySprite(x, y, line_width, brush, scale) {
@@ -1561,7 +1776,699 @@ var Geoma;
             return Debug;
         }());
         Sprite_1.Debug = Debug;
+        var LatexContainer = (function (_super) {
+            __extends(LatexContainer, _super);
+            function LatexContainer(latex_engine, formula, x, y, scale) {
+                var _this = _super.call(this, x, y) || this;
+                _this.addW(Geoma.Utils.makeMod(_this, function () { var _a, _b; return ((_b = (_a = _this._renderedImage) === null || _a === void 0 ? void 0 : _a.width) !== null && _b !== void 0 ? _b : 0) * _this._scale; }));
+                _this.addH(Geoma.Utils.makeMod(_this, function () { var _a, _b; return ((_b = (_a = _this._renderedImage) === null || _a === void 0 ? void 0 : _a.height) !== null && _b !== void 0 ? _b : 0) * _this._scale; }));
+                _this._formula = makeProp(formula, "");
+                _this._scale = scale !== null && scale !== void 0 ? scale : 1;
+                _this._latexEngine = latex_engine;
+                return _this;
+            }
+            LatexContainer.prototype.innerDraw = function (play_ground) {
+                this._latexEngine.drawLatex(this._formula.value, this.x, this.y, this._scale, play_ground.context2d);
+            };
+            Object.defineProperty(LatexContainer.prototype, "_renderedImage", {
+                get: function () {
+                    var _a;
+                    return (_a = this._latexEngine.getRenderedImage(this._formula.value)) !== null && _a !== void 0 ? _a : null;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            return LatexContainer;
+        }(Sprite));
+        Sprite_1.LatexContainer = LatexContainer;
     })(Sprite = Geoma.Sprite || (Geoma.Sprite = {}));
+})(Geoma || (Geoma = {}));
+var Geoma;
+(function (Geoma) {
+    var Tools;
+    (function (Tools) {
+        var UiLanguage;
+        (function (UiLanguage) {
+            UiLanguage[UiLanguage["ruRu"] = 0] = "ruRu";
+            UiLanguage[UiLanguage["enUs"] = 1] = "enUs";
+        })(UiLanguage = Tools.UiLanguage || (Tools.UiLanguage = {}));
+        var Resources = (function () {
+            function Resources() {
+            }
+            Resources.collator = function () {
+                switch (Resources.language) {
+                    case UiLanguage.enUs:
+                        return new Intl.Collator("en-US", { numeric: true });
+                    case UiLanguage.ruRu:
+                        return new Intl.Collator("ru-RU", { numeric: true });
+                }
+            };
+            Resources.string = function (resource_id) {
+                var _a;
+                var args = [];
+                for (var _i = 1; _i < arguments.length; _i++) {
+                    args[_i - 1] = arguments[_i];
+                }
+                switch (Resources.language) {
+                    case UiLanguage.enUs:
+                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([(_a = Resources.enEnStrings[resource_id]) !== null && _a !== void 0 ? _a : resource_id], args, false));
+                    case UiLanguage.ruRu:
+                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([resource_id], args, false));
+                }
+            };
+            Resources.language = UiLanguage.ruRu;
+            Resources.enEnStrings = {
+                "Создать": "Create",
+                "Создать точку": "Create a point",
+                "Создать отрезок...": "Create a line segment...",
+                "Создать функцию...": "Create a function graph...",
+                "Файл": "File",
+                "Новый": "New",
+                "Открыть": "Open",
+                "Копировать": "Copy",
+                "Удалить": "Delete",
+                "Сохранить": "Save",
+                "Сохранить как...": "Save as...",
+                "Файла {0} больше нет": "There is not exists file {0}",
+                "Введите имя документа": "Please enter document name",
+                "Постоянная ссылка на документ": "Permanent document link",
+                "Настройки": "Settings",
+                "Светлая": "Light theme",
+                "Тёмная": "Dark theme",
+                "Тема": "Theme",
+                "Свойства": "Properties",
+                "Показать биссектрисы углов": "Show angles bisectors",
+                "Имя по умолчанию ({0})": "Set default name ({0})",
+                "Настраиваемое имя": "Custom name",
+                "Удалить индикатор угла {0}": "Delete angle indicator",
+                "Масштаб по осям x/y, %": "Scale by x/y axes (%)",
+                "Масштаб по осям x/y...": "Scale by x/y axes...",
+                "Редактировать функцию f = {0} ...": "Edit function f = {0} ...",
+                "Редактировать функцию": "Edit function",
+                "Удалить координатную плоскость": "Delete coordinate plane",
+                "Выберите вторую точку": "Please select second point",
+                "Выберите вторую прямую": "Please select second line segment",
+                "Выберите || прямую": "Please select line segment to be parallel",
+                "Выберите ⟂ прямую": "Please select line segment to be orthogonal",
+                "Невозможно восстановить данные": "Unable to restore document data",
+                "{0}\r\nВведите число": "{0}\r\nPlease, enter a number",
+                "Значение '{0}' не является числом": "The '{0}' is not a number",
+                "Нельзя провести линию к той же точке!": "Unable to make line segment with one point.",
+                "Отрезок {0} уже проведен!": "Line segment {0} is already exists.",
+                "Угол может быть обозначен только между различными прямыми, имеющими одну общую точку.": "The angle can be set between two different lines segments with one common point.",
+                "Угол {0} уже обозначен.": "The {0} angle is already exists.",
+                "Отрезки {0} и {1} не содержат общих точек": "The {0} and {1} lines segments have not common points.",
+                "Биссектриса угла {0} уже проведена.": "Bisector of {0} angle is already exists.",
+                "Отрезки {0} и {1} имеют общую точку и не могут стать ||.": "The {0} and {1} lines segments have one common point and cannot be parallel.",
+                "Отрезки {0} и {1} не имеют общей точки и не могут стать ⟂.": "The {0} and {1} lines segments have not common points and cannot by orthogonal.",
+                "Окружность {0} уже проведена!": "The {0} circle is already exists.",
+                "Нельзя провести окружность к той же точке!": "Unable to make circle containing one point.",
+                "Удалить биссектрису": "Delete angle bisector",
+                "Добавить точку": "Add point",
+                "Удалить окружность {0}": "Delete {0} circle",
+                "Введен недопустимый размер {0}": "The value {0} is the invalid size",
+                "Введите размер в пикселях": "Please enter the size in pixels",
+                "Задать размер...": "Set the size...",
+                "Изменяемый размер": "Resizable",
+                "Фиксированный размер": "Fixed size",
+                "Обозначить угол...": "Add the angle indicator...",
+                "Показать биссектрису угла...": "Add the angle bisector...",
+                "Сделать ||...": "Make it parallel to...",
+                "Сделать ⟂...": "Make it orthogonal to...",
+                "Удалить отрезок {0}": "Delete the {0} line segment",
+                "Приращение аргумента x функции {0}": "dx value of the function {0}",
+                "Точность...": "Accuracy...",
+                "Создать окружность из центра...": "Create a circle with point as center...",
+                "Создать окружность на диаметре...": "Create a circle with point as one of diameter point...",
+                "Удалить точку": "Delete point",
+                "Выберите место": "Please select a starting location",
+                "Создать линию...": "Create a line...",
+                "Линия {0} уже проведена!": "Line {0} is already exists.",
+                "Удалить линию {0}": "Delete the {0} line ",
+                "Удалить график {0}": "Delete the {0} function graph",
+                "Отмена": "Undo",
+                "Повтор": "Redo",
+                "Перемещение точки {0}": "Moving of the {0} point",
+                "Удаление точки {0}": "Delete the {0} point",
+                "Добавление точки": "Add a point",
+                "Перемещение сегмента {0}": "Moving of the {0} line segment",
+                "Удаление сегмента {0}": "Delete the {0} line segment",
+                "Удаление линии {0}": "Delete the {0} line",
+                "Добавление сегмента": "Add a line segment",
+                "Название угла ({0})": "Angle name ({0})",
+                "Отобразить угол": "Show angle",
+                "Добавление окружности": "Add a circle",
+                "Перемещение окружности {0}": "Moving of the {0} circle",
+                "Добавление линии": "Add a line",
+                "Перемещение линии {0}": "Moving of the {0} line",
+                "Сделать ||": "Make parallel",
+                "Сделать ⟂": "Make orthogonal",
+                "Добавление функции": "Add a function graph",
+                "Перемещение функции {0}": "Moving of the {0} function graph",
+                "Масштабирование функции {0}": "Scaling of the {0} function graph",
+                "Редактирование функции {0}": "Editing of the {0} function grapth",
+                "Масштабирование осей": "Scaling of the axes",
+                "Автоматическое сохранение": "Autosave",
+                "Перемещение страницы": "Moving of the canvas",
+                "Точка({0}: x={1}; y={2})": "Point({0}: x={1}; y={2})",
+                "Отрезок({0}: l={1}; α={2}°)": "Segment({0}: l={1}; α={2}°)",
+                "Линия({0}: α={1}°)": "Line({0}: α={1}°)",
+                "Окружность({0}: Ø={1})": "Circle({0}: Ø={1})",
+                "Функция(f={0})": "Function(f={0})",
+                "Угол({0}: {1}={2}°)": "Angle({0}: {1}={2}°)",
+                "Установить {0} = {1}": "Set {0} = {1}",
+                "Ошибка выражения: {0}": "Error expression: {0}",
+                "Неподдерживаемый тип функции: {0}": "Unsupported function type: {0}",
+                "Неподдерживаемый тип оператора: {0}": "Unsupported operator type: {0}",
+                "Неподдерживаемый тип операнда: {0}": "Unsupported operand type: {0}",
+                "Введите выражение": "Enter a math expression",
+                "⌨⇆🖰": "⌨⇆🖰",
+            };
+            return Resources;
+        }());
+        Tools.Resources = Resources;
+    })(Tools = Geoma.Tools || (Geoma.Tools = {}));
+})(Geoma || (Geoma = {}));
+var factorialCache = [];
+function factorial(value) {
+    if (!factorialCache.length) {
+        factorialCache.push(1);
+        for (var i = 1; i <= 170; i++) {
+            factorialCache.push(factorialCache[factorialCache.length - 1] * i);
+        }
+    }
+    if (value > 170) {
+        return Infinity;
+    }
+    else if (value >= 0) {
+        return factorialCache[Geoma.Utils.toInt(value)];
+    }
+    else {
+        return NaN;
+    }
+}
+function derivative(id, context, code) {
+    var f = context.getFunction(id);
+    if (f) {
+        var last_x = context.arg(id + "_x");
+        var last_y = context.arg(id + "_y");
+        var current_x = context.arg("x");
+        var current_y = f(current_x);
+        context.setArg(id + "_x", current_x);
+        context.setArg(id + "_y", current_y);
+        if (last_x < current_x) {
+            return (current_y - last_y) / (current_x - last_x);
+        }
+        else {
+            return NaN;
+        }
+    }
+    else {
+        context.addFunction(id, code);
+        var f_1 = context.getFunction(id);
+        Geoma.Utils.assert(f_1);
+        var current_x = context.arg("x");
+        var current_y = f_1(current_x);
+        context.addArg(id + "_x", current_x);
+        context.addArg(id + "_y", current_y);
+        return NaN;
+    }
+}
+function nthRoot(value, degree) {
+    if (degree > 0 && degree == Math.trunc(degree) && degree % 2) {
+        return Math.sign(value) * Math.pow(Math.abs(value), 1.0 / degree);
+    }
+    else {
+        return Math.pow(value, 1.0 / degree);
+    }
+}
+var Geoma;
+(function (Geoma) {
+    var Syntax;
+    (function (Syntax) {
+        var assert = Geoma.Utils.assert;
+        function defaultVisitor(_) { }
+        var CodeElement = (function () {
+            function CodeElement() {
+            }
+            Object.defineProperty(CodeElement.prototype, "derivativeLevel", {
+                get: function () {
+                    return this.getDerivativeLevel(0);
+                },
+                enumerable: false,
+                configurable: true
+            });
+            CodeElement.prototype.visitArguments = function (visitor) {
+                if (this instanceof Syntax.CodeArgument && !(this instanceof CodeArgumentX)) {
+                    visitor(this);
+                }
+                else if (this instanceof CodeUnary) {
+                    this.operand.visitArguments(visitor);
+                }
+                else if (this instanceof CodeBinary) {
+                    this.operand1.visitArguments(visitor);
+                    this.operand2.visitArguments(visitor);
+                }
+            };
+            CodeElement.prototype.serialize = function (data) {
+                if (this instanceof CodeLiteral) {
+                    data.push("+l");
+                    data.push(this.text);
+                }
+                else if (this instanceof CodeArgumentX) {
+                    data.push("+x");
+                }
+                else if (this instanceof CodeArgument) {
+                    data.push("+a");
+                    data.push(this.text);
+                }
+                else if (this instanceof CodeUnary) {
+                    data.push("+u");
+                    data.push(this.function);
+                    this.operand.serialize(data);
+                }
+                else if (this instanceof CodeBinary) {
+                    data.push("+b");
+                    data.push(this.function);
+                    this.operand1.serialize(data);
+                    this.operand2.serialize(data);
+                }
+            };
+            CodeElement.deserialize = function (data, i) {
+                if (i >= data.length) {
+                    throw CodeElement.error;
+                }
+                switch (data[i]) {
+                    case "+l":
+                        i++;
+                        if (i >= data.length) {
+                            throw CodeElement.error;
+                        }
+                        var value = parseFloat(data[i]);
+                        if (data[i] != "" + value) {
+                            throw CodeElement.error;
+                        }
+                        return { code: new CodeLiteral(value), index: i + 1 };
+                    case "+x":
+                        return { code: new CodeArgumentX(), index: i + 1 };
+                    case "+a":
+                        i++;
+                        if (i >= data.length) {
+                            throw CodeElement.error;
+                        }
+                        return { code: new CodeArgument(data[i]), index: i + 1 };
+                    case "+u":
+                        i++;
+                        if (i >= data.length) {
+                            throw CodeElement.error;
+                        }
+                        var unary_function = data[i];
+                        var operand = CodeElement.deserialize(data, i + 1);
+                        return { code: new CodeUnary(unary_function, operand.code), index: operand.index };
+                    case "+b":
+                        i++;
+                        if (i >= data.length) {
+                            throw CodeElement.error;
+                        }
+                        var binary_function = data[i];
+                        var operand1 = CodeElement.deserialize(data, i + 1);
+                        var operand2 = CodeElement.deserialize(data, operand1.index);
+                        return { code: new CodeBinary(operand1.code, binary_function, operand2.code), index: operand2.index };
+                    default:
+                        throw CodeElement.error;
+                }
+            };
+            CodeElement.prototype.getDerivativeLevel = function (level) {
+                if (this instanceof Syntax.CodeUnary) {
+                    if (this.function == "f'") {
+                        return this.operand.getDerivativeLevel(level + 1);
+                    }
+                    else {
+                        return this.operand.getDerivativeLevel(level);
+                    }
+                }
+                else if (this instanceof Syntax.CodeBinary) {
+                    var level1 = this.operand1.getDerivativeLevel(level);
+                    var level2 = this.operand2.getDerivativeLevel(level);
+                    return Math.max(level1, level2);
+                }
+                else {
+                    return level;
+                }
+            };
+            CodeElement.error = new Error(Geoma.Tools.Resources.string("Невозможно восстановить данные"));
+            return CodeElement;
+        }());
+        Syntax.CodeElement = CodeElement;
+        var CodeDefinitionElement = (function (_super) {
+            __extends(CodeDefinitionElement, _super);
+            function CodeDefinitionElement() {
+                return _super !== null && _super.apply(this, arguments) || this;
+            }
+            return CodeDefinitionElement;
+        }(CodeElement));
+        Syntax.CodeDefinitionElement = CodeDefinitionElement;
+        var CodeArgument = (function (_super) {
+            __extends(CodeArgument, _super);
+            function CodeArgument(arg_name) {
+                var _this = _super.call(this) || this;
+                _this._argName = arg_name;
+                return _this;
+            }
+            Object.defineProperty(CodeArgument.prototype, "code", {
+                get: function () {
+                    return "this.arg('" + this._argName + "')";
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeArgument.prototype, "text", {
+                get: function () {
+                    return this._argName;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeArgument.prototype, "math", {
+                get: function () {
+                    return this.text;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            return CodeArgument;
+        }(CodeDefinitionElement));
+        Syntax.CodeArgument = CodeArgument;
+        var CodeLiteral = (function (_super) {
+            __extends(CodeLiteral, _super);
+            function CodeLiteral(value) {
+                var _this = _super.call(this) || this;
+                _this._value = value;
+                return _this;
+            }
+            Object.defineProperty(CodeLiteral.prototype, "code", {
+                get: function () {
+                    return "" + this._value;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeLiteral.prototype, "text", {
+                get: function () {
+                    return "" + this._value;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeLiteral.prototype, "math", {
+                get: function () {
+                    return this.text;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            return CodeLiteral;
+        }(CodeDefinitionElement));
+        Syntax.CodeLiteral = CodeLiteral;
+        var CodeArgumentX = (function (_super) {
+            __extends(CodeArgumentX, _super);
+            function CodeArgumentX() {
+                return _super.call(this, "x") || this;
+            }
+            return CodeArgumentX;
+        }(CodeArgument));
+        Syntax.CodeArgumentX = CodeArgumentX;
+        var CodeUnary = (function (_super) {
+            __extends(CodeUnary, _super);
+            function CodeUnary(_function, operand) {
+                var _this = _super.call(this) || this;
+                _this._function = _function;
+                _this._operand = operand;
+                return _this;
+            }
+            Object.defineProperty(CodeUnary.prototype, "code", {
+                get: function () {
+                    var math_function;
+                    switch (this._function) {
+                        case "±":
+                            return "" + this._operand.code;
+                        case "arccos":
+                            math_function = "Math.acos";
+                            break;
+                        case "arcsin":
+                            math_function = "Math.asin";
+                            break;
+                        case "arctan":
+                            math_function = "Math.atan";
+                            break;
+                        case "sin":
+                            math_function = "Math.sin";
+                            break;
+                        case "cos":
+                            math_function = "Math.cos";
+                            break;
+                        case "tan":
+                            math_function = "Math.tan";
+                            break;
+                        case "ln":
+                            math_function = "Math.log";
+                            break;
+                        case "log2":
+                            math_function = "Math.log2";
+                            break;
+                        case "log10":
+                            math_function = "Math.log10";
+                            break;
+                        case "exp":
+                            math_function = "Math.exp";
+                            break;
+                        case "√":
+                            math_function = "Math.sqrt";
+                            break;
+                        case "∛":
+                            return "Math.cbrt(" + this._operand.code + ")";
+                        case "∜":
+                            return "Math.sqrt(Math.sqrt(" + this._operand.code + "))";
+                        case "sign":
+                            math_function = "Math.sign";
+                            break;
+                        case "abs":
+                            math_function = "Math.abs";
+                            break;
+                        case "sinh":
+                            math_function = "Math.sinh";
+                            break;
+                        case "cosh":
+                            math_function = "Math.cosh";
+                            break;
+                        case "tanh":
+                            math_function = "Math.tanh";
+                            break;
+                        case "arcsinh":
+                            math_function = "Math.asinh";
+                            break;
+                        case "arccosh":
+                            math_function = "Math.acosh";
+                            break;
+                        case "arctanh":
+                            math_function = "Math.atanh";
+                            break;
+                        case "!":
+                            math_function = "factorial";
+                            break;
+                        case "f'":
+                            var code = this._operand.code.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+                            return "derivative(" + CodeUnary._functionNo++ + ", this, \"" + code + "\")";
+                        case "round":
+                            math_function = "Math.round";
+                            break;
+                        case "ceil":
+                            math_function = "Math.ceil";
+                            break;
+                        case "floor":
+                            math_function = "Math.floor";
+                            break;
+                        case "neg":
+                            math_function = "-";
+                            break;
+                        default:
+                            assert(false, "Math function " + this._function + " not supported");
+                    }
+                    return math_function + "(" + this._operand.code + ")";
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeUnary.prototype, "text", {
+                get: function () {
+                    return this.toText(this._operand.text);
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeUnary.prototype, "math", {
+                get: function () {
+                    switch (this._function) {
+                        case "log2":
+                            return "log(" + this._operand.math + "; 2)";
+                        case "log10":
+                            return "log(" + this._operand.math + "; 10)";
+                        case "√":
+                            return "sqrt(" + this._operand.math + ")";
+                        case "∛":
+                            return "cbrt(" + this._operand.math + ")";
+                        case "∜":
+                            return "root(" + this._operand.math + ", 4)";
+                        case "abs":
+                            return "abs(" + this._operand.math + ")";
+                        case "round":
+                            return "round(" + this._operand.math + ")";
+                        case "ceil":
+                            return "ceil(" + this._operand.math + ")";
+                        case "floor":
+                            return "floor(" + this._operand.math + ")";
+                        case "!":
+                            return "fact(" + this._operand.math + ")";
+                        default:
+                            return this.toText(this._operand.math);
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeUnary.prototype, "function", {
+                get: function () {
+                    return this._function;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeUnary.prototype, "operand", {
+                get: function () {
+                    return this._operand;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            CodeUnary.prototype.toText = function (operand) {
+                switch (this.function) {
+                    case "abs":
+                        return "|" + operand + "|";
+                    case "round":
+                        return "[" + operand + "]";
+                    case "ceil":
+                        return "\u23BE" + operand + "\u23CB";
+                    case "floor":
+                        return "\u23BF" + operand + "\u23CC";
+                    case "!":
+                        return operand + "!";
+                    case "neg":
+                        return "-(" + operand + ")";
+                }
+                if (operand.length > 0 && operand.charAt(0) == "(") {
+                    return "" + this._function + operand;
+                }
+                else {
+                    return this._function + "(" + operand + ")";
+                }
+            };
+            CodeUnary._functionNo = 1;
+            return CodeUnary;
+        }(CodeElement));
+        Syntax.CodeUnary = CodeUnary;
+        var CodeBinary = (function (_super) {
+            __extends(CodeBinary, _super);
+            function CodeBinary(operand1, _function, operand2) {
+                var _this = _super.call(this) || this;
+                _this._function = _function;
+                _this._operand1 = operand1;
+                _this._operand2 = operand2;
+                return _this;
+            }
+            Object.defineProperty(CodeBinary.prototype, "code", {
+                get: function () {
+                    switch (this._function) {
+                        case "pow":
+                            return "Math.pow(" + this._operand1.code + ", " + this._operand2.code + ")";
+                        case "n√":
+                            return "nthRoot(" + this._operand2.code + ", " + this._operand1.code + ")";
+                        case "+":
+                            return "(" + this._operand1.code + " + " + this._operand2.code + ")";
+                        case "-":
+                            return "(" + this._operand1.code + " - " + this._operand2.code + ")";
+                        case "*":
+                            return "(" + this._operand1.code + " * " + this._operand2.code + ")";
+                        case "÷":
+                            return "(" + this._operand1.code + " / " + this._operand2.code + ")";
+                        default:
+                            assert(false, "Math function " + this._function + " not supported");
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeBinary.prototype, "text", {
+                get: function () {
+                    return this.toText(this._operand1.text, this._operand2.text);
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeBinary.prototype, "math", {
+                get: function () {
+                    switch (this._function) {
+                        case "n√":
+                            return "root(" + this._operand2.math + "; " + this._operand1.math + ")";
+                        default:
+                            return this.toText(this._operand1.math, this._operand2.math);
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeBinary.prototype, "function", {
+                get: function () {
+                    return this._function;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeBinary.prototype, "operand1", {
+                get: function () {
+                    return this._operand1;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(CodeBinary.prototype, "operand2", {
+                get: function () {
+                    return this._operand2;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            CodeBinary.prototype.toText = function (operand1, operand2) {
+                switch (this._function) {
+                    case "pow":
+                        return "(" + operand1 + " ^ " + operand2 + ")";
+                    case "n√":
+                        return "(" + operand1 + "\u221A " + operand2 + ")";
+                    case "+":
+                        return "(" + operand1 + " + " + operand2 + ")";
+                    case "-":
+                        return "(" + operand1 + " - " + operand2 + ")";
+                    case "*":
+                        return "(" + operand1 + " * " + operand2 + ")";
+                    case "÷":
+                        return "(" + operand1 + " / " + operand2 + ")";
+                    default:
+                        assert(false, "Math function " + this._function + " not supported");
+                }
+            };
+            return CodeBinary;
+        }(CodeElement));
+        Syntax.CodeBinary = CodeBinary;
+    })(Syntax = Geoma.Syntax || (Geoma.Syntax = {}));
 })(Geoma || (Geoma = {}));
 var Geoma;
 (function (Geoma) {
@@ -1691,6 +2598,8 @@ var Geoma;
         var DefaultThemeStyle = (function () {
             function DefaultThemeStyle() {
                 this.name = "DefaultTheme";
+                this.PropertyLeftMargin = 20;
+                this.PropertyVerticalPadding = 5;
                 this.ButtonBackgroundBrush = "#117777";
                 this.ButtonSelectedBrush = "#0011EF";
                 this.ButtonItemTextBrush = "#EFFFFF";
@@ -1775,9 +2684,14 @@ var Geoma;
                 this.AdornerStrokeBrush = "White";
                 this.AdornerStrokeWidth = 0;
                 this.FormulaEditorBackgroundBrush = "#117777";
+                this.FormulaInputTextBrush = "#EFFFFF";
+                this.FormulaInputTextBackgroundBrush = "#117777";
+                this.FormulaInputTextStyle = {
+                    font: "18px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+                };
                 this.FormulaSampleTextBrush = "SandyBrown";
                 this.FormulaSampleTextStyle = {
-                    font: "12px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+                    font: "18px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
                 };
                 this.CoordinatesPrecision = 2;
                 this.PropertyTextBrush = "DarkTurquoise";
@@ -1791,6 +2705,8 @@ var Geoma;
         var BlueThemeStyle = (function () {
             function BlueThemeStyle() {
                 this.name = "BlueTheme";
+                this.PropertyLeftMargin = 20;
+                this.PropertyVerticalPadding = 5;
                 this.ButtonBackgroundBrush = "LightSkyBlue";
                 this.ButtonSelectedBrush = "SteelBlue";
                 this.ButtonItemTextBrush = "DarkSlateGray";
@@ -1875,9 +2791,14 @@ var Geoma;
                 this.BisectorSelectionBrush = "OrangeRed";
                 this.BisectorLineWidth = 1;
                 this.FormulaEditorBackgroundBrush = "PeachPuff";
+                this.FormulaInputTextBrush = "DarkSlateGray";
+                this.FormulaInputTextBackgroundBrush = "LightSkyBlue";
+                this.FormulaInputTextStyle = {
+                    font: "18px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+                };
                 this.FormulaSampleTextBrush = "Gray";
                 this.FormulaSampleTextStyle = {
-                    font: "12px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+                    font: "18px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
                 };
                 this.CoordinatesPrecision = 2;
                 this.PropertyTextBrush = "DarkSlateGray";
@@ -2113,12 +3034,12 @@ var Geoma;
                 _this._subMenu.addVisible(makeMod(_this, function () { return _this._subMenuVisible; }));
                 _this._beforeDrawListener = _this.document.onBeforeDraw.bind(_this, function () {
                     if (_this._subMenuVisible) {
-                        if (_this._subMenuAboutToHide && _this._subMenuAboutToHide <= Tools.Document.getTicks()) {
+                        if (_this._subMenuAboutToHide && _this._subMenuAboutToHide <= Tools.Document.ticks) {
                             _this._subMenuAboutToHide = 0;
                             _this._subMenuVisible = _this.selected;
                         }
                     }
-                    else if (_this._subMenuAboutToShow && _this._subMenuAboutToShow <= Tools.Document.getTicks()) {
+                    else if (_this._subMenuAboutToShow && _this._subMenuAboutToShow <= Tools.Document.ticks) {
                         _this._subMenuAboutToShow = 0;
                         _this._subMenuVisible = _this.selected;
                     }
@@ -2168,7 +3089,7 @@ var Geoma;
                         if (!this.selected) {
                             this._subMenuAboutToShow = 0;
                             if (!this._subMenuAboutToHide) {
-                                this._subMenuAboutToHide = Tools.Document.getTicks() + MenuGroup._subMenuVisibilityChangeTimeOut;
+                                this._subMenuAboutToHide = Tools.Document.ticks + MenuGroup._subMenuVisibilityChangeTimeOut;
                             }
                         }
                         else {
@@ -2178,7 +3099,7 @@ var Geoma;
                     else if (this.selected) {
                         this._subMenuAboutToHide = 0;
                         if (!this._subMenuAboutToShow) {
-                            this._subMenuAboutToShow = Tools.Document.getTicks() + MenuGroup._subMenuVisibilityChangeTimeOut;
+                            this._subMenuAboutToShow = Tools.Document.ticks + MenuGroup._subMenuVisibilityChangeTimeOut;
                         }
                     }
                 }
@@ -2366,143 +3287,6 @@ var Geoma;
 (function (Geoma) {
     var Tools;
     (function (Tools) {
-        var UiLanguage;
-        (function (UiLanguage) {
-            UiLanguage[UiLanguage["ruRu"] = 0] = "ruRu";
-            UiLanguage[UiLanguage["enUs"] = 1] = "enUs";
-        })(UiLanguage = Tools.UiLanguage || (Tools.UiLanguage = {}));
-        var Resources = (function () {
-            function Resources() {
-            }
-            Resources.collator = function () {
-                switch (Resources.language) {
-                    case UiLanguage.enUs:
-                        return new Intl.Collator("en-US", { numeric: true });
-                    case UiLanguage.ruRu:
-                        return new Intl.Collator("ru-RU", { numeric: true });
-                }
-            };
-            Resources.string = function (resource_id) {
-                var _a;
-                var args = [];
-                for (var _i = 1; _i < arguments.length; _i++) {
-                    args[_i - 1] = arguments[_i];
-                }
-                switch (Resources.language) {
-                    case UiLanguage.enUs:
-                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([(_a = Resources.enEnStrings[resource_id]) !== null && _a !== void 0 ? _a : resource_id], args));
-                    case UiLanguage.ruRu:
-                        return Geoma.Utils.formatString.apply(Geoma.Utils, __spreadArray([resource_id], args));
-                }
-            };
-            Resources.language = UiLanguage.ruRu;
-            Resources.enEnStrings = {
-                "Создать": "Create",
-                "Создать точку": "Create a point",
-                "Создать отрезок...": "Create a line segment...",
-                "Создать функцию...": "Create a function graph...",
-                "Файл": "File",
-                "Новый": "New",
-                "Открыть": "Open",
-                "Копировать": "Copy",
-                "Удалить": "Delete",
-                "Сохранить...": "Save...",
-                "Файла {0} больше нет": "There is not exists file {0}",
-                "Введите имя документа": "Please enter document name",
-                "Постоянная ссылка на документ": "Permanent document link",
-                "Настройки": "Settings",
-                "Светлая": "Light theme",
-                "Тёмная": "Dark theme",
-                "Тема": "Theme",
-                "Свойства": "Properties",
-                "Показать биссектрисы углов": "Show angles bisectors",
-                "Имя по умолчанию ({0})": "Set default name ({0})",
-                "Настраиваемое имя": "Custom name",
-                "Удалить индикатор угла {0}": "Delete angle indicator",
-                "Масштаб по осям x/y, %": "Scale by x/y axes (%)",
-                "Масштаб по осям x/y...": "Scale by x/y axes...",
-                "Редактировать функцию f = {0} ...": "Edit function f = {0} ...",
-                "Редактировать функцию": "Edit function",
-                "Удалить координатную плоскость": "Delete coordinate plane",
-                "Выберите вторую точку": "Please select second point",
-                "Выберите вторую прямую": "Please select second line segment",
-                "Выберите || прямую": "Please select line segment to be parallel",
-                "Выберите ⟂ прямую": "Please select line segment to be orthogonal",
-                "Невозможно восстановить данные": "Unable to restore document data",
-                "{0}\r\nВведите число": "{0}\r\nPlease, enter a number",
-                "Значение '{0}' не является числом": "The '{0}' is not a number",
-                "Нельзя провести линию к той же точке!": "Unable to make line segment with one point.",
-                "Отрезок {0} уже проведен!": "Line segment {0} is already exists.",
-                "Угол может быть обозначен только между различными прямыми, имеющими одну общую точку.": "The angle can be set between two different lines segments with one common point.",
-                "Угол {0} уже обозначен.": "The {0} angle is already exists.",
-                "Отрезки {0} и {1} не содержат общих точек": "The {0} and {1} lines segments have not common points.",
-                "Биссектриса угла {0} уже проведена.": "Bisector of {0} angle is already exists.",
-                "Отрезки {0} и {1} имеют общую точку и не могут стать ||.": "The {0} and {1} lines segments have one common point and cannot be parallel.",
-                "Отрезки {0} и {1} не имеют общей точки и не могут стать ⟂.": "The {0} and {1} lines segments have not common points and cannot by orthogonal.",
-                "Окружность {0} уже проведена!": "The {0} circle is already exists.",
-                "Нельзя провести окружность к той же точке!": "Unable to make circle containing one point.",
-                "Удалить биссектрису": "Delete angle bisector",
-                "Добавить точку": "Add point",
-                "Удалить окружность {0}": "Delete {0} circle",
-                "Введен недопустимый размер {0}": "The value {0} is the invalid size",
-                "Введите размер в пикселях": "Please enter the size in pixels",
-                "Задать размер...": "Set the size...",
-                "Изменяемый размер": "Resizable",
-                "Фиксированный размер": "Fixed size",
-                "Обозначить угол...": "Add the angle indicator...",
-                "Показать биссектрису угла...": "Add the angle bisector...",
-                "Сделать ||...": "Make it parallel to...",
-                "Сделать ⟂...": "Make it orthogonal to...",
-                "Удалить отрезок {0}": "Delete the {0} line segment",
-                "Приращение аргумента x функции {0}": "dx value of the function {0}",
-                "Точность...": "Accuracy...",
-                "Создать окружность из центра...": "Create a circle with point as center...",
-                "Создать окружность на диаметре...": "Create a circle with point as one of diameter point...",
-                "Удалить точку": "Delete point",
-                "Выберите место": "Please select a starting location",
-                "Создать линию...": "Create a line...",
-                "Линия {0} уже проведена!": "Line {0} is already exists.",
-                "Удалить линию {0}": "Delete the {0} line ",
-                "Удалить график {0}": "Delete the {0} function graph",
-                "Отмена": "Undo",
-                "Повтор": "Redo",
-                "Перемещение точки {0}": "Moving of the {0} point",
-                "Удаление точки {0}": "Delete the {0} point",
-                "Добавление точки": "Add a point",
-                "Перемещение сегмента {0}": "Moving of the {0} line segment",
-                "Удаление сегмента {0}": "Delete the {0} line segment",
-                "Добавление сегмента": "Add a line segment",
-                "Название угла ({0})": "Angle name ({0})",
-                "Отобразить угол": "Show angle",
-                "Добавление окружности": "Add a circle",
-                "Перемещение окружности {0}": "Moving of the {0} circle",
-                "Добавление линии": "Add a line",
-                "Перемещение линии {0}": "Moving of the {0} line",
-                "Сделать ||": "Make parallel",
-                "Сделать ⟂": "Make orthogonal",
-                "Добавление функции": "Add a function graph",
-                "Перемещение функции {0}": "Moving of the {0} function graph",
-                "Масштабирование функции {0}": "Scaling of the {0} function graph",
-                "Редактирование функции {0}": "Editing of the {0} function grapth",
-                "Масштабирование осей": "Scaling of the axes",
-                "Автоматическое сохранение": "Autosave",
-                "Перемещение страницы": "Moving of the canvas",
-                "Точка({0}: x={1}; y={2})": "Point({0}: x={1}; y={2})",
-                "Отрезок({0}: l={1}; α={2}°)": "Segment({0}: l={1}; α={2}°)",
-                "Линия({0}: α={1}°)": "Line({0}: α={1}°)",
-                "Окружность({0}: Ø={1})": "Circle({0}: Ø={1})",
-                "Функция(f={0})": "Function(f={0})",
-                "Угол({0}: {1}={2}°)": "Angle({0}: {1}={2}°)"
-            };
-            return Resources;
-        }());
-        Tools.Resources = Resources;
-    })(Tools = Geoma.Tools || (Geoma.Tools = {}));
-})(Geoma || (Geoma = {}));
-var Geoma;
-(function (Geoma) {
-    var Tools;
-    (function (Tools) {
         var makeMod = Geoma.Utils.makeMod;
         var makeProp = Geoma.Utils.makeProp;
         var Point = Geoma.Utils.Point;
@@ -2523,7 +3307,7 @@ var Geoma;
             ToolBase.prototype.mouseHit = function (point) {
                 return _super.prototype.mouseHit.call(this, Point.sub(point, this.document.mouseArea.offset));
             };
-            ToolBase.prototype.moved = function (_receiptor) {
+            ToolBase.prototype.isMoved = function (_receiptor) {
                 return false;
             };
             return ToolBase;
@@ -2641,8 +3425,11 @@ var Geoma;
                     var menu_item = menu.addMenuItem(Tools.Resources.string("Новый"));
                     menu_item.onChecked.bind(this.document, this.document.new);
                     var open_group = menu.addMenuGroup(Tools.Resources.string("Открыть"));
-                    menu_item = menu.addMenuItem(Tools.Resources.string("Сохранить..."));
+                    menu_item = menu.addMenuItem(Tools.Resources.string("Сохранить"));
                     menu_item.onChecked.bind(this, this.saveCommand);
+                    menu_item.enabled.addModifier(makeMod(this, function () { return _this.document.name != ""; }));
+                    menu_item = menu.addMenuItem(Tools.Resources.string("Сохранить как..."));
+                    menu_item.onChecked.bind(this, this.saveCommandAs);
                     menu_item = menu.addMenuItem(Tools.Resources.string("Копировать"));
                     menu_item.onChecked.bind(this, this.copyCommand);
                     var delete_group = menu.addMenuGroup(Tools.Resources.string("Удалить"));
@@ -2682,10 +3469,16 @@ var Geoma;
                 window.localStorage.removeItem(file_name !== null && file_name !== void 0 ? file_name : event.detail.tooltip);
             };
             FileTool.prototype.saveCommand = function () {
+                assert(this.document.name);
+                var data = this.document.save();
+                window.localStorage.setItem(this.document.name, data);
+            };
+            FileTool.prototype.saveCommandAs = function () {
                 var data = this.document.save();
                 var save_name = this.document.prompt(Tools.Resources.string("Введите имя документа"));
                 if (save_name != null) {
                     window.localStorage.setItem(save_name, data);
+                    this.document.name = save_name;
                 }
             };
             FileTool.prototype.copyCommand = function () {
@@ -2879,7 +3672,7 @@ var Geoma;
             TapTool.prototype.innerDraw = function (play_ground) {
                 assert(this._startTicks);
                 assert(this._downPoint);
-                var elapsed_time = Tools.Document.getTicks() - this._startTicks;
+                var elapsed_time = Tools.Document.ticks - this._startTicks;
                 var active_time = elapsed_time - this._delayTime.value;
                 if (active_time >= 0) {
                     var duration = this._activateTime.value - this._delayTime.value;
@@ -2909,7 +3702,7 @@ var Geoma;
                     assert(!this._mouseUpListener);
                     this._mouseUpListener = this.document.mouseArea.onMouseUp.bind(this, this.mouseUp, true);
                     this._downPoint = event;
-                    this._startTicks = Tools.Document.getTicks();
+                    this._startTicks = Tools.Document.ticks;
                     this.visible = true;
                     this.selected = true;
                 }
@@ -3071,12 +3864,28 @@ var Geoma;
                 _this.item.push(text_sprite);
                 return _this;
             }
+            Object.defineProperty(Button.prototype, "isPressed", {
+                get: function () {
+                    return this._mouseDown;
+                },
+                enumerable: false,
+                configurable: true
+            });
             Button.prototype.dispose = function () {
                 if (!this.disposed) {
                     this._mouseDownListener.dispose();
                     this._mouseUpListener.dispose();
                     _super.prototype.dispose.call(this);
                 }
+            };
+            Button.prototype.addX = function (modifier) {
+                this.item.first.addX(modifier);
+            };
+            Button.prototype.addY = function (modifier) {
+                this.item.first.addY(modifier);
+            };
+            Button.prototype.addText = function (modifier) {
+                this.item.item(1).text.addModifier(modifier);
             };
             Button.prototype.mouseClick = function (event) {
                 if (this.mouseHit(event)) {
@@ -3528,9 +4337,6 @@ var Geoma;
                 _this.addY(makeMod(_this, _this.dyModifier));
                 return _this;
             }
-            ActivePoint.prototype.moved = function (receiptor) {
-                return this._moved.get(receiptor);
-            };
             ActivePoint.prototype.dispose = function () {
                 var _a;
                 if (!this.disposed) {
@@ -3543,7 +4349,10 @@ var Geoma;
             ActivePoint.prototype.move = function (dx, dy) {
                 this._dx -= dx;
                 this._dy -= dy;
-                this._moved.set();
+                this.setMoved();
+            };
+            ActivePoint.prototype.isMoved = function (receiptor) {
+                return this._moved.get(receiptor);
             };
             ActivePoint.prototype.serialize = function (context) {
                 var data = _super.prototype.serialize.call(this, context);
@@ -3637,6 +4446,9 @@ var Geoma;
                     delete this._transaction;
                     delete this._dragStart;
                 }
+            };
+            ActivePoint.prototype.setMoved = function () {
+                this._moved.set();
             };
             return ActivePoint;
         }(Tools.ActivePointBase));
@@ -3752,6 +4564,10 @@ var Geoma;
                 if (this._line1 && !this._line2) {
                     this._intersection.move(dx, dy);
                 }
+            };
+            ActiveCommonPoint.prototype.isMoved = function (receiptor) {
+                var _a, _b;
+                return _super.prototype.isMoved.call(this, receiptor) || ((_b = (_a = this._intersection) === null || _a === void 0 ? void 0 : _a.isMoved(receiptor)) !== null && _b !== void 0 ? _b : false);
             };
             ActiveCommonPoint.prototype.addGroupVisibility = function (visibility_modifier) {
                 if (!this._groupVisibility) {
@@ -3934,13 +4750,6 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
-            Object.defineProperty(ActiveLineSegment.prototype, "moved", {
-                get: function () {
-                    return this.start.moved(this.name) || this.end.moved(this.name);
-                },
-                enumerable: false,
-                configurable: true
-            });
             Object.defineProperty(ActiveLineSegment.prototype, "points", {
                 get: function () {
                     var ret = new Array(this.start, this.end);
@@ -4062,6 +4871,9 @@ var Geoma;
                 this.start.move(dx, dy);
                 this.end.move(dx, dy);
             };
+            ActiveLineSegment.prototype.isMoved = function (receiptor) {
+                return this.start.isMoved(receiptor) || this.end.isMoved(receiptor);
+            };
             ActiveLineSegment.prototype.mouseHit = function (point) {
                 return _super.prototype.mouseHit.call(this, point) && Tools.PointLineSegment.intersected(point, this.startPoint, this.endPoint, Tools.Thickness.Mouse);
             };
@@ -4168,7 +4980,7 @@ var Geoma;
                         menu_item = menu.addMenuItem(Tools.Resources.string("Добавить точку"));
                         menu_item.onChecked.bind(this, function () { return doc_2.addPoint(Point.make(x_1, y_1)); });
                         menu_item = menu.addMenuItem(Tools.Resources.string("Удалить отрезок {0}", this.name));
-                        menu_item.onChecked.bind(this, function () { return doc_2.removeLineSegment(_this); });
+                        menu_item.onChecked.bind(this, function () { return doc_2.removeLine(_this); });
                         menu.show();
                     }
                 }
@@ -4251,7 +5063,7 @@ var Geoma;
                 _this.addY(function () { return prop_y.value; });
                 return _this;
             }
-            ActiveVirtualPoint.prototype.moved = function (_receiptor) {
+            ActiveVirtualPoint.prototype.isMoved = function (_receiptor) {
                 return false;
             };
             ActiveVirtualPoint.prototype.mouseClick = function () {
@@ -4279,13 +5091,6 @@ var Geoma;
                 _this._points = new Array(_this.startPoint, _this.endPoint);
                 return _this;
             }
-            Object.defineProperty(ActiveLine.prototype, "moved", {
-                get: function () {
-                    throw assert(false, "TODO");
-                },
-                enumerable: false,
-                configurable: true
-            });
             Object.defineProperty(ActiveLine.prototype, "points", {
                 get: function () {
                     return this._points;
@@ -4319,7 +5124,7 @@ var Geoma;
                     if (this._points) {
                         for (var _i = 0, _a = this._points; _i < _a.length; _i++) {
                             var point = _a[_i];
-                            if (point instanceof Tools.ActiveCommonPoint) {
+                            if (!this.isPivot(point) && point instanceof Tools.ActiveCommonPoint) {
                                 point.removeSegment(this);
                             }
                         }
@@ -4329,6 +5134,9 @@ var Geoma;
             };
             ActiveLine.prototype.move = function (__dx, __dy) {
                 assert(false, "Not implemented yet");
+            };
+            ActiveLine.prototype.isMoved = function (receiptor) {
+                return this.startPoint.isMoved(receiptor) || this.endPoint.isMoved(receiptor);
             };
             ActiveLine.prototype.serialize = function (context) {
                 var data = [];
@@ -4491,13 +5299,9 @@ var Geoma;
                 _this._angleIndicator = angle_indicator;
                 return _this;
             }
-            Object.defineProperty(BisectorLine.prototype, "moved", {
-                get: function () {
-                    return this._angleIndicator.moved;
-                },
-                enumerable: false,
-                configurable: true
-            });
+            BisectorLine.prototype.isMoved = function (receiptor) {
+                return this._angleIndicator.isMoved(receiptor);
+            };
             BisectorLine.prototype.mouseClick = function (event) {
                 var _this = this;
                 if (this.mouseHit(event)) {
@@ -4816,51 +5620,6 @@ var Geoma;
         Tools.ActiveCircleLine = ActiveCircleLine;
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
 })(Geoma || (Geoma = {}));
-var factorialCache = [];
-function factorial(value) {
-    if (!factorialCache.length) {
-        factorialCache.push(1);
-        for (var i = 1; i <= 170; i++) {
-            factorialCache.push(factorialCache[factorialCache.length - 1] * i);
-        }
-    }
-    if (value > 170) {
-        return Infinity;
-    }
-    else if (value >= 0) {
-        return factorialCache[Geoma.Utils.toInt(value)];
-    }
-    else {
-        return NaN;
-    }
-}
-function derivative(id, line, code) {
-    var f = line.getFunction(id);
-    if (f) {
-        var last_x = line.arg(id + "_x");
-        var last_y = line.arg(id + "_y");
-        var current_x = line.arg("x");
-        var current_y = f(current_x);
-        line.setArg(id + "_x", current_x);
-        line.setArg(id + "_y", current_y);
-        if (last_x < current_x) {
-            return (current_y - last_y) / (current_x - last_x);
-        }
-        else {
-            return NaN;
-        }
-    }
-    else {
-        line.addFunction(id, code);
-        var f_1 = line.getFunction(id);
-        Geoma.Utils.assert(f_1);
-        var current_x = line.arg("x");
-        var current_y = f_1(current_x);
-        line.addArg(id + "_x", current_x);
-        line.addArg(id + "_y", current_y);
-        return NaN;
-    }
-}
 var Geoma;
 (function (Geoma) {
     var Tools;
@@ -4870,371 +5629,6 @@ var Geoma;
         var toInt = Geoma.Utils.toInt;
         var Point = Geoma.Utils.Point;
         var assert = Geoma.Utils.assert;
-        var CodeElement = (function () {
-            function CodeElement() {
-            }
-            CodeElement.prototype.serialize = function (data) {
-                if (this instanceof CodeLiteral) {
-                    data.push("+l");
-                    data.push(this.text);
-                }
-                else if (this instanceof CodeArgumentX) {
-                    data.push("+x");
-                }
-                else if (this instanceof CodeArgument) {
-                    data.push("+a");
-                    data.push(this.text);
-                }
-                else if (this instanceof CodeUnary) {
-                    data.push("+u");
-                    data.push(this.function);
-                    this.operand.serialize(data);
-                }
-                else if (this instanceof CodeBinary) {
-                    data.push("+b");
-                    data.push(this.function);
-                    this.operand1.serialize(data);
-                    this.operand2.serialize(data);
-                }
-            };
-            CodeElement.deserialize = function (data, i) {
-                if (i >= data.length) {
-                    throw CodeElement.error;
-                }
-                switch (data[i]) {
-                    case "+l":
-                        i++;
-                        if (i >= data.length) {
-                            throw CodeElement.error;
-                        }
-                        var value = parseFloat(data[i]);
-                        if (data[i] != "" + value) {
-                            throw CodeElement.error;
-                        }
-                        return { code: new CodeLiteral(value), index: i + 1 };
-                    case "+x":
-                        return { code: new CodeArgumentX(), index: i + 1 };
-                    case "+a":
-                        i++;
-                        if (i >= data.length) {
-                            throw CodeElement.error;
-                        }
-                        return { code: new CodeArgument(data[i]), index: i + 1 };
-                    case "+u":
-                        i++;
-                        if (i >= data.length) {
-                            throw CodeElement.error;
-                        }
-                        var unary_function = data[i];
-                        var operand = CodeElement.deserialize(data, i + 1);
-                        return { code: new CodeUnary(unary_function, operand.code), index: operand.index };
-                    case "+b":
-                        i++;
-                        if (i >= data.length) {
-                            throw CodeElement.error;
-                        }
-                        var binary_function = data[i];
-                        var operand1 = CodeElement.deserialize(data, i + 1);
-                        var operand2 = CodeElement.deserialize(data, operand1.index);
-                        return { code: new CodeBinary(operand1.code, binary_function, operand2.code), index: operand2.index };
-                    default:
-                        throw CodeElement.error;
-                }
-            };
-            CodeElement.error = new Error(Tools.Resources.string("Невозможно восстановить данные"));
-            return CodeElement;
-        }());
-        Tools.CodeElement = CodeElement;
-        var CodeDefinitionElement = (function (_super) {
-            __extends(CodeDefinitionElement, _super);
-            function CodeDefinitionElement() {
-                return _super !== null && _super.apply(this, arguments) || this;
-            }
-            return CodeDefinitionElement;
-        }(CodeElement));
-        Tools.CodeDefinitionElement = CodeDefinitionElement;
-        var CodeArgument = (function (_super) {
-            __extends(CodeArgument, _super);
-            function CodeArgument(arg_name) {
-                var _this = _super.call(this) || this;
-                _this._argName = arg_name;
-                return _this;
-            }
-            Object.defineProperty(CodeArgument.prototype, "code", {
-                get: function () {
-                    return "this.arg('" + this._argName + "')";
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeArgument.prototype, "text", {
-                get: function () {
-                    return "" + this._argName;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            return CodeArgument;
-        }(CodeDefinitionElement));
-        Tools.CodeArgument = CodeArgument;
-        var CodeLiteral = (function (_super) {
-            __extends(CodeLiteral, _super);
-            function CodeLiteral(value) {
-                var _this = _super.call(this) || this;
-                _this._value = value;
-                return _this;
-            }
-            Object.defineProperty(CodeLiteral.prototype, "code", {
-                get: function () {
-                    return "" + this._value;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeLiteral.prototype, "text", {
-                get: function () {
-                    return "" + this._value;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            return CodeLiteral;
-        }(CodeDefinitionElement));
-        Tools.CodeLiteral = CodeLiteral;
-        var CodeArgumentX = (function (_super) {
-            __extends(CodeArgumentX, _super);
-            function CodeArgumentX() {
-                return _super.call(this, "x") || this;
-            }
-            return CodeArgumentX;
-        }(CodeArgument));
-        Tools.CodeArgumentX = CodeArgumentX;
-        Math.sinh;
-        Math.cosh;
-        Math.tanh;
-        var CodeUnary = (function (_super) {
-            __extends(CodeUnary, _super);
-            function CodeUnary(_function, operand) {
-                var _this = _super.call(this) || this;
-                _this._function = _function;
-                _this._operand = operand;
-                return _this;
-            }
-            Object.defineProperty(CodeUnary.prototype, "code", {
-                get: function () {
-                    var math_function;
-                    switch (this._function) {
-                        case "±":
-                            return "" + this._operand.code;
-                        case "arccos":
-                            math_function = "Math.acos";
-                            break;
-                        case "arcsin":
-                            math_function = "Math.asin";
-                            break;
-                        case "arctan":
-                            math_function = "Math.atan";
-                            break;
-                        case "sin":
-                            math_function = "Math.sin";
-                            break;
-                        case "cos":
-                            math_function = "Math.cos";
-                            break;
-                        case "tan":
-                            math_function = "Math.tan";
-                            break;
-                        case "ln":
-                            math_function = "Math.log";
-                            break;
-                        case "log2":
-                            math_function = "Math.log2";
-                            break;
-                        case "log10":
-                            math_function = "Math.log10";
-                            break;
-                        case "exp":
-                            math_function = "Math.exp";
-                            break;
-                        case "√":
-                            math_function = "Math.sqrt";
-                            break;
-                        case "∛":
-                            return "Math.cbrt(" + this._operand.code + ")";
-                        case "∜":
-                            return "Math.sqrt(Math.sqrt(" + this._operand.code + "))";
-                        case "sign":
-                            math_function = "Math.sign";
-                            break;
-                        case "abs":
-                            math_function = "Math.abs";
-                            break;
-                        case "sinh":
-                            math_function = "Math.sinh";
-                            break;
-                        case "cosh":
-                            math_function = "Math.cosh";
-                            break;
-                        case "tanh":
-                            math_function = "Math.tanh";
-                            break;
-                        case "arcsinh":
-                            math_function = "Math.asinh";
-                            break;
-                        case "arccosh":
-                            math_function = "Math.acosh";
-                            break;
-                        case "arctanh":
-                            math_function = "Math.atanh";
-                            break;
-                        case "!":
-                            math_function = "factorial";
-                            break;
-                        case "f'":
-                            var code = this._operand.code.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
-                            return "derivative(" + CodeUnary._functionNo++ + ", this, \"" + code + "\")";
-                        default:
-                            assert(false, "Math function " + this._function + " not supported");
-                    }
-                    return math_function + "(" + this._operand.code + ")";
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeUnary.prototype, "text", {
-                get: function () {
-                    if (this._operand instanceof CodeBlock) {
-                        return "" + this._function + this._operand.text;
-                    }
-                    else if (this._operand.text.length > 0 && this._operand.text.charAt(0) == "(") {
-                        return "" + this._function + this._operand.text;
-                    }
-                    else {
-                        return this._function + "(" + this._operand.text + ")";
-                    }
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeUnary.prototype, "function", {
-                get: function () {
-                    return this._function;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeUnary.prototype, "operand", {
-                get: function () {
-                    return this._operand;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            CodeUnary._functionNo = 1;
-            return CodeUnary;
-        }(CodeElement));
-        Tools.CodeUnary = CodeUnary;
-        var CodeBinary = (function (_super) {
-            __extends(CodeBinary, _super);
-            function CodeBinary(operand1, _function, operand2) {
-                var _this = _super.call(this) || this;
-                _this._function = _function;
-                _this._operand1 = operand1;
-                _this._operand2 = operand2;
-                return _this;
-            }
-            Object.defineProperty(CodeBinary.prototype, "code", {
-                get: function () {
-                    switch (this._function) {
-                        case "pow":
-                            return "Math.pow(" + this._operand1.code + ", " + this._operand2.code + ")";
-                        case "n√":
-                            return "Math.pow(" + this._operand2.code + ", 1.0 / " + this._operand1.code + ")";
-                        case "+":
-                            return "(" + this._operand1.code + " + " + this._operand2.code + ")";
-                        case "-":
-                            return "(" + this._operand1.code + " - " + this._operand2.code + ")";
-                        case "*":
-                            return "(" + this._operand1.code + " * " + this._operand2.code + ")";
-                        case "÷":
-                            return "(" + this._operand1.code + " / " + this._operand2.code + ")";
-                        default:
-                            assert(false, "Math function " + this._function + " not supported");
-                    }
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeBinary.prototype, "text", {
-                get: function () {
-                    switch (this._function) {
-                        case "pow":
-                            return "(" + this._operand1.text + " ^ " + this._operand2.text + ")";
-                        case "n√":
-                            return "(" + this._operand1.text + "\u221A " + this._operand2.text + ")";
-                        case "+":
-                            return "(" + this._operand1.text + " + " + this._operand2.text + ")";
-                        case "-":
-                            return "(" + this._operand1.text + " - " + this._operand2.text + ")";
-                        case "*":
-                            return "(" + this._operand1.text + " * " + this._operand2.text + ")";
-                        case "÷":
-                            return "(" + this._operand1.text + " / " + this._operand2.text + ")";
-                        default:
-                            assert(false, "Math function " + this._function + " not supported");
-                    }
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeBinary.prototype, "function", {
-                get: function () {
-                    return this._function;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeBinary.prototype, "operand1", {
-                get: function () {
-                    return this._operand1;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeBinary.prototype, "operand2", {
-                get: function () {
-                    return this._operand2;
-                },
-                enumerable: false,
-                configurable: true
-            });
-            return CodeBinary;
-        }(CodeElement));
-        Tools.CodeBinary = CodeBinary;
-        var CodeBlock = (function (_super) {
-            __extends(CodeBlock, _super);
-            function CodeBlock(element) {
-                var _this = _super.call(this) || this;
-                _this._element = element;
-                return _this;
-            }
-            Object.defineProperty(CodeBlock.prototype, "code", {
-                get: function () {
-                    return "(" + this._element.code + ")";
-                },
-                enumerable: false,
-                configurable: true
-            });
-            Object.defineProperty(CodeBlock.prototype, "text", {
-                get: function () {
-                    return "(" + this._element.text + ")";
-                },
-                enumerable: false,
-                configurable: true
-            });
-            return CodeBlock;
-        }(CodeElement));
-        Tools.CodeBlock = CodeBlock;
         var ParametricLine = (function (_super) {
             __extends(ParametricLine, _super);
             function ParametricLine(document, line_width, brush, selected_brush, axes) {
@@ -5251,6 +5645,7 @@ var Geoma;
                 }(Geoma.Sprite.Sprite));
                 _this = _super.call(this, document, new stub()) || this;
                 _this.axes = axes;
+                _this.axes.addLine(_this);
                 _this.lineWidth = makeProp(line_width, 1);
                 _this.brush = makeProp(brush, "Black");
                 _this.selectedBrush = makeProp(selected_brush, "Black");
@@ -5263,6 +5658,9 @@ var Geoma;
                 _this._mouseDownListener = document.mouseArea.onMouseDown.bind(_this, _this.mouseDown);
                 _this._mouseUpListener = document.mouseArea.onMouseUp.bind(_this, _this.mouseUp);
                 _this._screenSamples = [];
+                _this._suppressModified = false;
+                _this._isModified = new Geoma.Utils.Pulse();
+                _this._id = _this.axes.axesId + "-" + ParametricLine._idSource.inc() + "-{47705e19-541a-4f59-b0c0-34edd1f6fefa}";
                 return _this;
             }
             Object.defineProperty(ParametricLine.prototype, "dx", {
@@ -5271,7 +5669,7 @@ var Geoma;
                 },
                 set: function (value) {
                     this._dx = value;
-                    delete this._drawPath;
+                    this.setModified();
                 },
                 enumerable: false,
                 configurable: true
@@ -5279,20 +5677,35 @@ var Geoma;
             Object.defineProperty(ParametricLine.prototype, "code", {
                 get: function () {
                     var _a;
-                    return (_a = this._code) !== null && _a !== void 0 ? _a : new CodeLiteral(0);
+                    return (_a = this._code) !== null && _a !== void 0 ? _a : new Geoma.Syntax.CodeLiteral(0);
                 },
                 set: function (value) {
                     this._code = value;
                     this._function = Geoma.Utils.makeEvaluator(this, this._code.code);
-                    this._derivativeLevel = ParametricLine.derivativeLevel(this._code);
-                    delete this._drawPath;
+                    this._derivativeLevel = this._code.derivativeLevel;
+                    this.setModified();
                 },
                 enumerable: false,
                 configurable: true
             });
             Object.defineProperty(ParametricLine.prototype, "symmetric", {
                 get: function () {
-                    return this.code instanceof CodeUnary && this.code.function == "±";
+                    return this.code instanceof Geoma.Syntax.CodeUnary && this.code.function == "±";
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(ParametricLine.prototype, "derivativeLevel", {
+                get: function () {
+                    return this._derivativeLevel;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(ParametricLine.prototype, "points", {
+                get: function () {
+                    var _a;
+                    return (_a = this._points) !== null && _a !== void 0 ? _a : null;
                 },
                 enumerable: false,
                 configurable: true
@@ -5306,6 +5719,10 @@ var Geoma;
                     if (this.selected) {
                         this.document.removeSelectedSprite(this);
                     }
+                    for (var key in this._args) {
+                        this._args[key].reset();
+                    }
+                    this.axes.removeLine(this);
                     _super.prototype.dispose.call(this);
                 }
             };
@@ -5338,7 +5755,10 @@ var Geoma;
                     this._functions = {};
                 }
                 this._functions[name] = Geoma.Utils.makeEvaluator(this, code);
-                delete this._drawPath;
+                this.setModified();
+            };
+            ParametricLine.prototype.hasArg = function (name) {
+                return name in this._args;
             };
             ParametricLine.prototype.addArg = function (name, arg) {
                 assert(!this._args[name]);
@@ -5359,8 +5779,8 @@ var Geoma;
                         throw assert(false);
                     default:
                         assert(this._args[name]);
-                        this._args[name].value = value;
-                        delete this._drawPath;
+                        this._args[name] = makeProp(value, NaN);
+                        this.setModified();
                         break;
                 }
             };
@@ -5370,15 +5790,37 @@ var Geoma;
             ParametricLine.prototype.move = function (dx, dy) {
                 this.axes.move(dx, dy);
             };
-            ParametricLine.prototype.moved = function (receiptor) {
-                return this.axes.moved(receiptor);
+            ParametricLine.prototype.isMoved = function (receiptor) {
+                return this.axes.isMoved(receiptor);
+            };
+            ParametricLine.prototype.isModified = function (receiptor) {
+                if (this._isModified.get(receiptor)) {
+                    return true;
+                }
+                else {
+                    if (this.points) {
+                        for (var _i = 0, _a = this.points; _i < _a.length; _i++) {
+                            var point = _a[_i];
+                            if (point.isMoved(receiptor)) {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
+            };
+            ParametricLine.prototype.setModified = function () {
+                if (!this._suppressModified) {
+                    this._isModified.set();
+                }
             };
             ParametricLine.prototype.showExpressionEditor = function () {
                 var _this = this;
                 var dialog = new Tools.ExpressionDialog(this.document, makeMod(this, function () { return _this.document.mouseArea.offset.x + (_this.document.mouseArea.w / 2 - _this.document.mouseArea.w / 10) / _this.document.mouseArea.ratio; }), makeMod(this, function () { return _this.document.mouseArea.offset.y + (_this.document.mouseArea.h / 2 - _this.document.mouseArea.h / 10) / _this.document.mouseArea.ratio; }), this.code);
                 dialog.onEnter.bind(this, function (event) {
                     if (event.detail) {
-                        Tools.UndoTransaction.Do(_this, Tools.Resources.string("Редактирование функции {0}", _this.code.text), function () { _this.code = event.detail; });
+                        var expression_info_1 = event.detail;
+                        Tools.UndoTransaction.Do(_this, Tools.Resources.string("Редактирование функции {0}", _this.code.text), function () { return _this.editCode(expression_info_1); });
                     }
                     _this.document.remove(dialog);
                     dialog.dispose();
@@ -5397,7 +5839,6 @@ var Geoma;
                 return false;
             };
             ParametricLine.prototype.addPoint = function (point) {
-                assert(this.mouseHit(point));
                 this._addPoint(point);
             };
             ParametricLine.prototype.removePoint = function (point) {
@@ -5406,7 +5847,9 @@ var Geoma;
                 var index = this._points.indexOf(point);
                 assert(index >= 0);
                 this._points.splice(index, 1);
-                point.removeSegment(this);
+                if (point instanceof Tools.ActiveCommonPoint) {
+                    point.removeSegment(this);
+                }
             };
             ParametricLine.prototype.serialize = function (context) {
                 var data = [];
@@ -5426,70 +5869,56 @@ var Geoma;
                     return null;
                 }
                 else {
-                    var line = new ParametricLine(context.document, function () { return Tools.CurrentTheme.ParametricLineWidth; }, function () { return Tools.CurrentTheme.ParametricLineBrush; }, function () { return Tools.CurrentTheme.ParametricLineSelectBrush; }, context.data.axes.item(toInt(data[index++])));
+                    var line_1 = new ParametricLine(context.document, function () { return Tools.CurrentTheme.ParametricLineWidth; }, function () { return Tools.CurrentTheme.ParametricLineBrush; }, function () { return Tools.CurrentTheme.ParametricLineSelectBrush; }, context.data.axes.item(toInt(data[index++])));
                     var points = new Array();
                     while (data[index].charAt(0) == "p") {
                         var chunck = data[index++];
                         var p_index = toInt(chunck.substring(1));
                         var point = context.data.points.item(p_index);
-                        assert(point instanceof Tools.ActiveCommonPoint);
                         points.push(point);
                     }
                     if (data[index++] == "f") {
-                        line.code = CodeElement.deserialize(data, index).code;
+                        line_1.code = Geoma.Syntax.CodeElement.deserialize(data, index).code;
                     }
-                    if (points.length) {
-                        line.updateSamples(context.document.mouseArea);
-                        for (var _i = 0, points_2 = points; _i < points_2.length; _i++) {
-                            var point = points_2[_i];
-                            point.addGraphLine(line);
-                            line._addPoint(point);
+                    line_1.code.visitArguments(function (arg) {
+                        if (!(arg instanceof Geoma.Syntax.CodeArgumentX)) {
+                            var arg_name = arg.text;
+                            if (!line_1.hasArg(arg_name)) {
+                                var arg_modifier = context.document.getArgModifier(arg_name, line_1);
+                                assert(arg_modifier);
+                                line_1.addArg(arg_name, arg_modifier);
+                            }
+                        }
+                    });
+                    line_1.updateSamples(context.document.mouseArea);
+                    for (var _i = 0, points_2 = points; _i < points_2.length; _i++) {
+                        var point = points_2[_i];
+                        if (point instanceof Tools.ActiveCommonPoint) {
+                            if (!line_1.isRelated(point)) {
+                                line_1._addPoint(point);
+                                point.addGraphLine(line_1);
+                            }
                         }
                     }
-                    return line;
+                    return line_1;
                 }
             };
-            ParametricLine.derivativeLevel = function (element, level) {
-                if (level === void 0) { level = 0; }
-                if (element instanceof CodeUnary) {
-                    if (element.function == "f'") {
-                        return ParametricLine.derivativeLevel(element.operand, level + 1);
-                    }
-                    else {
-                        return ParametricLine.derivativeLevel(element.operand, level);
-                    }
-                }
-                else if (element instanceof CodeBinary) {
-                    var result1 = ParametricLine.derivativeLevel(element.operand1, level);
-                    var result2 = ParametricLine.derivativeLevel(element.operand2, level);
-                    return Math.max(result1, result2);
-                }
-                else {
-                    return level;
-                }
-            };
-            ParametricLine.prototype.updateSamples = function (mouse_area) {
-                var _this = this;
+            ParametricLine.calcSamples = function (screen_box, dx, contains_derivative, adapter) {
                 var needs_move = false;
-                var draw_path = new Path2D();
-                var samples = new Array();
-                var dx = this.dx;
+                var last_sign = 0;
+                var last_is_nan = true;
+                var last_y = NaN;
+                var samples_length = 0;
+                var offscreen_top = -(screen_box.h - screen_box.top);
+                var offscreen_bottom = (2 * screen_box.h) + screen_box.top;
                 var minimum_dx = 1e-11;
-                var offscreen_top = -(mouse_area.h - mouse_area.offset.y);
-                var offscreen_bottom = (2 * mouse_area.h) + mouse_area.offset.y;
                 var line_to = function (x, y) {
-                    if (needs_move) {
-                        needs_move = false;
-                        draw_path.moveTo(x, y);
-                    }
-                    else {
-                        draw_path.lineTo(x, y);
-                    }
-                    var integer_x = Math.floor(x) - mouse_area.offset.x;
-                    assert(samples.length > integer_x);
-                    samples[integer_x] = y;
+                    adapter.lineTo(x, y, needs_move);
+                    needs_move = false;
+                    var integer_x = Math.floor(x) - screen_box.left;
+                    assert(samples_length > integer_x);
+                    adapter.setSample(integer_x, y);
                 };
-                var contains_derivative = this._derivativeLevel != 0;
                 var line_to_offscreen = function (x, last_sign, y) {
                     switch (last_sign) {
                         case 1:
@@ -5504,10 +5933,10 @@ var Geoma;
                             assert(false);
                     }
                     if (Math.sign(y) == -1) {
-                        draw_path.moveTo(x, offscreen_top);
+                        adapter.lineTo(x, offscreen_top, true);
                     }
                     else {
-                        draw_path.moveTo(x, offscreen_bottom);
+                        adapter.lineTo(x, offscreen_bottom, true);
                     }
                 };
                 var sign = function (x, y1, y2) {
@@ -5532,14 +5961,14 @@ var Geoma;
                     var local_dx = dx / 2;
                     var start_x = x - dx;
                     for (var x1 = start_x; x1 <= x; x1 += local_dx) {
-                        var y1 = _this.axes.toScreenY(_this.getY(_this.axes.fromScreenX(x1)));
+                        var y1 = adapter.getScreenY(x1);
                         if (isNaN(y1)) {
                             x1 -= local_dx;
                             local_dx /= 2;
                             x1 -= local_dx;
                             if (local_dx <= minimum_dx) {
-                                for (; x1 > start_x; x1 -= local_dx) {
-                                    var y2 = _this.axes.toScreenY(_this.getY(_this.axes.fromScreenX(x1)));
+                                for (; x1 > start_x; x1 -= minimum_dx) {
+                                    var y2 = adapter.getScreenY(x1);
                                     if (!isNaN(y2)) {
                                         needs_move = false;
                                         line_to(x1, y2);
@@ -5555,14 +5984,14 @@ var Geoma;
                     var local_dx = dx / 2;
                     var end_x = x - dx;
                     for (var x1 = x; x1 >= end_x; x1 -= local_dx) {
-                        var y1 = _this.axes.toScreenY(_this.getY(_this.axes.fromScreenX(x1)));
+                        var y1 = adapter.getScreenY(x1);
                         if (isNaN(y1)) {
                             x1 += local_dx;
                             local_dx /= 2;
                             x1 += local_dx;
                             if (local_dx <= minimum_dx) {
-                                for (; x1 < x; x1 += local_dx) {
-                                    var y2 = _this.axes.toScreenY(_this.getY(_this.axes.fromScreenX(x1)));
+                                for (; x1 < x; x1 += minimum_dx) {
+                                    var y2 = adapter.getScreenY(x1);
                                     if (!isNaN(y2)) {
                                         needs_move = true;
                                         line_to(x1, y2);
@@ -5575,21 +6004,18 @@ var Geoma;
                     }
                     needs_move = false;
                 };
-                var last_sign = 0;
-                var last_is_nan = true;
-                var last_y = NaN;
-                var last_x = this.document.mouseArea.w + mouse_area.offset.x;
-                for (var x = mouse_area.offset.x; x < last_x; x += dx) {
-                    var integer_x = (samples.length + mouse_area.offset.x) == Math.floor(x);
-                    var y = this.axes.toScreenY(this.getY(this.axes.fromScreenX(x)));
+                for (var x = screen_box.left; x < screen_box.right; x += dx) {
+                    var integer_x = (samples_length + screen_box.left) == Math.floor(x);
+                    var y = adapter.getScreenY(x);
                     if (integer_x) {
-                        samples.push(NaN);
+                        adapter.addSample();
+                        samples_length++;
                     }
                     if (isNaN(y)) {
                         if (!last_is_nan) {
                             last_is_nan = true;
                             if (!contains_derivative) {
-                                right_nan(x);
+                                right_nan.call(this, x);
                             }
                         }
                         needs_move = true;
@@ -5603,9 +6029,9 @@ var Geoma;
                         else if (last_sign != new_sign && !contains_derivative) {
                             var local_dx = dx / 2;
                             for (var x1 = x - dx; x1 <= x && local_dx > minimum_dx; x1 = (x1 < x) ? Math.min(x1 + local_dx, x) : (x1 + local_dx)) {
-                                var y1 = this.axes.toScreenY(this.getY(this.axes.fromScreenX(x1)));
+                                var y1 = adapter.getScreenY(x1);
                                 if (is_infinite(y1)) {
-                                    line_to_offscreen(x, last_sign, y1);
+                                    line_to_offscreen(x1, last_sign, y1);
                                     offscreen_break = true;
                                     break;
                                 }
@@ -5614,7 +6040,7 @@ var Geoma;
                                     local_dx /= 2;
                                     x1 -= local_dx;
                                     if ((last_sign == 1 && y1 <= offscreen_top) || (last_sign == -1 && y1 >= offscreen_bottom)) {
-                                        line_to_offscreen(x, last_sign, y1);
+                                        line_to_offscreen(x1, last_sign, y1);
                                         offscreen_break = true;
                                         break;
                                     }
@@ -5629,18 +6055,67 @@ var Geoma;
                             line_to(x, Geoma.Utils.limit(y, offscreen_top, offscreen_bottom));
                         }
                         if (last_is_nan && !contains_derivative) {
-                            left_nan(x);
+                            left_nan.call(this, x);
                         }
                         last_is_nan = false;
                     }
                     last_y = y;
                 }
-                assert(samples.length == this.document.mouseArea.w, "Logical error");
-                this._drawPath = draw_path;
-                this._screenSamples = samples;
+                assert(samples_length == screen_box.w, "Logical error");
+            };
+            ParametricLine.prototype.editCode = function (expression_info) {
+                var last_args = this._args;
+                this.code = expression_info.expression;
+                this._args = {};
+                this.document.realizeGraphArguments(this, expression_info.argValues);
+                for (var key in this._args) {
+                    if (key in last_args) {
+                        this._args[key] = last_args[key];
+                        delete last_args[key];
+                    }
+                }
+                for (var key in last_args) {
+                    last_args[key].reset();
+                }
+            };
+            ParametricLine.prototype.updateSamples = function (mouse_area) {
+                var draw_adapter = (function () {
+                    function draw_adapter(owner) {
+                        this.drawPath = new Path2D();
+                        this.samples = new Array();
+                        this.owner = owner;
+                    }
+                    draw_adapter.prototype.getScreenY = function (screen_x) {
+                        return this.owner.axes.toScreenY(this.owner.getY(this.owner.axes.fromScreenX(screen_x)));
+                    };
+                    draw_adapter.prototype.lineTo = function (x, y, discontinuity) {
+                        if (discontinuity) {
+                            this.drawPath.moveTo(x, y);
+                        }
+                        else {
+                            this.drawPath.lineTo(x, y);
+                        }
+                    };
+                    draw_adapter.prototype.addSample = function () {
+                        this.samples.push(NaN);
+                    };
+                    draw_adapter.prototype.setSample = function (screen_x, screen_y) {
+                        this.samples[screen_x] = screen_y;
+                    };
+                    return draw_adapter;
+                }());
+                var screen_box = new Geoma.Utils.Box(mouse_area.offset.x, mouse_area.offset.y, mouse_area.w, mouse_area.h);
+                var contains_derivative = this._derivativeLevel != 0;
+                var adapter = new draw_adapter(this);
+                this._suppressModified = true;
+                ParametricLine.calcSamples(screen_box, this.dx, contains_derivative, adapter);
+                this._suppressModified = false;
+                assert(adapter.samples.length == this.document.mouseArea.w, "Logical error");
+                this._drawPath = adapter.drawPath;
+                this._screenSamples = adapter.samples;
             };
             ParametricLine.prototype.innerDraw = function (play_ground) {
-                if (this.axes.needsCalc.get(this.code.text) || !this._drawPath) {
+                if (this.isModified(this._id) || !this._drawPath) {
                     this.updateSamples(play_ground);
                     assert(this._drawPath);
                 }
@@ -5731,6 +6206,7 @@ var Geoma;
                 }
                 this._points.push(point);
             };
+            ParametricLine._idSource = new Geoma.Utils.ModuleInteger();
             return ParametricLine;
         }(Tools.DocumentSprite));
         Tools.ParametricLine = ParametricLine;
@@ -5746,19 +6222,32 @@ var Geoma;
         var assert = Geoma.Utils.assert;
         var Intersection = (function () {
             function Intersection(start_point) {
+                this._lastDx = NaN;
+                this._lastDy = NaN;
                 this._disposed = false;
+                this._isMoved = new Geoma.Utils.Pulse();
                 this._startPoint = start_point;
             }
             Object.defineProperty(Intersection.prototype, "dx", {
                 get: function () {
-                    return this.startPoint.x - this.point.x;
+                    var dx = this.startPoint.x - this.point.x;
+                    if (this._lastDx != dx) {
+                        this._lastDx = dx;
+                        this._isMoved.set();
+                    }
+                    return dx;
                 },
                 enumerable: false,
                 configurable: true
             });
             Object.defineProperty(Intersection.prototype, "dy", {
                 get: function () {
-                    return this.startPoint.y - this.point.y;
+                    var dy = this.startPoint.y - this.point.y;
+                    if (this._lastDy != dy) {
+                        this._lastDy = dy;
+                        this._isMoved.set();
+                    }
+                    return dy;
                 },
                 enumerable: false,
                 configurable: true
@@ -5799,6 +6288,22 @@ var Geoma;
                                 var intersection = LineCircle.intersection(line1, line2);
                                 return LineCircle.preferredIntersection(LineCircle.getPreference(point, intersection), intersection);
                             }
+                            else if (line2 instanceof Tools.ParametricLine) {
+                                var intersections = LineParametric.intersection(line1, line2);
+                                var index = LineParametric.getPrefferedIndex(point, intersections);
+                                if (index >= 0) {
+                                    return intersections[index];
+                                }
+                            }
+                        }
+                        else if (line1 instanceof Tools.ParametricLine) {
+                            if (line2 instanceof Tools.ParametricLine) {
+                                var intersections = ParametricParametric.intersection(line1, line2);
+                                var index = ParametricParametric.getPrefferedIndex(point, intersections);
+                                if (index >= 0) {
+                                    return intersections[index];
+                                }
+                            }
                         }
                         return null;
                     };
@@ -5836,6 +6341,14 @@ var Geoma;
                             else if (line2 instanceof Tools.ActiveCircleLine) {
                                 return new LineCircle(point, line1, line2);
                             }
+                            else if (line2 instanceof Tools.ParametricLine) {
+                                return new LineParametric(point, line1, line2);
+                            }
+                        }
+                        else if (line1 instanceof Tools.ParametricLine) {
+                            if (line2 instanceof Tools.ParametricLine) {
+                                return new ParametricParametric(point, line1, line2);
+                            }
                         }
                         return null;
                     };
@@ -5854,6 +6367,9 @@ var Geoma;
             };
             Intersection.prototype.move = function (__dx, __dy) {
                 assert(false, "Not supported");
+            };
+            Intersection.prototype.isMoved = function (receiptor) {
+                return this._isMoved.get(receiptor);
             };
             Object.defineProperty(Intersection.prototype, "startPoint", {
                 get: function () {
@@ -6097,26 +6613,55 @@ var Geoma;
                 }
             };
             LineLine.intersection = function (line1, line2) {
-                var coeff1 = line1.coefficients;
-                var coeff2 = line2.coefficients;
-                if (coeff1 && coeff2) {
+                return LineLine.intersection2(line1.startPoint, line1.endPoint, line2.startPoint, line2.endPoint);
+            };
+            LineLine.intersection2 = function (point11, point12, point21, point22) {
+                var coeff1 = Tools.ActiveLineBase.getCoefficients(point11.x, point11.y, point12.x, point12.y);
+                var coeff2 = Tools.ActiveLineBase.getCoefficients(point21.x, point21.y, point22.x, point22.y);
+                var maxK = 1000;
+                if (coeff1 && coeff2 && Math.abs(coeff1.k) < maxK && Math.abs(coeff2.k) < maxK) {
                     var dk = coeff1.k - coeff2.k;
                     if (dk) {
                         var x = (coeff2.b - coeff1.b) / dk;
                         return Point.make(x, Tools.ActiveLineBase.getY(x, coeff1));
                     }
                     else {
-                        assert(false, "todo");
+                        return Point.empty;
                     }
                 }
-                else if (coeff1) {
-                    return Point.make(line2.startPoint.x, Tools.ActiveLineBase.getY(line2.startPoint.x, coeff1));
+                else if ((!coeff1 || Math.abs(coeff1.k) > maxK) && coeff2 && Math.abs(coeff2.k) < maxK) {
+                    coeff1 = {
+                        k: (point12.x - point11.x) / (point12.y - point11.y),
+                        b: point12.x - point12.y * ((point12.x - point11.x) / (point12.y - point11.y))
+                    };
+                    var y = (coeff2.k * coeff1.b + coeff2.b) / (1 - coeff1.k * coeff2.k);
+                    return Point.make(y * coeff1.k + coeff1.b, y);
                 }
-                else if (coeff2) {
-                    return Point.make(line1.startPoint.x, Tools.ActiveLineBase.getY(line1.startPoint.x, coeff2));
+                else if ((!coeff2 || Math.abs(coeff2.k) > maxK) && coeff1 && Math.abs(coeff1.k) < maxK) {
+                    coeff2 = {
+                        k: (point22.x - point21.x) / (point22.y - point21.y),
+                        b: point22.x - point22.y * ((point22.x - point21.x) / (point22.y - point21.y))
+                    };
+                    var y = (coeff1.k * coeff2.b + coeff1.b) / (1 - coeff1.k * coeff2.k);
+                    return Point.make(y * coeff2.k + coeff2.b, y);
                 }
                 else {
-                    return Point.make(line1.startPoint.x, line1.startPoint.y);
+                    coeff1 = {
+                        k: (point12.x - point11.x) / (point12.y - point11.y),
+                        b: point12.x - point12.y * ((point12.x - point11.x) / (point12.y - point11.y))
+                    };
+                    coeff2 = {
+                        k: (point22.x - point21.x) / (point22.y - point21.y),
+                        b: point22.x - point22.y * ((point22.x - point21.x) / (point22.y - point21.y))
+                    };
+                    var dk = coeff1.k - coeff2.k;
+                    if (dk) {
+                        var y = (coeff2.b - coeff1.b) / dk;
+                        return Point.make(y * coeff1.k + coeff1.b, y);
+                    }
+                    else {
+                        return Point.empty;
+                    }
                 }
             };
             return LineLine;
@@ -6328,11 +6873,7 @@ var Geoma;
                 this._intersection.reset();
                 _super.prototype.dispose.call(this);
             };
-            PointParametric.prototype.move = function (dx, dy) {
-                var x = this._line.axes.toScreenX(this._startX) - dx;
-                this._startX = this._line.axes.fromScreenX(x);
-                var y = this._line.axes.toScreenY(this._startY) - dy;
-                this._startY = this._line.axes.fromScreenY(y);
+            PointParametric.prototype.move = function (_dx, _dy) {
             };
             PointParametric.intersection = function (point, line) {
                 var p1 = PointParametric.intersectionMain(point, line);
@@ -6380,6 +6921,313 @@ var Geoma;
             return PointParametric;
         }(Intersection));
         Tools.PointParametric = PointParametric;
+        var LineParametric = (function (_super) {
+            __extends(LineParametric, _super);
+            function LineParametric(point, line, parametric) {
+                var _this = _super.call(this, Point.make(point.x, point.y)) || this;
+                _this._id = FunctionFunction.createId();
+                _this._line = line;
+                _this._parametric = parametric;
+                _this._update(true);
+                _this._prefferedIntersection = FunctionFunction.getPrefferedIndex(point, _this.intersections);
+                return _this;
+            }
+            Object.defineProperty(LineParametric.prototype, "point", {
+                get: function () {
+                    if (this.visible) {
+                        return this.intersections[this._prefferedIntersection];
+                    }
+                    else {
+                        return Point.empty;
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(LineParametric.prototype, "visible", {
+                get: function () {
+                    return this._prefferedIntersection >= 0 && this._prefferedIntersection < this.intersections.length;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(LineParametric.prototype, "intersections", {
+                get: function () {
+                    this._update();
+                    assert(this._intersections);
+                    return this._intersections;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            LineParametric.prototype.dispose = function () {
+                var _a;
+                _super.prototype.dispose.call(this);
+                (_a = this._calculator) === null || _a === void 0 ? void 0 : _a.dispose();
+            };
+            LineParametric.getPrefferedIndex = function (point, intersections) {
+                return FunctionFunction.getPrefferedIndex(point, intersections);
+            };
+            LineParametric.intersection = function (line, parametric) {
+                var calculator = new LineParametric(Point.empty, line, parametric);
+                var intersections = calculator.intersections;
+                calculator.dispose();
+                return intersections;
+            };
+            LineParametric.prototype._update = function (force) {
+                var _a;
+                var id = this._id;
+                var update_calc = this._parametric.isMoved(id) || this._parametric.isModified(id) || force;
+                if (update_calc) {
+                    var calc = new FunctionFunction(this._parametric.code, LineParametric._lineFunction, this._parametric.axes, this._parametric);
+                    calc.addArg(LineParametric._kName, NaN);
+                    calc.addArg(LineParametric._bName, NaN);
+                    (_a = this._calculator) === null || _a === void 0 ? void 0 : _a.dispose();
+                    this._calculator = calc;
+                }
+                var update_coeff = this._line.isMoved(id) || force || update_calc;
+                if (update_coeff) {
+                    assert(this._calculator);
+                    var axes = this._calculator.axes;
+                    var coeff = Tools.ActiveLineBase.getCoefficients(axes.fromScreenX(this._line.startPoint.x), axes.fromScreenY(this._line.startPoint.y), axes.fromScreenX(this._line.endPoint.x), axes.fromScreenY(this._line.endPoint.y));
+                    if (coeff) {
+                        this._calculator.setArg(LineParametric._kName, coeff.k);
+                        this._calculator.setArg(LineParametric._bName, coeff.b);
+                    }
+                    else {
+                        var multiplier = 1e20;
+                        var x = axes.fromScreenX(this._line.x);
+                        this._calculator.setArg(LineParametric._kName, -multiplier);
+                        this._calculator.setArg(LineParametric._bName, x * multiplier);
+                    }
+                    this._intersections = this._calculator.intersections;
+                }
+            };
+            LineParametric._makeLineFunction = function () {
+                var kx = new Geoma.Syntax.CodeBinary(new Geoma.Syntax.CodeArgument(LineParametric._kName), "*", new Geoma.Syntax.CodeArgumentX());
+                return new Geoma.Syntax.CodeBinary(kx, "+", new Geoma.Syntax.CodeArgument(LineParametric._bName));
+            };
+            LineParametric._kName = "k-{C696237D-E444-468E-A8F7-7C780E599BBB}";
+            LineParametric._bName = "b-{E131A6AE-285A-45E4-AEFC-D88EE4CF1BFC}";
+            LineParametric._lineFunction = LineParametric._makeLineFunction();
+            return LineParametric;
+        }(Intersection));
+        Tools.LineParametric = LineParametric;
+        var ParametricParametric = (function (_super) {
+            __extends(ParametricParametric, _super);
+            function ParametricParametric(point, parametric1, parametric2) {
+                var _this = _super.call(this, Point.make(point.x, point.y)) || this;
+                _this._id = FunctionFunction.createId();
+                assert(parametric1.axes === parametric2.axes);
+                _this._parametric1 = parametric1;
+                _this._parametric2 = parametric2;
+                _this._update(true);
+                _this._prefferedIntersection = FunctionFunction.getPrefferedIndex(point, _this.intersections);
+                return _this;
+            }
+            Object.defineProperty(ParametricParametric.prototype, "point", {
+                get: function () {
+                    if (this.visible) {
+                        return this.intersections[this._prefferedIntersection];
+                    }
+                    else {
+                        return Point.empty;
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(ParametricParametric.prototype, "visible", {
+                get: function () {
+                    return this._prefferedIntersection >= 0 && this._prefferedIntersection < this.intersections.length;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(ParametricParametric.prototype, "intersections", {
+                get: function () {
+                    this._update();
+                    assert(this._intersections);
+                    return this._intersections;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            ParametricParametric.prototype.dispose = function () {
+                var _a;
+                _super.prototype.dispose.call(this);
+                (_a = this._calculator) === null || _a === void 0 ? void 0 : _a.dispose();
+            };
+            ParametricParametric.getPrefferedIndex = function (point, intersections) {
+                return FunctionFunction.getPrefferedIndex(point, intersections);
+            };
+            ParametricParametric.intersection = function (parametric1, parametric2) {
+                var calculator = new ParametricParametric(Point.empty, parametric1, parametric2);
+                var intersections = calculator.intersections;
+                calculator.dispose();
+                return intersections;
+            };
+            ParametricParametric.prototype._update = function (force) {
+                var _a;
+                var id = this._id;
+                var update_calc = this._parametric1.isModified(id) || this._parametric2.isModified(id) || force;
+                if (update_calc) {
+                    var calc = new FunctionFunction(this._parametric1.code, this._parametric2.code, this._parametric1.axes, this._parametric1, this._parametric2);
+                    (_a = this._calculator) === null || _a === void 0 ? void 0 : _a.dispose();
+                    this._calculator = calc;
+                }
+                if (update_calc || this._parametric1.isMoved(id) || this._parametric2.isMoved(id)) {
+                    assert(this._calculator);
+                    this._intersections = this._calculator.intersections;
+                }
+            };
+            return ParametricParametric;
+        }(Intersection));
+        Tools.ParametricParametric = ParametricParametric;
+        var FunctionFunction = (function () {
+            function FunctionFunction(function1, function2, axes, context1, context2) {
+                var _this = this;
+                this._intersectionsData = [];
+                this._argX = NaN;
+                this._lastPoint = Point.empty;
+                this._args = {};
+                this._function1 = Geoma.Utils.makeEvaluator(this, function1.code);
+                this._function2 = Geoma.Utils.makeEvaluator(this, function2.code);
+                this._context1 = context1;
+                this._context2 = context2;
+                this._axes = axes;
+                var code = new Geoma.Syntax.CodeBinary(function1, "-", function2);
+                var contains_derivative = code.derivativeLevel > 0;
+                this._deltaFunction = Geoma.Utils.makeEvaluator(this, code.code);
+                var samples_calculator = makeMod(this, function () {
+                    var mouse_area = _this._axes.document.mouseArea;
+                    var screen_box = new Geoma.Utils.Box(mouse_area.offset.x, mouse_area.offset.y, mouse_area.w, mouse_area.h);
+                    _this._intersectionsData.splice(0);
+                    _this._lastPoint = Point.empty;
+                    Tools.ParametricLine.calcSamples(screen_box, 1, contains_derivative, _this);
+                    return _this._intersectionsData;
+                });
+                this._intersections = makeProp(samples_calculator, []);
+            }
+            FunctionFunction.prototype.point = function (preffered_intersection) {
+                if (this.visible(preffered_intersection)) {
+                    return this.intersections[preffered_intersection];
+                }
+                else {
+                    return Point.empty;
+                }
+            };
+            FunctionFunction.prototype.visible = function (preffered_intersection) {
+                return preffered_intersection >= 0 && preffered_intersection < this.intersections.length;
+            };
+            Object.defineProperty(FunctionFunction.prototype, "intersections", {
+                get: function () {
+                    return this._intersections.value;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(FunctionFunction.prototype, "axes", {
+                get: function () {
+                    return this._axes;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            FunctionFunction.prototype.dispose = function () {
+                for (var key in this._args) {
+                    this._args[key].reset();
+                }
+            };
+            FunctionFunction.getPrefferedIndex = function (point, intersections) {
+                var last_length = Infinity;
+                var ret = -1;
+                var i = 0;
+                for (var _i = 0, intersections_1 = intersections; _i < intersections_1.length; _i++) {
+                    var intersection = intersections_1[_i];
+                    var length_2 = Tools.ActiveLineBase.getLength(point, intersection);
+                    if (length_2 < last_length) {
+                        ret = i;
+                        last_length = length_2;
+                    }
+                    i++;
+                }
+                return ret;
+            };
+            FunctionFunction.intersection = function (parametric1, parametric2) {
+                return (new ParametricParametric(Point.empty, parametric1, parametric2)).intersections;
+            };
+            FunctionFunction.createId = function () {
+                return FunctionFunction._index.inc() + "-{4B5D04F4-A028-48D6-BB69-B9E857793D38}";
+            };
+            FunctionFunction.prototype.getFunction = function (_name) {
+                throw new Error("Method not implemented.");
+            };
+            FunctionFunction.prototype.addFunction = function (_name, _code) {
+                throw new Error("Method not implemented.");
+            };
+            FunctionFunction.prototype.arg = function (name) {
+                switch (name) {
+                    case "x":
+                        return this._argX;
+                    default:
+                        assert(this.hasArg(name));
+                        if (name in this._args) {
+                            return this._args[name].value;
+                        }
+                        else if (this._context1.hasArg(name)) {
+                            return this._context1.arg(name);
+                        }
+                        else {
+                            assert(this._context2);
+                            return this._context2.arg(name);
+                        }
+                }
+            };
+            FunctionFunction.prototype.hasArg = function (name) {
+                var _a, _b;
+                return name in this._args || this._context1.hasArg(name) || ((_b = (_a = this._context2) === null || _a === void 0 ? void 0 : _a.hasArg(name)) !== null && _b !== void 0 ? _b : false);
+            };
+            FunctionFunction.prototype.addArg = function (name, arg) {
+                assert(!this.hasArg(name));
+                this._args[name] = makeProp(arg, NaN);
+            };
+            FunctionFunction.prototype.setArg = function (name, value) {
+                assert(name != "x");
+                assert(name in this._args);
+                this._args[name].value = value;
+            };
+            FunctionFunction.prototype.getScreenY = function (screen_x, func) {
+                var axes = this._axes;
+                var x = axes.fromScreenX(screen_x);
+                this._argX = x;
+                var screen_y = axes.toScreenY((func !== null && func !== void 0 ? func : this._deltaFunction)());
+                return screen_y;
+            };
+            FunctionFunction.prototype.lineTo = function (screen_x, screen_y, discontinuity) {
+                var next_point = Point.make(screen_x, screen_y);
+                if (!discontinuity && !Point.isEmpty(this._lastPoint)) {
+                    var axes = this._axes;
+                    var x_axis_intersection = (this._lastPoint.y <= axes.y && next_point.y >= axes.y) ||
+                        (this._lastPoint.y >= axes.y && next_point.y <= axes.y);
+                    if (x_axis_intersection) {
+                        var y1 = this.getScreenY(this._lastPoint.x, this._function1);
+                        var y2 = this.getScreenY(this._lastPoint.x, this._function2);
+                        var y3 = this.getScreenY(next_point.x, this._function1);
+                        var y4 = this.getScreenY(next_point.x, this._function2);
+                        var intersection = LineLine.intersection2(Point.make(this._lastPoint.x, y1), Point.make(next_point.x, y3), Point.make(this._lastPoint.x, y2), Point.make(next_point.x, y4));
+                        this._intersectionsData.push(intersection);
+                    }
+                }
+                this._lastPoint = next_point;
+            };
+            FunctionFunction.prototype.addSample = function () {
+            };
+            FunctionFunction.prototype.setSample = function (_screen_x, _screen_y) {
+            };
+            FunctionFunction._index = new Geoma.Utils.ModuleInteger();
+            return FunctionFunction;
+        }());
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
 })(Geoma || (Geoma = {}));
 var Geoma;
@@ -6413,7 +7261,7 @@ var Geoma;
                 _this._kX = makeProp(kx, 1);
                 _this._kY = makeProp(ky, 1);
                 _this._showDegrees = makeProp(true);
-                _this._needsCalc = new Geoma.Utils.Pulse();
+                _this._lines = new Array();
                 _this._dx = _this._dy = 0;
                 _this._moved = new Geoma.Utils.Pulse();
                 _this._beforeDrawListener = document.onBeforeDraw.bind(_this, _this.beforeDraw);
@@ -6451,6 +7299,7 @@ var Geoma;
                 },
                 set: function (value) {
                     this._kX.value = value;
+                    this.updateLines();
                 },
                 enumerable: false,
                 configurable: true
@@ -6461,6 +7310,7 @@ var Geoma;
                 },
                 set: function (value) {
                     this._kY.value = value;
+                    this.updateLines();
                 },
                 enumerable: false,
                 configurable: true
@@ -6472,9 +7322,9 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
-            Object.defineProperty(AxesLines.prototype, "needsCalc", {
+            Object.defineProperty(AxesLines.prototype, "lines", {
                 get: function () {
-                    return this._needsCalc;
+                    return this._lines;
                 },
                 enumerable: false,
                 configurable: true
@@ -6517,9 +7367,22 @@ var Geoma;
             AxesLines.prototype.move = function (dx, dy) {
                 this._dx -= dx;
                 this._dy -= dy;
+                var moved_point = new Set();
+                for (var _i = 0, _a = this._lines; _i < _a.length; _i++) {
+                    var line = _a[_i];
+                    if (line.points) {
+                        for (var _b = 0, _c = line.points; _b < _c.length; _b++) {
+                            var p = _c[_b];
+                            if (!moved_point.has(p.name) && p instanceof Tools.ActivePoint) {
+                                p.move(dx, dy);
+                                moved_point.add(p.name);
+                            }
+                        }
+                    }
+                }
                 this._moved.set();
             };
-            AxesLines.prototype.moved = function (receiptor) {
+            AxesLines.prototype.isMoved = function (receiptor) {
                 return this._moved.get(receiptor);
             };
             AxesLines.prototype.serialize = function (__context) {
@@ -6552,6 +7415,14 @@ var Geoma;
                 else {
                     return false;
                 }
+            };
+            AxesLines.prototype.addLine = function (line) {
+                this._lines.push(line);
+            };
+            AxesLines.prototype.removeLine = function (line) {
+                var index = this._lines.indexOf(line);
+                assert(index != -1);
+                this._lines.splice(index, 1);
             };
             AxesLines.deserialize = function (context, data, index) {
                 if (data.length < (index + 5)) {
@@ -6599,7 +7470,7 @@ var Geoma;
                     this._lastH = this.document.mouseArea.h;
                     this._lastOffsetX = this.document.mouseArea.offset.x;
                     this._lastOffsetY = this.document.mouseArea.offset.y;
-                    this._needsCalc.set();
+                    this.updateLines();
                 }
             };
             AxesLines.prototype.innerDraw = function (play_ground) {
@@ -6815,16 +7686,15 @@ var Geoma;
                         menu_item.onChecked.bind(this, this.scaleDialog);
                         menu_item = menu.addMenuItem(Tools.Resources.string("Создать функцию..."));
                         menu_item.onChecked.bind(this, function () { return _this.document.addParametricLine(Point.make(x_7, y_7), _this); });
-                        var lines = this.document.getParametricLines(this);
-                        if (lines.length == 1) {
-                            var line = lines[0];
+                        if (this.lines.length == 1) {
+                            var line = this.lines[0];
                             menu_item = menu.addMenuItem(Tools.Resources.string("Редактировать функцию f = {0} ...", line.code.text));
                             menu_item.onChecked.bind(line, line.showExpressionEditor);
                         }
-                        else if (lines.length > 1) {
+                        else if (this.lines.length > 1) {
                             var group = menu.addMenuGroup(Tools.Resources.string("Редактировать функцию"));
-                            for (var _i = 0, lines_1 = lines; _i < lines_1.length; _i++) {
-                                var line = lines_1[_i];
+                            for (var _i = 0, _a = this.lines; _i < _a.length; _i++) {
+                                var line = _a[_i];
                                 menu_item = group.addMenuItem("f = " + line.code.text + " ...");
                                 menu_item.onChecked.bind(line, line.showExpressionEditor);
                             }
@@ -6836,12 +7706,902 @@ var Geoma;
                 }
                 _super.prototype.mouseClick.call(this, event);
             };
+            AxesLines.prototype.updateLines = function () {
+                for (var _i = 0, _a = this.lines; _i < _a.length; _i++) {
+                    var line = _a[_i];
+                    line.setModified();
+                }
+            };
             AxesLines._adornerMargins = 10;
             return AxesLines;
         }(Tools.DocumentSprite));
         Tools.AxesLines = AxesLines;
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
 })(Geoma || (Geoma = {}));
+var OperatorPrecedence;
+(function (OperatorPrecedence) {
+    OperatorPrecedence[OperatorPrecedence["First"] = 0] = "First";
+    OperatorPrecedence[OperatorPrecedence["Second"] = 1] = "Second";
+    OperatorPrecedence[OperatorPrecedence["Third"] = 2] = "Third";
+})(OperatorPrecedence || (OperatorPrecedence = {}));
+var Extensions = (function () {
+    function Extensions() {
+    }
+    Extensions.split = function (value) {
+        var separators = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            separators[_i - 1] = arguments[_i];
+        }
+        var split = [];
+        var lastIndex = 0;
+        for (var index = 0; index < value.length; index++) {
+            for (var index2 = 0; index2 < separators.length; index2++) {
+                if (index + separators[index2].length <= value.length) {
+                    var substr = value.substr(index, separators[index2].length);
+                    if (substr == separators[index2]) {
+                        if (lastIndex != index) {
+                            split.push(value.substring(lastIndex, index));
+                        }
+                        lastIndex = index + 1;
+                    }
+                }
+            }
+        }
+        if (lastIndex < value.length) {
+            split.push(value.substring(lastIndex));
+        }
+        return split;
+    };
+    Extensions.replaceAll = function (searchValue, replaceValue, value) {
+        var index = value.indexOf(searchValue);
+        while (index != -1) {
+            value = Extensions.replace(value, index, index + searchValue.length, replaceValue);
+            index = value.indexOf(searchValue);
+        }
+        return value;
+    };
+    Extensions.replace = function (value, start, end, replaceValue) {
+        return value.substring(0, start) + replaceValue + value.substr(end);
+    };
+    Extensions.asBoolean = function (value) {
+        if (typeof value == "boolean") {
+            return value;
+        }
+        else {
+            throw new Error("Unable to cast " + typeof value + " to boolean");
+        }
+    };
+    Extensions.asNumber = function (value) {
+        if (typeof value == "number") {
+            return value;
+        }
+        else {
+            throw new Error("Unable to cast " + typeof value + " to number");
+        }
+    };
+    return Extensions;
+}());
+var Operand = (function () {
+    function Operand(value) {
+        this.Value = value;
+    }
+    return Operand;
+}());
+var Parameter = (function () {
+    function Parameter(name, value) {
+        this.Name = name;
+        this.Value = value;
+    }
+    return Parameter;
+}());
+var Operator = (function () {
+    function Operator(value, operatorLevel) {
+        this.Value = value;
+        this.OperatorLevel = operatorLevel;
+    }
+    return Operator;
+}());
+var BinaryOperation = (function () {
+    function BinaryOperation(firstOperand, secondOperand, oper) {
+        this.FirstOperand = firstOperand;
+        this.SecondOperand = secondOperand;
+        this.Operator = oper;
+    }
+    return BinaryOperation;
+}());
+var UnaryOperation = (function () {
+    function UnaryOperation(argument, func) {
+        this.Arguments = argument;
+        this.Func = func;
+    }
+    return UnaryOperation;
+}());
+var ArgumentArray = (function () {
+    function ArgumentArray(argument) {
+        this.Arguments = argument;
+    }
+    Object.defineProperty(ArgumentArray.prototype, "Length", {
+        get: function () {
+            return this.Arguments.length;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    return ArgumentArray;
+}());
+var MathFunction = (function () {
+    function MathFunction(type, argsCount, func) {
+        this.Type = type;
+        this.ArgumentsCount = argsCount;
+        this.Func = func;
+    }
+    return MathFunction;
+}());
+var MathParser = (function () {
+    function MathParser() {
+    }
+    MathParser.IsBasicOperator = function (value) {
+        var result = false;
+        MathParser.Operators.forEach(function (oper) {
+            if (!result) {
+                result = oper.Value == value;
+            }
+        });
+        return result;
+    };
+    MathParser.CalculateOperators = function (expression, operands) {
+        var split = Extensions.split(expression, MathParser.OperandKey);
+        var calculate = function (oper) {
+            var sign = 1;
+            for (var index = oper.length - 1; !MathParser.IsBasicOperator(oper); index--) {
+                if (oper[index] == '-') {
+                    sign = -sign;
+                    oper = oper.substr(0, oper.length - 1);
+                }
+                else {
+                    throw new Error("Incorrect operator: " + oper);
+                }
+            }
+            return oper[0].toString() + (sign == -1 ? "-" : "");
+        };
+        for (var token = 0; token < split.length; token++) {
+            if (!isNaN(Number(split[token]))) {
+                split[token] = "" + MathParser.OperandKey + parseInt(split[token]) + MathParser.OperandKey;
+            }
+            else {
+                var oper = calculate(split[token]);
+                var operandIndex = parseInt(split[token + 1]);
+                if (token == 0) {
+                    split[token] = "";
+                    if (oper == "-") {
+                        operands[operandIndex] = new Operand(new UnaryOperation(new ArgumentArray([operands[operandIndex]]), MathParser.NegativeFunction));
+                    }
+                    else if (oper != "--") {
+                        throw new Error("Can't parse operator: " + split[token]);
+                    }
+                }
+                else {
+                    if (!MathParser.IsBasicOperator(split[token])) {
+                        split[token] = oper[0].toString();
+                        if (oper.length > 1 && oper[1] == '-') {
+                            operands[operandIndex] = new Operand(new UnaryOperation(new ArgumentArray([operands[operandIndex]]), MathParser.NegativeFunction));
+                        }
+                    }
+                }
+            }
+        }
+        return { operands: operands, expression: split.join("") };
+    };
+    MathParser.GetOperands = function (expression, parameters, addedOperands) {
+        var operands = [];
+        if (addedOperands != null) {
+            operands = operands.concat(addedOperands);
+        }
+        var lastIndex = 0;
+        var operators = [];
+        MathParser.Operators.forEach(function (oper) {
+            operators.push(oper.Value);
+        });
+        var addOperand = function (start, end) {
+            var operand = expression.substring(start, end);
+            if (operand.length > 0) {
+                if (operand[0].toString() == MathParser.OperandKey && operand[operand.length - 1].toString() == MathParser.OperandKey) {
+                    return start + operand.length;
+                }
+                else {
+                    var replaceValue = "" + MathParser.OperandKey + operands.length + MathParser.OperandKey;
+                    expression = Extensions.replace(expression, lastIndex, end, replaceValue);
+                    operands.push(MathParser.ParseOperand(operand, parameters, operands));
+                    return start + replaceValue.length;
+                }
+            }
+            else {
+                return -1;
+            }
+        };
+        var _loop_1 = function (index) {
+            var currentOperator = "";
+            operators.forEach(function (oper) {
+                if (index + oper.length <= expression.length && oper.length > currentOperator.length) {
+                    var subExpression = expression.substr(index, oper.length);
+                    if (subExpression == oper) {
+                        currentOperator = oper;
+                    }
+                }
+            });
+            if (currentOperator != "") {
+                var currentIndex = addOperand(lastIndex, index);
+                index = currentIndex == -1 ? index : currentIndex;
+                lastIndex = index + currentOperator.length;
+            }
+            out_index_1 = index;
+        };
+        var out_index_1;
+        for (var index = 0; index < expression.length; index++) {
+            _loop_1(index);
+            index = out_index_1;
+        }
+        addOperand(lastIndex, expression.length);
+        return { operands: operands, expression: expression };
+    };
+    MathParser.GroupBinaryOperations = function (expression, operands, level) {
+        var split = Extensions.split(expression, MathParser.OperandKey);
+        var operators = [];
+        MathParser.Operators.forEach(function (oper) {
+            if (level == oper.OperatorLevel) {
+                operators.push(oper);
+            }
+        });
+        var _loop_2 = function (token) {
+            var currentOperator;
+            operators.forEach(function (oper) {
+                if (oper.Value == split[token]) {
+                    currentOperator = oper;
+                }
+            });
+            if (currentOperator !== undefined) {
+                var firstOperandIndex = parseInt(split[token - 1]);
+                var secondOperandIndex = parseInt(split[token + 1]);
+                var expressionToReplace = "" + MathParser.OperandKey + firstOperandIndex + MathParser.OperandKey + currentOperator.Value + MathParser.OperandKey + secondOperandIndex + MathParser.OperandKey;
+                operands.push(new Operand(new BinaryOperation(operands[firstOperandIndex], operands[secondOperandIndex], currentOperator)));
+                expression = Extensions.replaceAll(expressionToReplace, "" + MathParser.OperandKey + (operands.length - 1) + MathParser.OperandKey, expression);
+                token = 1;
+                split = Extensions.split(expression, MathParser.OperandKey);
+            }
+            else {
+                token++;
+            }
+            out_token_1 = token;
+        };
+        var out_token_1;
+        for (var token = 1; token < split.length - 1;) {
+            _loop_2(token);
+            token = out_token_1;
+        }
+        return { operands: operands, expression: expression };
+    };
+    MathParser.SplitExpression = function (expression, parameters, operands) {
+        var calculatedOperands = MathParser.GetOperands(expression, parameters, operands);
+        var calculatedOperators = MathParser.CalculateOperators(calculatedOperands.expression, calculatedOperands.operands);
+        var thirdLevel = MathParser.GroupBinaryOperations(calculatedOperators.expression, calculatedOperators.operands, OperatorPrecedence.Third);
+        var secondLevel = MathParser.GroupBinaryOperations(thirdLevel.expression, thirdLevel.operands, OperatorPrecedence.Second);
+        var firstLevel = MathParser.GroupBinaryOperations(secondLevel.expression, secondLevel.operands, OperatorPrecedence.First);
+        return firstLevel.operands[MathParser.ParseOperandIndex(firstLevel.expression)];
+    };
+    MathParser.ParseOperand = function (operand, parameters, addedOperands) {
+        var allParameters = MathParser.GetParameters(parameters);
+        if (!isNaN(Number(operand))) {
+            return new Operand(parseFloat(operand));
+        }
+        else if (operand[0].toString() == MathParser.OperandKey && operand[operand.length - 1].toString() == MathParser.OperandKey) {
+            if (!addedOperands) {
+                throw new Error("addedOperands is not defined");
+            }
+            return addedOperands[MathParser.ParseOperandIndex(operand)];
+        }
+        else if (allParameters.has(operand)) {
+            return new Operand(allParameters.get(operand));
+        }
+        else if (operand.indexOf(MathParser.Enumerator) != -1) {
+            var args = Extensions.split(operand, MathParser.Enumerator);
+            var operands = [];
+            for (var index = 0; index < args.length; index++) {
+                operands.push(MathParser.SplitExpression(args[index], parameters, addedOperands));
+            }
+            return new Operand(new ArgumentArray(operands));
+        }
+        else {
+            var returnValue = void 0;
+            var suitableFunctions_1 = [];
+            MathParser.Functions.forEach(function (func) {
+                if (func.Type.length < operand.length && operand.substr(0, func.Type.length) == func.Type) {
+                    suitableFunctions_1.push(func);
+                }
+            });
+            if (suitableFunctions_1.length == 0) {
+                if (!operand.includes(MathParser.OperandKey)) {
+                    return new Operand(new Parameter(operand, 0));
+                }
+                else {
+                    throw new Error("Function wasn't found");
+                }
+            }
+            var mostSuitableFunction_1 = suitableFunctions_1[0];
+            suitableFunctions_1.forEach(function (func) {
+                if (mostSuitableFunction_1) {
+                    if (func.Type.length > mostSuitableFunction_1.Type.length) {
+                        mostSuitableFunction_1 = func;
+                    }
+                }
+            });
+            var innerExpression = operand.substr(mostSuitableFunction_1.Type.length, operand.length - mostSuitableFunction_1.Type.length);
+            var value = MathParser.ParseOperand(innerExpression, parameters, addedOperands);
+            if (value.Value instanceof ArgumentArray) {
+                if (value.Value.Length != mostSuitableFunction_1.ArgumentsCount) {
+                    throw new Error("Function doesn't take " + value.Value.Length + " arguments");
+                }
+                else {
+                    returnValue = new Operand(new UnaryOperation(value.Value, mostSuitableFunction_1));
+                }
+            }
+            else if (1 != mostSuitableFunction_1.ArgumentsCount) {
+                throw new Error("Function doesn't take 1 argument");
+            }
+            else {
+                returnValue = new Operand(new UnaryOperation(new ArgumentArray([value]), mostSuitableFunction_1));
+            }
+            return returnValue;
+        }
+    };
+    MathParser.GetParameters = function (parameters) {
+        var output = new Map();
+        MathParser.Constants.forEach(function (constant) {
+            output.set(constant.Name, constant);
+        });
+        if (parameters != null) {
+            parameters.forEach(function (parameter) {
+                if (!output.has(parameter.Name)) {
+                    output.set(parameter.Name, parameter);
+                }
+                else {
+                    throw new Error("Double parameter " + parameter.Name + " declaration");
+                }
+            });
+        }
+        return output;
+    };
+    MathParser.ParseOperandIndex = function (operand) {
+        return parseInt(Extensions.replaceAll(MathParser.OperandKey, "", operand));
+    };
+    MathParser.OpenBraces = function (expression, parameters) {
+        var operands = [];
+        for (; expression.indexOf("(") != -1;) {
+            var expressionLast = expression;
+            var maxBracesCount = 0;
+            var bracesCount = 0;
+            var currentOpenIndex = 0;
+            var openIndex = -1;
+            var closeIndex = -1;
+            for (var index = 0; index < expression.length; index++) {
+                if (expression[index] == '(') {
+                    bracesCount++;
+                    currentOpenIndex = index;
+                }
+                if (expression[index] == ')') {
+                    if (bracesCount > maxBracesCount) {
+                        openIndex = currentOpenIndex;
+                        closeIndex = index;
+                        maxBracesCount = bracesCount;
+                    }
+                    bracesCount = 0;
+                }
+            }
+            var expressionToEvaluate = expression.substr(openIndex + 1, closeIndex - (openIndex + 1));
+            var expressionToReplace = "(" + expressionToEvaluate + ")";
+            if (expressionToEvaluate.indexOf(MathParser.Enumerator) != -1) {
+                var resultOperand = MathParser.ParseOperand(expressionToEvaluate, parameters, operands);
+                operands.push(resultOperand);
+            }
+            else {
+                var resultOperand = MathParser.SplitExpression(expressionToEvaluate, parameters, operands);
+                operands.push(resultOperand);
+            }
+            expression = Extensions.replaceAll(expressionToReplace, "" + MathParser.OperandKey + (operands.length - 1) + MathParser.OperandKey, expression);
+            if (expressionLast == expression) {
+                throw new Error("Can't open braces in: " + expression);
+            }
+        }
+        return { operands: operands, expression: expression };
+    };
+    MathParser.Parse = function (expression, parameters) {
+        expression = expression.replace(/\s/gi, "").replace(/\,/gi, ".");
+        var openedBraces = MathParser.OpenBraces(expression, parameters);
+        return MathParser.SplitExpression(openedBraces.expression, parameters, openedBraces.operands);
+    };
+    MathParser.Evaluate = function (operation) {
+        var firstOperand = MathParser.EvaluateOperand(operation.FirstOperand);
+        var secondOperand = MathParser.EvaluateOperand(operation.SecondOperand);
+        switch (operation.Operator.Value) {
+            case "-":
+                return Extensions.asNumber(firstOperand) - Extensions.asNumber(secondOperand);
+            case "+":
+                return Extensions.asNumber(firstOperand) + Extensions.asNumber(secondOperand);
+            case "*":
+                return Extensions.asNumber(firstOperand) * Extensions.asNumber(secondOperand);
+            case "/":
+                return Extensions.asNumber(firstOperand) / Extensions.asNumber(secondOperand);
+            case "%":
+                return Extensions.asNumber(firstOperand) % Extensions.asNumber(secondOperand);
+            case "^":
+                return Math.pow(Extensions.asNumber(firstOperand), Extensions.asNumber(secondOperand));
+            case "&":
+                return Extensions.asBoolean(firstOperand) && Extensions.asBoolean(secondOperand);
+            case "|":
+                return Extensions.asBoolean(firstOperand) || Extensions.asBoolean(secondOperand);
+            case ">":
+                return Extensions.asNumber(firstOperand) > Extensions.asNumber(secondOperand);
+            case "<":
+                return Extensions.asNumber(firstOperand) < Extensions.asNumber(secondOperand);
+            case "ge":
+            case ">=":
+                return Extensions.asNumber(firstOperand) >= Extensions.asNumber(secondOperand);
+            case "le":
+            case "<=":
+                return Extensions.asNumber(firstOperand) <= Extensions.asNumber(secondOperand);
+            case "==":
+                return Extensions.asNumber(firstOperand) == Extensions.asNumber(secondOperand);
+            case "!=":
+                return Extensions.asNumber(firstOperand) != Extensions.asNumber(secondOperand);
+            default:
+                throw new Error("Unknown operator: " + operation.Operator.Value);
+        }
+    };
+    MathParser.EvaluateOperand = function (operand) {
+        if (typeof operand.Value == "number" || typeof operand.Value == "boolean") {
+            return operand.Value;
+        }
+        else if (operand.Value instanceof Parameter) {
+            return operand.Value.Value;
+        }
+        else if (operand.Value instanceof UnaryOperation) {
+            var evaluatedArguments = [];
+            for (var index = 0; index < operand.Value.Func.ArgumentsCount; index++) {
+                evaluatedArguments.push(MathParser.EvaluateOperand(operand.Value.Arguments.Arguments[index]));
+            }
+            var unaryResult = operand.Value.Func.Func(evaluatedArguments);
+            return unaryResult;
+        }
+        else if (operand.Value instanceof BinaryOperation) {
+            var binaryResult = MathParser.Evaluate(operand.Value);
+            return binaryResult;
+        }
+        else {
+            throw new Error("Unknown function");
+        }
+    };
+    MathParser.ArgumentsToLatex = function (args) {
+        var innerFunction = "";
+        for (var index = 0; index < args.Length; index++) {
+            innerFunction += MathParser.OperandToLatexFormula(args.Arguments[index]);
+            if (index < args.Length - 1) {
+                innerFunction += MathParser.Enumerator;
+            }
+        }
+        return innerFunction;
+    };
+    MathParser.OperandToLatexFormula = function (operand) {
+        var output = "";
+        if (typeof operand.Value == "number" || typeof operand.Value == "boolean") {
+            output += operand.Value.toString();
+        }
+        else if (operand.Value instanceof Parameter) {
+            switch (operand.Value.Name) {
+                case "pi":
+                    output += "\pi";
+                    break;
+                case "infinity":
+                    output += "\infty";
+                    break;
+                default:
+                    output += operand.Value.Name;
+                    break;
+            }
+        }
+        else if (operand.Value instanceof UnaryOperation) {
+            var innerFunction = MathParser.ArgumentsToLatex(operand.Value.Arguments);
+            switch (operand.Value.Func.Type) {
+                case "negative":
+                    var argumentValue = operand.Value.Arguments.Arguments[0].Value;
+                    if (typeof argumentValue == "number" || typeof operand.Value == "boolean" || argumentValue instanceof Parameter || argumentValue instanceof UnaryOperation) {
+                        output += "-" + innerFunction + "";
+                    }
+                    else {
+                        output += "-(" + innerFunction + ")";
+                    }
+                    break;
+                case "sqrt":
+                    output += "\\sqrt{" + innerFunction + "}";
+                    break;
+                case "cbrt":
+                    output += "\\sqrt[3]{" + innerFunction + "}";
+                    break;
+                case "rad":
+                    output += innerFunction;
+                    break;
+                case "deg":
+                    output += "{" + innerFunction + "}" + "^{\\circ}";
+                    break;
+                case "ln":
+                    output += "\\log_e{(" + innerFunction + ")}";
+                    break;
+                case "log":
+                    output += "\\log_{" + MathParser.OperandToLatexFormula(operand.Value.Arguments.Arguments[1]) + "}{(" + MathParser.OperandToLatexFormula(operand.Value.Arguments.Arguments[0]) + ")}";
+                    break;
+                case "rand":
+                    output += "rand(" + innerFunction + ")";
+                    break;
+                case "root":
+                    output += "\\sqrt[" + MathParser.OperandToLatexFormula(operand.Value.Arguments.Arguments[1]) + "]{" + MathParser.OperandToLatexFormula(operand.Value.Arguments.Arguments[0]) + "}";
+                    break;
+                case "!":
+                    output += "not \\;(" + innerFunction + ")";
+                    break;
+                case "acos":
+                    output += "\\arccos{(" + innerFunction + ")}";
+                    break;
+                case "asin":
+                    output += "\\arcsin{(" + innerFunction + ")}";
+                    break;
+                case "atan":
+                    output += "\\arctan{(" + innerFunction + ")}";
+                    break;
+                case "acot":
+                    output += "\\arctan{(\\frac{1}{" + innerFunction + "})}";
+                    break;
+                case "acosh":
+                    output += "\\cosh^{-1}{(" + innerFunction + ")}";
+                    break;
+                case "asinh":
+                    output += "\\sinh^{-1}1{(" + innerFunction + ")}";
+                    break;
+                case "atanh":
+                    output += "\\tanh^{-1}{(" + innerFunction + ")}";
+                    break;
+                case "acoth":
+                    output += "\\tanh^{-1}{(\\frac{1}{" + innerFunction + "})}";
+                    break;
+                case "exp":
+                    output += "e^{" + innerFunction + "}";
+                    break;
+                case "floor":
+                    output += "⌊" + innerFunction + "⌋";
+                    break;
+                case "round":
+                    output += "round(" + innerFunction + ")";
+                    break;
+                case "ceil":
+                    output += "⌈" + innerFunction + "⌉";
+                    break;
+                case "abs":
+                    output += "|" + innerFunction + "|";
+                    break;
+                case "f'":
+                    output += "\\frac{d}{dx}(" + innerFunction + ")";
+                    break;
+                case "fact":
+                    output += innerFunction + "!";
+                    break;
+                case "sign":
+                    output += "sgn(" + innerFunction + ")";
+                    break;
+                default:
+                    output += "\\" + operand.Value.Func.Type + "{" + innerFunction + "}";
+                    break;
+            }
+        }
+        else if (operand.Value instanceof BinaryOperation) {
+            output += MathParser.BinaryOperationToLatexFormula(operand.Value);
+        }
+        else {
+            return "";
+        }
+        return output;
+    };
+    MathParser.BinaryOperationToLatexFormula = function (operation) {
+        var output = "";
+        var firstOperand = MathParser.OperandToLatexFormula(operation.FirstOperand);
+        var secondOperand = MathParser.OperandToLatexFormula(operation.SecondOperand);
+        if (operation.FirstOperand.Value instanceof BinaryOperation) {
+            var firstOperation = operation.FirstOperand.Value;
+            if ((firstOperation.Operator.OperatorLevel < operation.Operator.OperatorLevel || operation.Operator.Value == "-") && operation.Operator.Value != "/") {
+                firstOperand = "(" + firstOperand + ")";
+            }
+        }
+        if (operation.SecondOperand.Value instanceof BinaryOperation) {
+            var secondOperation = operation.SecondOperand.Value;
+            if ((secondOperation.Operator.OperatorLevel < operation.Operator.OperatorLevel || operation.Operator.Value == "-") && operation.Operator.Value != "^" && operation.Operator.Value != "/") {
+                secondOperand = "(" + secondOperand + ")";
+            }
+        }
+        switch (operation.Operator.Value) {
+            case "*":
+                output += firstOperand + " \\cdot " + secondOperand;
+                break;
+            case "/":
+                output += "\\frac{" + firstOperand + "}{" + secondOperand + "}";
+                break;
+            case ">=":
+                output += firstOperand + "\\geq" + secondOperand;
+                break;
+            case "<=":
+                output += firstOperand + "\\leq" + secondOperand;
+                break;
+            case "==":
+                output += firstOperand + "\\equiv" + secondOperand;
+                break;
+            case "!=":
+                output += firstOperand + "\\neq" + secondOperand;
+                break;
+            case "&":
+                output += firstOperand + "\\; and \\;" + secondOperand;
+                break;
+            case "|":
+                output += firstOperand + "\\; or \\;" + secondOperand;
+                break;
+            case "^":
+                var powerAfrer = function () {
+                    output += "{" + firstOperand + "}^{" + secondOperand + "}";
+                };
+                var powerBefore = function () {
+                    var funct = operation.FirstOperand.Value;
+                    output += "\\" + funct.Func.Type + "^" + MathParser.OperandToLatexFormula(operation.SecondOperand) + "{(" + MathParser.ArgumentsToLatex(funct.Arguments) + ")}";
+                };
+                if (operation.FirstOperand.Value instanceof UnaryOperation) {
+                    var func = (operation.FirstOperand.Value).Func;
+                    switch (func.Type) {
+                        case "cos":
+                            powerBefore();
+                            break;
+                        case "sin":
+                            powerBefore();
+                            break;
+                        case "tan":
+                            powerBefore();
+                            break;
+                        case "cot":
+                            powerBefore();
+                            break;
+                        case "acos":
+                            powerBefore();
+                            break;
+                        case "asin":
+                            powerBefore();
+                            break;
+                        case "atan":
+                            powerBefore();
+                            break;
+                        case "acot":
+                            powerBefore();
+                            break;
+                        default:
+                            powerAfrer();
+                            break;
+                    }
+                }
+                else {
+                    powerAfrer();
+                }
+                break;
+            default:
+                output += firstOperand + " " + operation.Operator.Value + " " + secondOperand;
+                break;
+        }
+        return output;
+    };
+    MathParser.Operators = [
+        new Operator("+", OperatorPrecedence.First),
+        new Operator("-", OperatorPrecedence.First),
+        new Operator("|", OperatorPrecedence.First),
+        new Operator("&", OperatorPrecedence.First),
+        new Operator("*", OperatorPrecedence.Second),
+        new Operator("%", OperatorPrecedence.Second),
+        new Operator("/", OperatorPrecedence.Second),
+        new Operator(">", OperatorPrecedence.Second),
+        new Operator("<", OperatorPrecedence.Second),
+        new Operator(">=", OperatorPrecedence.Second),
+        new Operator("<=", OperatorPrecedence.Second),
+        new Operator("==", OperatorPrecedence.Second),
+        new Operator("!=", OperatorPrecedence.Second),
+        new Operator("^", OperatorPrecedence.Third),
+    ];
+    MathParser.OperandKey = "#";
+    MathParser.Enumerator = ";";
+    MathParser.Constants = [new Parameter("pi", Math.PI), new Parameter("e", Math.E), new Parameter("false", false), new Parameter("true", true), new Parameter("infinity", Number.POSITIVE_INFINITY)];
+    MathParser.NegativeFunction = new MathFunction("negative", 1, function (value) { return -Extensions.asNumber(value[0]); });
+    MathParser.Functions = [
+        new MathFunction("rad", 1, function (value) { return Extensions.asNumber(value[0]) / 180.0 * Math.PI; }),
+        new MathFunction("deg", 1, function (value) { return Extensions.asNumber(value[0]) * 180.0 / Math.PI; }),
+        new MathFunction("cos", 1, function (value) { return Math.cos(Extensions.asNumber(value[0])); }),
+        new MathFunction("sin", 1, function (value) { return Math.sin(Extensions.asNumber(value[0])); }),
+        new MathFunction("tan", 1, function (value) { return Math.sin(Extensions.asNumber(value[0])) / Math.cos(Extensions.asNumber(value[0])); }),
+        new MathFunction("cot", 1, function (value) { return Math.cos(Extensions.asNumber(value[0])) / Math.sin(Extensions.asNumber(value[0])); }),
+        new MathFunction("cosh", 1, function (value) { return Math.cosh(Extensions.asNumber(value[0])); }),
+        new MathFunction("sinh", 1, function (value) { return Math.sinh(Extensions.asNumber(value[0])); }),
+        new MathFunction("tanh", 1, function (value) { return Math.sinh(Extensions.asNumber(value[0])) / Math.cosh(Extensions.asNumber(value[0])); }),
+        new MathFunction("coth", 1, function (value) { return Math.cosh(Extensions.asNumber(value[0])) / Math.sinh(Extensions.asNumber(value[0])); }),
+        new MathFunction("acos", 1, function (value) { return Math.acos(Extensions.asNumber(value[0])); }),
+        new MathFunction("asin", 1, function (value) { return Math.asin(Extensions.asNumber(value[0])); }),
+        new MathFunction("atan", 1, function (value) { return Math.atan(Extensions.asNumber(value[0])); }),
+        new MathFunction("acot", 1, function (value) { return Math.atan(1 / Extensions.asNumber(value[0])); }),
+        new MathFunction("acosh", 1, function (value) { return Math.acosh(Extensions.asNumber(value[0])); }),
+        new MathFunction("asinh", 1, function (value) { return Math.asinh(Extensions.asNumber(value[0])); }),
+        new MathFunction("atanh", 1, function (value) { return Math.atanh(Extensions.asNumber(value[0])); }),
+        new MathFunction("acoth", 1, function (value) { return Math.atanh(1 / Extensions.asNumber(value[0])); }),
+        new MathFunction("sqrt", 1, function (value) { return Math.sqrt(Extensions.asNumber(value[0])); }),
+        new MathFunction("cbrt", 1, function (value) { return Math.pow(Extensions.asNumber(value[0]), 1.0 / 3.0); }),
+        new MathFunction("ln", 1, function (value) { return Math.log(Extensions.asNumber(value[0])); }),
+        new MathFunction("abs", 1, function (value) { return Math.abs(Extensions.asNumber(value[0])); }),
+        new MathFunction("sign", 1, function (value) { return Math.sign(Extensions.asNumber(value[0])); }),
+        new MathFunction("exp", 1, function (value) { return Math.exp(Extensions.asNumber(value[0])); }),
+        new MathFunction("floor", 1, function (value) { return Math.floor(Extensions.asNumber(value[0])); }),
+        new MathFunction("ceil", 1, function (value) { return Math.ceil(Extensions.asNumber(value[0])); }),
+        new MathFunction("round", 1, function (value) { return Math.round(Extensions.asNumber(value[0])); }),
+        new MathFunction("!", 1, function (value) { return !Extensions.asBoolean(value[0]); }),
+        new MathFunction("fact", 1, function (value) { var result = 1; for (var i = 1; i <= Extensions.asNumber(value[0]); i++) {
+            result *= i;
+        } return result; }),
+        new MathFunction("f'", 1, function () { throw new Error("Not implemented"); }),
+        new MathFunction("rand", 2, function (value) { return Math.random() * (Extensions.asNumber(value[1]) - Extensions.asNumber(value[0])) + Extensions.asNumber(value[0]); }),
+        new MathFunction("log", 2, function (value) { return Math.log(Extensions.asNumber(value[0])) / Math.log(Extensions.asNumber(value[1])); }),
+        new MathFunction("root", 2, function (value) { return Math.pow(Extensions.asNumber(value[0]), 1 / Extensions.asNumber(value[1])); })
+    ];
+    return MathParser;
+}());
+var UnitTests = (function () {
+    function UnitTests() {
+    }
+    UnitTests.DisplayResult = function (received, expected, passed, type) {
+        if (passed) {
+            console.log("%c Test " + type + " passed. Received: " + received + ", expected: " + expected + " ", 'background: #0a0; color: #fff');
+        }
+        else {
+            console.log("%c Test " + type + " failed. Received: " + received + ", expected: " + expected + " ", 'background: #a00; color: #fff');
+        }
+    };
+    UnitTests.DeclareTestCase = function (testCase) {
+        UnitTests.TestCases.push(testCase);
+    };
+    UnitTests.AreEqual = function (expression, expected) {
+        var compared = UnitTests.EvaluateHelper(expression);
+        var passed;
+        if (typeof compared == "number" && typeof expected == "number") {
+            passed = expected - UnitTests.Delta <= compared && expected + UnitTests.Delta >= compared;
+        }
+        else {
+            passed = compared == expected;
+        }
+        UnitTests.DisplayResult(compared.toString(), expected.toString(), passed, "\"" + expression + "\"");
+    };
+    UnitTests.AreUnequal = function (expression, expected) {
+        var compared = UnitTests.EvaluateHelper(expression);
+        var passed;
+        if (typeof compared == "number" && typeof expected == "number") {
+            passed = !(expected - UnitTests.Delta <= compared && expected + UnitTests.Delta >= compared);
+        }
+        else {
+            passed = compared != expected;
+        }
+        UnitTests.DisplayResult(compared.toString(), expected.toString(), passed, "\"" + expression + "\"");
+    };
+    UnitTests.ThrowError = function (expression) {
+        try {
+            var result = UnitTests.EvaluateHelper(expression);
+            UnitTests.DisplayResult(result.toString(), "Error", false, "\"" + expression + "\"");
+        }
+        catch (_a) {
+            UnitTests.DisplayResult("Error", "Error", true, "\"" + expression + "\"");
+        }
+    };
+    UnitTests.IsTrue = function (expression) {
+        UnitTests.DisplayResult(expression ? "true" : "false", "true", expression, "\"is true\"");
+    };
+    UnitTests.EvaluateHelper = function (expression) {
+        var evaluated = MathParser.EvaluateOperand(MathParser.Parse(expression));
+        return evaluated;
+    };
+    UnitTests.RunTests = function () {
+        UnitTests.TestCases.forEach(function (testCase) {
+            testCase();
+        });
+    };
+    UnitTests.TestCases = [];
+    UnitTests.Delta = 0.01;
+    return UnitTests;
+}());
+function Evaluate() {
+    var input = document.getElementById('inp');
+    var result = document.getElementById('res');
+    var expression = document.getElementById('expression');
+    if (input && result && expression) {
+        result.innerHTML = UnitTests.EvaluateHelper(input.value).toString();
+        expression.innerHTML = "$" + MathParser.OperandToLatexFormula(MathParser.Parse(input.value)) + "$";
+    }
+}
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("cos(3550/20)*20+100", Math.cos(3550 / 20.0) * 20 + 100);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("4^(2*5^(1/2)+4)*2^(-3-4*5^(1/2))+(6^(3^(1/2))*7^(3^(1/2)))/(42^(3^(1/2)-1))+(-12)/((sin(131/180*3,1415926535897932384626433832795))^2+(sin(221/180*3,1415926535897932384626433832795))^2)+44*sqrt(3)*tan(-480/180*3,1415926535897932384626433832795)*46*tan(7/180*3,1415926535897932384626433832795)*tan(83/180*3,1415926535897932384626433832795)", 6134.0);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("4^(2*5^(1/2)+4)*2^(-3-4*5^(1/2))+(6^(3^(1/2))*7^(3^(1/2)))/(42^(3^(1/2)-1))+(-12)/((sin(131/180*pi))^2+(sin(221/180*pi))^2)+44*sqrt(3)*tan(-480/180*pi)*46*tan(7/180*pi)*tan(83/180*pi)", 6134.0);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("46*tan(7/180*3,1415926535897932384626433832795)*tan(83/180*3,1415926535897932384626433832795)", 46.0);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("(-12)/((sin(131/180*3,1415926535897932384626433832795))^2+(sin(221/180*3,1415926535897932384626433832795))^2)", -12.0);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("(6^(3^(1/2))*7^(3^(1/2)))/(42^(3^(1/2)-1))", 42.0);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("4 ^ (2 * 5 ^ (1 / 2) + 4) * 2 ^ (-3 - 4 * 5 ^ (1 / 2))", 32.0);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("cos(rad(sin(rad(deg(rad(30))))))", Math.cos(Math.sin(Math.PI / 6) / 180 * Math.PI));
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("deg(acos(cos(asin(sin(rad(30))))))", 30.0);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("log(10^6;root(10^4;10+10))", 30.0);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("log(10^6;root(10+10;10^4))", 46117.3);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreUnequal("2+2", 5);
+});
+UnitTests.DeclareTestCase(function () {
+    var expression = "sdgphjsdioghiosdnhiosd";
+    var operand = MathParser.Parse(expression);
+    UnitTests.IsTrue((operand.Value) instanceof Parameter);
+    UnitTests.IsTrue((operand.Value).Name == expression);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.ThrowError("sdgphjsdioghiosdnhiosd(0)");
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("3+-4", -1);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("-2+3", 1);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.ThrowError("1&3");
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.ThrowError("!(1)");
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("cossinlnraddeg(pi/2)", 0.9);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("sincos(-2)", -0.4);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("root(root(2;cossinlnraddeg(pi/2));log(pi;e))", 1.95);
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("sinh(10)", Math.sinh(10));
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.AreEqual("(e^10-e^(-10))/2", Math.sinh(10));
+});
+UnitTests.DeclareTestCase(function () {
+    UnitTests.ThrowError("sinhh(10)");
+});
 var Geoma;
 (function (Geoma) {
     var Tools;
@@ -6849,6 +8609,12 @@ var Geoma;
         var makeMod = Geoma.Utils.makeMod;
         var assert = Geoma.Utils.assert;
         var MulticastEvent = Geoma.Utils.MulticastEvent;
+        var CodeArgument = Geoma.Syntax.CodeArgument;
+        var CodeArgumentX = Geoma.Syntax.CodeArgumentX;
+        var CodeLiteral = Geoma.Syntax.CodeLiteral;
+        var CodeBinary = Geoma.Syntax.CodeBinary;
+        var CodeUnary = Geoma.Syntax.CodeUnary;
+        var paramaterNames = "abcdfhgiklmnoprstu";
         var MenuButton = (function (_super) {
             __extends(MenuButton, _super);
             function MenuButton(document, x, y, text, textBrush, horizontal_padding, vertical_padding) {
@@ -6920,29 +8686,33 @@ var Geoma;
                     ArgButton.prototype.onShowMenu = function (menu) {
                         var _this = this;
                         var item = menu.addMenuItem("x");
-                        item.onChecked.bind(this, function () { return _this._owner._codeElement = new Tools.CodeArgumentX(); });
+                        item.onChecked.bind(this, function () { return _this._owner._codeElement = new CodeArgumentX(); });
                         item = menu.addMenuItem("123");
                         item.onChecked.bind(this, function () {
                             var number = _this.document.promptNumber("");
                             if (number != null) {
-                                _this._owner._codeElement = new Tools.CodeLiteral(number);
+                                _this._owner._codeElement = new CodeLiteral(number);
                             }
                         });
                         var group = menu.addMenuGroup("abc");
                         var stripe;
-                        for (var i = 0; i < ArgButton._paramaterNames.length; i++) {
+                        var _loop_3 = function (i) {
                             if (i % 6 == 0) {
                                 stripe = group.addMenuStrip();
                             }
                             var index = i;
-                            var menu_item = stripe.addMenuItem(" " + ArgButton._paramaterNames.charAt(index) + " ");
-                            menu_item.onChecked.bind(this, function (item) { return _this._owner._codeElement = new Tools.CodeArgument(item.detail.tooltip); });
+                            var arg_name = paramaterNames.charAt(index);
+                            var menu_item = stripe.addMenuItem(" " + arg_name + " ");
+                            menu_item.onChecked.bind(this_1, function () { return _this._owner._codeElement = new CodeArgument(arg_name); });
+                        };
+                        var this_1 = this;
+                        for (var i = 0; i < paramaterNames.length; i++) {
+                            _loop_3(i);
                         }
                     };
-                    ArgButton._paramaterNames = "abcdefhgiklmnoprst";
                     return ArgButton;
                 }(MenuButton));
-                _this._codeElement = new Tools.CodeArgumentX();
+                _this._codeElement = new CodeArgumentX();
                 _this.item.push(new ArgButton(_this, x, y));
                 return _this;
             }
@@ -6971,22 +8741,31 @@ var Geoma;
                         return _this;
                     }
                     UnaryButton.prototype.onShowMenu = function (menu) {
-                        var _this = this;
-                        var functions = ["sin", "cos", "tan",
-                            "arcsin", "arccos", "arctan",
-                            "ln", "log2", "log10",
-                            "exp", "√", "∛", "∜", "sign", "abs",
-                            "sinh", "cosh", "tanh",
-                            "arcsinh", "arccosh", "arctanh",
-                            "!", "f'"];
-                        var _loop_1 = function (unary_function) {
-                            menu.addMenuItem(unary_function).onChecked.bind(this_1, function () { return _this._owner._function = unary_function; });
-                        };
-                        var this_1 = this;
-                        for (var _i = 0, functions_1 = functions; _i < functions_1.length; _i++) {
-                            var unary_function = functions_1[_i];
-                            _loop_1(unary_function);
+                        var groups = {};
+                        groups["Trig"] = ["sin", "cos", "tan", "arcsin", "arccos", "arctan"];
+                        groups["Hyper"] = ["sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh"];
+                        groups["Log"] = ["ln", "log2", "log10"];
+                        groups["Roots"] = ["√", "∛", "∜",];
+                        groups["Int"] = ["round", "ceil", "floor"];
+                        var misc = ["exp", "neg", "sign", "abs", "!", "f'"];
+                        for (var group_name in groups) {
+                            var group = menu.addMenuGroup(group_name);
+                            for (var _i = 0, _a = groups[group_name]; _i < _a.length; _i++) {
+                                var unary_function = _a[_i];
+                                this.addMenu(group, unary_function);
+                            }
                         }
+                        for (var _b = 0, misc_1 = misc; _b < misc_1.length; _b++) {
+                            var unary_function = misc_1[_b];
+                            this.addMenu(menu, unary_function);
+                        }
+                    };
+                    UnaryButton.prototype.addMenu = function (root, unary_function) {
+                        var _this = this;
+                        var name = new CodeUnary(unary_function, new CodeArgumentX()).text;
+                        var menu = root.addMenuItem(name);
+                        menu.onChecked.bind(this, function () { return _this._owner._function = unary_function; });
+                        menu.addW(function (value) { return Math.max(20, value); });
                     };
                     return UnaryButton;
                 }(MenuButton));
@@ -7005,7 +8784,7 @@ var Geoma;
             }
             Object.defineProperty(CodeUnaryPresenter.prototype, "codeElement", {
                 get: function () {
-                    return new Tools.CodeUnary(this._function, this.placeholder.codeElement);
+                    return new CodeUnary(this._function, this.placeholder.codeElement);
                 },
                 set: function (value) {
                     this._function = value.function;
@@ -7040,13 +8819,13 @@ var Geoma;
                     BinaryButton.prototype.onShowMenu = function (menu) {
                         var _this = this;
                         var functions = ["pow", "n√", "+", "-", "*", "÷"];
-                        var _loop_2 = function (binary_function) {
+                        var _loop_4 = function (binary_function) {
                             menu.addMenuItem(binary_function).onChecked.bind(this_2, function () { return _this._owner._function = binary_function; });
                         };
                         var this_2 = this;
-                        for (var _i = 0, functions_2 = functions; _i < functions_2.length; _i++) {
-                            var binary_function = functions_2[_i];
-                            _loop_2(binary_function);
+                        for (var _i = 0, functions_1 = functions; _i < functions_1.length; _i++) {
+                            var binary_function = functions_1[_i];
+                            _loop_4(binary_function);
                         }
                     };
                     return BinaryButton;
@@ -7073,7 +8852,7 @@ var Geoma;
                     var operand2 = this.item.item(3);
                     assert(operand1 instanceof CodePlaceholder);
                     assert(operand2 instanceof CodePlaceholder);
-                    return new Tools.CodeBinary(operand1.codeElement, this._function, operand2.codeElement);
+                    return new CodeBinary(operand1.codeElement, this._function, operand2.codeElement);
                 },
                 set: function (value) {
                     this._function = value.function;
@@ -7125,23 +8904,23 @@ var Geoma;
                             var item_1 = menu.addMenuItem(symmetric_func_1);
                             var presenter_1 = new CodeUnaryPresenter(document, x_mod, y_mod, symmetric_func_1);
                             item_1.onChecked.bind(this, function () {
-                                if (_this._owner.codeElement instanceof Tools.CodeUnary && _this._owner.codeElement.function == symmetric_func_1) {
-                                    if (_this._owner.codeElement.operand instanceof Tools.CodeArgument) {
+                                if (_this._owner.codeElement instanceof CodeUnary && _this._owner.codeElement.function == symmetric_func_1) {
+                                    if (_this._owner.codeElement.operand instanceof CodeArgument) {
                                         presenter_1 = new CodeArgumentPresenter(document, x_mod, y_mod);
                                         presenter_1.codeElement = _this._owner.codeElement.operand;
                                     }
-                                    else if (_this._owner.codeElement.operand instanceof Tools.CodeUnary) {
+                                    else if (_this._owner.codeElement.operand instanceof CodeUnary) {
                                         presenter_1 = new CodeUnaryPresenter(document, x_mod, y_mod);
                                         presenter_1.codeElement = _this._owner.codeElement.operand;
                                     }
                                     else {
-                                        assert(_this._owner.codeElement.operand instanceof Tools.CodeBinary);
+                                        assert(_this._owner.codeElement.operand instanceof CodeBinary);
                                         presenter_1 = new CodeBinaryPresenter(document, x_mod, y_mod);
                                         presenter_1.codeElement = _this._owner.codeElement.operand;
                                     }
                                 }
                                 else {
-                                    var expression = new Tools.CodeUnary(symmetric_func_1, _this._owner.codeElement);
+                                    var expression = new CodeUnary(symmetric_func_1, _this._owner.codeElement);
                                     presenter_1.codeElement = expression;
                                 }
                                 _this._owner.setPresenter(presenter_1);
@@ -7155,21 +8934,21 @@ var Geoma;
                         item.onChecked.bind(this, function () { return _this._owner.setPresenter(new CodeBinaryPresenter(document, x_mod, y_mod)); });
                         item = menu.addMenuItem("\u03C8{ f() }");
                         item.onChecked.bind(this, function () {
-                            var expression = new Tools.CodeUnary("sin", _this._owner.codeElement);
+                            var expression = new CodeUnary("sin", _this._owner.codeElement);
                             var presenter = new CodeUnaryPresenter(document, x_mod, y_mod);
                             presenter.codeElement = expression;
                             _this._owner.setPresenter(presenter);
                         });
                         item = menu.addMenuItem("\u03C8{ f(), v }");
                         item.onChecked.bind(this, function () {
-                            var expression = new Tools.CodeBinary(_this._owner.codeElement, "+", new Tools.CodeArgumentX());
+                            var expression = new CodeBinary(_this._owner.codeElement, "+", new CodeArgumentX());
                             var presenter = new CodeBinaryPresenter(document, x_mod, y_mod);
                             presenter.codeElement = expression;
                             _this._owner.setPresenter(presenter);
                         });
                         item = menu.addMenuItem("\u03C8{ u, f() }");
                         item.onChecked.bind(this, function () {
-                            var expression = new Tools.CodeBinary(new Tools.CodeArgumentX(), "+", _this._owner.codeElement);
+                            var expression = new CodeBinary(new CodeArgumentX(), "+", _this._owner.codeElement);
                             var presenter = new CodeBinaryPresenter(document, x_mod, y_mod);
                             presenter.codeElement = expression;
                             _this._owner.setPresenter(presenter);
@@ -7191,17 +8970,17 @@ var Geoma;
                     var button = this.item.first;
                     var x_mod = function () { return button.right; };
                     var y_mod = function () { return button.top; };
-                    if (value instanceof Tools.CodeArgumentX || value instanceof Tools.CodeArgument || value instanceof Tools.CodeLiteral) {
+                    if (value instanceof CodeArgumentX || value instanceof CodeArgument || value instanceof CodeLiteral) {
                         var presenter = new CodeArgumentPresenter(this.document, x_mod, y_mod);
                         presenter.codeElement = value;
                         this.setPresenter(presenter);
                     }
-                    else if (value instanceof Tools.CodeUnary) {
+                    else if (value instanceof CodeUnary) {
                         var presenter = new CodeUnaryPresenter(this.document, x_mod, y_mod);
                         presenter.codeElement = value;
                         this.setPresenter(presenter);
                     }
-                    else if (value instanceof Tools.CodeBinary) {
+                    else if (value instanceof CodeBinary) {
                         var presenter = new CodeBinaryPresenter(this.document, x_mod, y_mod);
                         presenter.codeElement = value;
                         this.setPresenter(presenter);
@@ -7231,10 +9010,11 @@ var Geoma;
                     function OkButton(editor, x, y) {
                         var _this = _super.call(this, editor.document, x, y, "OK", 5, 5, true) || this;
                         _this._editor = editor;
+                        _this.addVisible(function () { return !editor._parseError; });
                         return _this;
                     }
                     OkButton.prototype.onClick = function () {
-                        this._editor.onEnter.emitEvent(new CustomEvent("ExpressionEditorEvent", { cancelable: false, detail: this._editor._code.codeElement }));
+                        this._editor.emitOnEnter();
                         return false;
                     };
                     return OkButton;
@@ -7252,32 +9032,82 @@ var Geoma;
                     };
                     return CancelButton;
                 }(Tools.Button));
+                var EditButton = (function (_super) {
+                    __extends(EditButton, _super);
+                    function EditButton(editor, x, y) {
+                        var _this = _super.call(this, editor.document, x, y, Tools.Resources.string("⌨⇆🖰"), 5, 5, true) || this;
+                        _this._editor = editor;
+                        return _this;
+                    }
+                    EditButton.prototype.onClick = function () {
+                        this._editor._code.visible = !this._editor._code.visible;
+                        if (!this._editor._code.visible) {
+                            text_editor.text = this._editor._code.codeElement.text;
+                        }
+                        else {
+                            delete this._editor._parseError;
+                        }
+                        return true;
+                    };
+                    return EditButton;
+                }(Tools.Button));
                 var background = new Geoma.Sprite.Rectangle(x, y, 1, 1, function () { return Tools.CurrentTheme.FormulaEditorBackgroundBrush; });
                 var x_mod = makeMod(_this, function () { return background.x + _this._padding; });
-                var code = new CodePlaceholder(document, x_mod, makeMod(_this, function () { return background.y + _this._padding; }), true);
-                var text = new Geoma.Sprite.Text(x_mod, makeMod(_this, function () { return code.bottom + _this._padding; }), 0, 0, function () { return Tools.CurrentTheme.FormulaSampleTextBrush; }, function () { return Tools.CurrentTheme.FormulaSampleTextStyle; }, function () {
-                    var text = code.codeElement.text;
-                    if (text.length > 0 && text.charAt(0) == "(") {
-                        return "y = " + text.substr(1, text.length - 2);
+                var y_mod = makeMod(_this, function () { return (text_editor.visible ? text_editor : visual_editor).bottom + _this._padding; });
+                var text_editor = new Geoma.Sprite.TextInput(x_mod, makeMod(_this, function () { return background.y + _this._padding; }), makeMod(_this, function () { return background.w - 2 * _this._padding; }), 30, expression === null || expression === void 0 ? void 0 : expression.text, function () { return Tools.CurrentTheme.FormulaInputTextBrush; }, function () { return Tools.CurrentTheme.FormulaInputTextStyle; }, function () { return Tools.CurrentTheme.FormulaInputTextBackgroundBrush; });
+                var visual_editor = new CodePlaceholder(document, x_mod, makeMod(_this, function () { return background.y + _this._padding; }), true);
+                visual_editor.visible = false;
+                text_editor.addVisible(function () { return !visual_editor.visible; });
+                text_editor.onKeyPress.bind(_this, function (event) {
+                    _this.parse(text_editor.text);
+                    var enter_key_code = 13;
+                    if (event.keyCode == enter_key_code) {
+                        _this.emitOnEnter();
                     }
-                    else {
-                        return "y = " + text;
-                    }
+                    return true;
                 });
-                var y_mod = makeMod(_this, function () { return text.bottom + _this._padding; });
+                var plain_text = new Geoma.Sprite.Text(x_mod, y_mod, 0, 0, function () { return Tools.CurrentTheme.FormulaSampleTextBrush; }, function () { return Tools.CurrentTheme.FormulaSampleTextStyle; }, makeMod(_this, function () { var _a; return _this._code.visible ? _this._plainText : ((_a = _this._parseError) !== null && _a !== void 0 ? _a : _this._plainText); }));
+                plain_text.addVisible(Geoma.Utils.makeMod(_this, function () { return document.latexEngine.disabled || !!_this._parseError; }));
+                var latex = new Geoma.Sprite.LatexContainer(document.latexEngine, makeMod(_this, function () { return _this._latex; }), x_mod, y_mod, 1.2);
+                latex.addVisible(function () { return !plain_text.visible; });
+                y_mod = makeMod(_this, function () { return Math.max(plain_text.bottom, latex.bottom) + _this._padding; });
+                var calc_x;
+                var calc_width;
                 var ok = new OkButton(_this, x_mod, y_mod);
                 var cancel = new CancelButton(_this, makeMod(_this, function () { return ok.right + _this._padding; }), y_mod);
-                background.addW(makeMod(_this, function () { return Math.max(code.right, cancel.right) - background.left + _this._padding; }));
-                background.addH(makeMod(_this, function () { return cancel.bottom - background.top + _this._padding; }));
+                var edit = new EditButton(_this, makeMod(_this, function () { return cancel.right + _this._padding; }), y_mod);
+                var width_calculator = makeMod(_this, function () {
+                    var w1 = (visual_editor.visible ? visual_editor.w : text_editor.textWidth) + 2 * _this._padding;
+                    var w2 = plain_text.visible ? plain_text.w + 2 * _this._padding : 0;
+                    var w3 = ok.w + cancel.w + edit.w + 4 * _this._padding;
+                    var w4 = (plain_text.visible ? plain_text.w : latex.w) + 2 * _this._padding;
+                    calc_width = Math.max(w1, w2, w3, w4);
+                    return calc_width;
+                });
+                var x_calculator = function (value) {
+                    if (!calc_width || !calc_x) {
+                        calc_x = value;
+                    }
+                    else if ((calc_x + calc_width) > document.mouseArea.w) {
+                        calc_x = (document.mouseArea.w - calc_width) / 2;
+                    }
+                    return Math.max(document.mouseArea.x, calc_x);
+                };
+                background.addX(x_calculator);
+                background.addW(width_calculator);
+                background.addH(makeMod(_this, function () { return edit.bottom - background.top + _this._padding; }));
                 _this.onEnter = new MulticastEvent();
-                _this._code = code;
+                _this._code = visual_editor;
                 _this.item.push(background);
-                _this.item.push(code);
-                _this.item.push(text);
+                _this.item.push(text_editor);
+                _this.item.push(visual_editor);
+                _this.item.push(plain_text);
+                _this.item.push(latex);
                 _this.item.push(ok);
                 _this.item.push(cancel);
+                _this.item.push(edit);
                 if (expression) {
-                    code.codeElement = expression;
+                    visual_editor.codeElement = expression;
                 }
                 _this._mouseDownBinder = document.mouseArea.onMouseDown.bind(_this, _this.mouseHandle);
                 _this._mouseUpBinder = document.mouseArea.onMouseDown.bind(_this, _this.mouseHandle);
@@ -7297,9 +9127,377 @@ var Geoma;
                 this.mouseHandle(event);
                 _super.prototype.mouseMove.call(this, event);
             };
+            ExpressionDialog.prototype.parse = function (text_expression) {
+                try {
+                    this._argValues = new Map();
+                    var operand = MathParser.Parse(text_expression);
+                    var expression = this.expressionConverter(operand);
+                    this._code.codeElement = expression;
+                    delete this._parseError;
+                    return true;
+                }
+                catch (error) {
+                    this._parseError = Tools.Resources.string("Ошибка выражения: {0}", "" + error);
+                    return false;
+                }
+            };
+            ExpressionDialog.prototype.emitOnEnter = function () {
+                var result = {
+                    expression: this._code.codeElement,
+                    argValues: this._argValues
+                };
+                this.onEnter.emitEvent(new CustomEvent("ExpressionEditorEvent", { cancelable: false, detail: result }));
+            };
+            Object.defineProperty(ExpressionDialog.prototype, "_plainText", {
+                get: function () {
+                    var text = this._code.codeElement.text;
+                    if (text.length > 0 && text.charAt(0) == "(") {
+                        return "y = " + text.substr(1, text.length - 2);
+                    }
+                    else {
+                        return "y = " + text;
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(ExpressionDialog.prototype, "_latex", {
+                get: function () {
+                    try {
+                        var latex_markup = "{\\color{" + Tools.CurrentTheme.FormulaSampleTextBrush + "} y=" +
+                            MathParser.OperandToLatexFormula(MathParser.Parse(this._code.codeElement.math)) + "}";
+                        return latex_markup;
+                    }
+                    catch (error) {
+                        return "{\\color{red}" + error + "}";
+                    }
+                },
+                enumerable: false,
+                configurable: true
+            });
+            ExpressionDialog.prototype.expressionConverter = function (operand) {
+                var expression = operand.Value;
+                if (expression instanceof Parameter) {
+                    if (expression.Name == "x") {
+                        return new CodeArgumentX();
+                    }
+                    else {
+                        var value = typeof expression.Value == "boolean" ? (expression.Value ? 1 : 0) : expression.Value;
+                        assert(this._argValues);
+                        this._argValues.set(expression.Name, value);
+                        return new CodeArgument(expression.Name);
+                    }
+                }
+                else if (expression instanceof UnaryOperation) {
+                    var function_type = expression.Func.Type;
+                    switch (function_type) {
+                        case "rad":
+                        case "deg":
+                            assert(false, "TODO");
+                        case "cos":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("cos", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "sin":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("sin", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "tan":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("tan", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "cot":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tan", this.expressionConverter(expression.Arguments.Arguments[0])));
+                        case "acos":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arccos", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "asin":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arcsin", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "atan":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arctan", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "acot":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arctan", new CodeBinary(new CodeLiteral(1), "÷", this.expressionConverter(expression.Arguments.Arguments[0])));
+                        case "sqrt":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("√", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "cbrt":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("∛", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "ln":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "abs":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("abs", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "log":
+                            assert(expression.Arguments.Length == 2);
+                            return new CodeBinary(new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[0])), "÷", new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[1])));
+                        case "root":
+                            assert(expression.Arguments.Length == 2);
+                            return new CodeBinary(this.expressionConverter(expression.Arguments.Arguments[1]), "n√", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "cosh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("cosh", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "sinh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("sinh", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "tanh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("tanh", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "coth":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tanh", this.expressionConverter(expression.Arguments.Arguments[0])));
+                        case "acosh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arccosh", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "asinh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arcsinh", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "atanh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arctanh", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "acoth":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arctanh", new CodeBinary(new CodeLiteral(1), "÷", this.expressionConverter(expression.Arguments.Arguments[0])));
+                        case "sign":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("sin", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "exp":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("exp", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "floor":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("floor", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "ceil":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("ceil", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "round":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("round", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "fact":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("!", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "f'":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("f'", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "negative":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("neg", this.expressionConverter(expression.Arguments.Arguments[0]));
+                        case "!":
+                        case "rand":
+                        default:
+                            throw new Error(Tools.Resources.string("Неподдерживаемый тип функции: {0}", function_type));
+                    }
+                }
+                else if (expression instanceof BinaryOperation) {
+                    var operator_type = expression.Operator.Value;
+                    switch (operator_type) {
+                        case "+":
+                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "+", this.expressionConverter(expression.SecondOperand));
+                        case "-":
+                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "-", this.expressionConverter(expression.SecondOperand));
+                        case "*":
+                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "*", this.expressionConverter(expression.SecondOperand));
+                        case "/":
+                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "÷", this.expressionConverter(expression.SecondOperand));
+                        case "^":
+                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "pow", this.expressionConverter(expression.SecondOperand));
+                        default:
+                            throw new Error(Tools.Resources.string("Неподдерживаемый тип оператора: {0}", operator_type));
+                    }
+                }
+                else if (typeof expression == "number") {
+                    return new CodeLiteral(expression);
+                }
+                else if (typeof expression == "boolean") {
+                    return new CodeLiteral(expression ? 1 : 0);
+                }
+                else {
+                    throw new Error(Tools.Resources.string("Неподдерживаемый тип операнда: {0}", expression.constructor.name));
+                }
+            };
             return ExpressionDialog;
         }(Tools.DocumentSprite));
         Tools.ExpressionDialog = ExpressionDialog;
+    })(Tools = Geoma.Tools || (Geoma.Tools = {}));
+})(Geoma || (Geoma = {}));
+var Geoma;
+(function (Geoma) {
+    var Tools;
+    (function (Tools) {
+        var makeMod = Geoma.Utils.makeMod;
+        var ArgumentHandleButton = (function (_super) {
+            __extends(ArgumentHandleButton, _super);
+            function ArgumentHandleButton(document, x, arg_name, value) {
+                var _this = _super.call(this, document, x, 0, arg_name) || this;
+                _this.bottomArgIndex = -1;
+                _this._value = value;
+                _this.item.name = arg_name;
+                _this.addX(makeMod(_this, _this.calcX));
+                _this.addY(makeMod(_this, _this.calcY));
+                _this.addText(makeMod(_this, function (value) { return value + (" = " + _this._value); }));
+                return _this;
+            }
+            Object.defineProperty(ArgumentHandleButton.prototype, "value", {
+                get: function () {
+                    return this._value;
+                },
+                set: function (value) {
+                    var _this = this;
+                    var transaction_name = Tools.Resources.string("Установить {0} = {1}", this.name, "" + value);
+                    Tools.UndoTransaction.Do(this, transaction_name, function () {
+                        _this._value = value;
+                        for (var i = 0; i < _this.document.parametrics.length; i++) {
+                            var line = _this.document.parametrics.item(i);
+                            Geoma.Utils.assert(line instanceof Tools.ParametricLine);
+                            if (line.hasArg(_this.name)) {
+                                line.setModified();
+                            }
+                        }
+                    });
+                },
+                enumerable: false,
+                configurable: true
+            });
+            ArgumentHandleButton.prototype.serialize = function (__context) {
+                var data = [];
+                data.push("" + this.name);
+                data.push("v");
+                data.push("" + this._value);
+                return data;
+            };
+            ArgumentHandleButton.deserialize = function (context, data, index) {
+                if (data.length < (index + 3)) {
+                    return null;
+                }
+                else {
+                    var name_2 = data[index++];
+                    switch (data[index++]) {
+                        case "v":
+                            var value = parseFloat(data[index++]);
+                            return new ArgumentHandleButton(context.document, 0, name_2, value);
+                        default:
+                            return null;
+                    }
+                }
+            };
+            Object.defineProperty(ArgumentHandleButton.prototype, "isAddornersSelected", {
+                get: function () {
+                    return this._adorners !== undefined && this._adorners.mouseHit(this.document.mouseArea.mousePoint);
+                },
+                enumerable: false,
+                configurable: true
+            });
+            ArgumentHandleButton.prototype.onClick = function () {
+                if (!this.isAddornersSelected) {
+                    var result = this.document.promptNumber("Значение", this._value);
+                    if (result !== null) {
+                        this.value = result;
+                    }
+                }
+                return false;
+            };
+            ArgumentHandleButton.prototype.mouseMove = function (event) {
+                _super.prototype.mouseMove.call(this, event);
+                if (this.selected) {
+                    if (!this._adorners) {
+                        Geoma.Utils.assert(this.item.last);
+                        var adorner_1 = (function (_super) {
+                            __extends(adorner, _super);
+                            function adorner(owner, x, text, direction) {
+                                var _this = _super.call(this, owner.document, x, owner.y, text) || this;
+                                _this._lastTicks = 0;
+                                _this._accelerator = adorner._defaultAcceleration;
+                                _this._direction = 0;
+                                _this._direction = direction;
+                                _this._owner = owner;
+                                return _this;
+                            }
+                            adorner.prototype.dispose = function () {
+                                if (this._transaction) {
+                                    this._transaction.rollback();
+                                    delete this._transaction;
+                                }
+                                _super.prototype.dispose.call(this);
+                            };
+                            adorner.prototype.calcDeltaValue = function () {
+                                var value = this._owner._value;
+                                if (Math.abs(value) < adorner._deltaValueThreshold) {
+                                    return this._direction * 2 * adorner._deltaValueThreshold;
+                                }
+                                else {
+                                    var value_magnitude = Geoma.Utils.toInt(Math.log10(Math.abs(value)));
+                                    var delta_value = (Math.pow(10, (value_magnitude - 1))) * this._direction;
+                                    return delta_value;
+                                }
+                            };
+                            adorner.prototype.onClick = function () {
+                                var delta_value = this.calcDeltaValue();
+                                this._owner.value += delta_value;
+                                if (this._transaction) {
+                                    this._transaction.commit();
+                                    delete this._transaction;
+                                }
+                                delete this._startTicks;
+                                return true;
+                            };
+                            adorner.prototype.innerDraw = function (play_ground) {
+                                _super.prototype.innerDraw.call(this, play_ground);
+                                if (this._owner.isPressed && this.mouseHit(play_ground.mousePoint)) {
+                                    if (this._startTicks === undefined) {
+                                        var transaction_name = Tools.Resources.string("Установить {0} = {1}", this.name, "++");
+                                        this._transaction = this.document.beginUndo(transaction_name);
+                                        this._accelerator = adorner._defaultAcceleration;
+                                        this._startTicks = Tools.Document.ticks;
+                                        this._lastTicks = Tools.Document.ticks;
+                                    }
+                                    var dt = Tools.Document.ticks - this._startTicks;
+                                    if (dt >= Tools.CurrentTheme.TapDelayTime) {
+                                        if (dt >= Tools.CurrentTheme.TapActivateTime) {
+                                            var velocity = adorner._defaultVelocity / Math.max(1, Geoma.Utils.toInt(this._accelerator));
+                                            if ((Tools.Document.ticks - this._lastTicks) >= velocity) {
+                                                this._lastTicks = Tools.Document.ticks;
+                                                this._owner.value += this.calcDeltaValue();
+                                            }
+                                            this._accelerator += adorner._defaultAcceleration;
+                                        }
+                                    }
+                                }
+                            };
+                            adorner._deltaValueThreshold = 0.001;
+                            adorner._defaultVelocity = 1000;
+                            adorner._defaultAcceleration = 0.3;
+                            return adorner;
+                        }(Tools.Button));
+                        this._adorners = new Tools.Container();
+                        var dec_adorner_1 = new adorner_1(this, this.right, "-", -1);
+                        var inc_adorner = new adorner_1(this, function () { return dec_adorner_1.right; }, "+", 1);
+                        this._adorners.push(inc_adorner);
+                        this._adorners.push(dec_adorner_1);
+                        this.item.push(this._adorners);
+                    }
+                }
+                else if (this._adorners) {
+                    this.item.remove(this._adorners);
+                    this._adorners.dispose();
+                    delete this._adorners;
+                }
+            };
+            ArgumentHandleButton.prototype.calcX = function (value) {
+                return value + Tools.CurrentTheme.PropertyLeftMargin + this.document.mouseArea.offset.x;
+            };
+            ArgumentHandleButton.prototype.calcY = function () {
+                if (this.bottomArgIndex == -1) {
+                    return this.document.toolsBottom + this.document.mouseArea.offset.y;
+                }
+                else {
+                    return this.document.args.item(this.bottomArgIndex).bottom + Tools.CurrentTheme.PropertyVerticalPadding;
+                }
+            };
+            return ArgumentHandleButton;
+        }(Tools.Button));
+        Tools.ArgumentHandleButton = ArgumentHandleButton;
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
 })(Geoma || (Geoma = {}));
 var Geoma;
@@ -7376,8 +9574,8 @@ var Geoma;
                 if (segments.length) {
                     text.textLines.push(empty_line);
                 }
-                for (var _b = 0, lines_2 = lines; _b < lines_2.length; _b++) {
-                    var line = lines_2[_b];
+                for (var _b = 0, lines_1 = lines; _b < lines_1.length; _b++) {
+                    var line = lines_1[_b];
                     text.textLines.push({
                         brush: this._getBrush(line),
                         style: Tools.CurrentTheme.PropertyTextStyle,
@@ -7457,6 +9655,7 @@ var Geoma;
                 this.circles = new Tools.Container();
                 this.parametric = new Tools.Container();
                 this.axes = new Tools.Container();
+                this.args = new Tools.Container();
             }
             DocumentData.prototype.dispose = function (container) {
                 this.points.dispose();
@@ -7465,6 +9664,7 @@ var Geoma;
                 this.circles.dispose();
                 this.parametric.dispose();
                 this.axes.dispose();
+                this.args.dispose();
                 if (container) {
                     container.remove(this.parametric);
                     container.remove(this.axes);
@@ -7472,6 +9672,7 @@ var Geoma;
                     container.remove(this.lines);
                     container.remove(this.angles);
                     container.remove(this.points);
+                    container.remove(this.args);
                 }
             };
             DocumentData.prototype.initialize = function (container) {
@@ -7481,6 +9682,7 @@ var Geoma;
                 container.push(this.lines);
                 container.push(this.angles);
                 container.push(this.points);
+                container.push(this.args);
             };
             return DocumentData;
         }());
@@ -7510,9 +9712,10 @@ var Geoma;
             __extends(Document, _super);
             function Document(mouse_area) {
                 var _this = _super.call(this) || this;
+                _this._latexEngine = new Geoma.Latex.LatexEngine();
                 _this._selectedSprites = new Array();
-                _this._preventShowMenu = false;
                 _this._undoStack = new Array();
+                _this._preventShowMenu = false;
                 _this._currentUndoPosition = 0;
                 Geoma.Utils.InitializeCalcRevision();
                 _this._mouseArea = mouse_area;
@@ -7546,7 +9749,7 @@ var Geoma;
                 var doc_name = new Geoma.Sprite.Text(0, tool_y, 0, 0, function () { return Tools.CurrentTheme.MenuItemTextBrush; }, function () { return Tools.CurrentTheme.MenuItemTextStyle; }, makeMod(_this, function () { return _this.name; }));
                 doc_name.addX(makeMod(_this, function () { return Math.max(_this.mouseArea.x + _this.mouseArea.offset.x + _this.mouseArea.w - doc_name.w - tool_padding, settings_tool.right + tool_padding); }));
                 _this._tools.push(doc_name);
-                var tools_separator = new Geoma.Sprite.Polyline(0, _this._tools.bottom + 10, 1, function () { return Tools.CurrentTheme.ToolSeparatorBrush; });
+                var tools_separator = new Geoma.Sprite.Polyline(0, _this.toolsBottom, 1, function () { return Tools.CurrentTheme.ToolSeparatorBrush; });
                 tools_separator.addPolygon(new Geoma.Polygon.Line(Point.make(0, 0), Point.make(8000, 0)));
                 _this._tools.push(tools_separator);
                 _this._mouseClickBinder = mouse_area.onMouseClick.bind(_this, _this.mouseClick, true);
@@ -7557,6 +9760,13 @@ var Geoma;
                 }
                 return _this;
             }
+            Object.defineProperty(Document.prototype, "toolsBottom", {
+                get: function () {
+                    return this._tools.bottom + 10;
+                },
+                enumerable: false,
+                configurable: true
+            });
             Object.defineProperty(Document.prototype, "mouseArea", {
                 get: function () {
                     return this._mouseArea;
@@ -7581,6 +9791,13 @@ var Geoma;
             Object.defineProperty(Document.prototype, "angles", {
                 get: function () {
                     return this._data.angles;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(Document.prototype, "args", {
+                get: function () {
+                    return this._data.args;
                 },
                 enumerable: false,
                 configurable: true
@@ -7612,6 +9829,13 @@ var Geoma;
             Object.defineProperty(Document.prototype, "selectedSprites", {
                 get: function () {
                     return this._selectedSprites;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(Document.prototype, "latexEngine", {
+                get: function () {
+                    return this._latexEngine;
                 },
                 enumerable: false,
                 configurable: true
@@ -7654,16 +9878,6 @@ var Geoma;
                         if (p != point && p instanceof Tools.ActiveCommonPoint && p.groupNo == group_no) {
                             ret.push(p);
                         }
-                    }
-                }
-                return ret;
-            };
-            Document.prototype.getParametricLines = function (axes) {
-                var ret = new Array();
-                for (var i = 0; i < this._data.parametric.length; i++) {
-                    var line = this._data.parametric.item(i);
-                    if (line.axes == axes) {
-                        ret.push(line);
                     }
                 }
                 return ret;
@@ -7756,6 +9970,27 @@ var Geoma;
                 }
                 return ret;
             };
+            Document.prototype.getArgModifier = function (arg_name, parametric_line) {
+                var point_prop = this._tryGetPointProperty(arg_name, parametric_line);
+                if (point_prop) {
+                    return point_prop;
+                }
+                else {
+                    var _loop_5 = function (i) {
+                        if (this_3._data.args.item(i).name == arg_name) {
+                            var handle_1 = this_3._data.args.item(i);
+                            return { value: function () { return handle_1.value; } };
+                        }
+                    };
+                    var this_3 = this;
+                    for (var i = 0; i < this._data.args.length; i++) {
+                        var state_1 = _loop_5(i);
+                        if (typeof state_1 === "object")
+                            return state_1.value;
+                    }
+                    return null;
+                }
+            };
             Document.prototype.removePoint = function (point) {
                 if (!point.disposed) {
                     var transaction = this.beginUndo(Tools.Resources.string("Удаление точки {0}", point.name));
@@ -7765,8 +10000,8 @@ var Geoma;
                         for (var i = 0; i < this._data.lines.length; i++) {
                             var line = this._data.lines.item(i);
                             if (line.isPivot(point)) {
-                                if (line instanceof Tools.ActiveLineSegment) {
-                                    this.removeLineSegment(line);
+                                if (line instanceof Tools.ActiveLineSegment || line instanceof Tools.ActiveLine) {
+                                    this.removeLine(line);
                                 }
                                 else {
                                     assert(false, "TODO");
@@ -7788,6 +10023,12 @@ var Geoma;
                                 i--;
                             }
                         }
+                        for (var i = 0; i < this._data.parametric.length; i++) {
+                            var parametric = this._data.parametric.item(i);
+                            if (parametric.isRelated(point)) {
+                                parametric.removePoint(point);
+                            }
+                        }
                         transaction.commit();
                     }
                     catch (error) {
@@ -7798,40 +10039,24 @@ var Geoma;
             };
             Document.prototype.removeLine = function (line) {
                 if (!line.disposed) {
-                    assert(line.startPoint instanceof Tools.ActivePoint);
-                    assert(line.endPoint instanceof Tools.ActivePoint);
-                    this._data.lines.remove(line);
-                    line.dispose();
-                    if (this.canRemovePoint(line.startPoint)) {
-                        this.removePoint(line.startPoint);
-                    }
-                    if (this.canRemovePoint(line.endPoint)) {
-                        this.removePoint(line.endPoint);
-                    }
-                    for (var i = 0; i < this._data.angles.length; i++) {
-                        var angle = this._data.angles.item(i);
-                        if (angle.isRelated(line)) {
-                            this.removeAngle(angle, true);
-                            i--;
-                        }
-                    }
-                }
-            };
-            Document.prototype.removeLineSegment = function (segment) {
-                if (!segment.disposed) {
-                    var transaction = this.beginUndo(Tools.Resources.string("Удаление сегмента {0}", segment.name));
+                    var undo_message = line instanceof Tools.ActiveLineSegment ?
+                        Tools.Resources.string("Удаление сегмента {0}", line.name) :
+                        Tools.Resources.string("Удаление линии {0}", line.name);
+                    var transaction = this.beginUndo(undo_message);
                     try {
-                        this._data.lines.remove(segment);
-                        segment.dispose();
-                        if (this.canRemovePoint(segment.start)) {
-                            this.removePoint(segment.start);
+                        assert(line.startPoint instanceof Tools.ActivePoint);
+                        assert(line.endPoint instanceof Tools.ActivePoint);
+                        this._data.lines.remove(line);
+                        line.dispose();
+                        if (this.canRemovePoint(line.startPoint)) {
+                            this.removePoint(line.startPoint);
                         }
-                        if (this.canRemovePoint(segment.end)) {
-                            this.removePoint(segment.end);
+                        if (this.canRemovePoint(line.endPoint)) {
+                            this.removePoint(line.endPoint);
                         }
                         for (var i = 0; i < this._data.angles.length; i++) {
                             var angle = this._data.angles.item(i);
-                            if (angle.isRelated(segment)) {
+                            if (angle.isRelated(line)) {
                                 this.removeAngle(angle, true);
                                 i--;
                             }
@@ -7874,16 +10099,28 @@ var Geoma;
                 }
             };
             Document.prototype.removeParametricLine = function (parametric_line) {
+                var _this = this;
                 if (!parametric_line.disposed) {
                     var transaction = this.beginUndo(Tools.Resources.string("Удалить график {0}", parametric_line.code.text));
                     try {
+                        var current_parametric_args = new Set();
+                        parametric_line.code.visitArguments(Document._makeVisitor(current_parametric_args));
                         this._data.parametric.remove(parametric_line);
                         parametric_line.dispose();
                         var axes = parametric_line.axes;
-                        if (this.getParametricLines(axes).length == 0) {
+                        if (axes.lines.length == 0) {
                             this._data.axes.remove(axes);
                             axes.dispose();
                         }
+                        var used_args_1 = new Set();
+                        for (var i = 0; i < this._data.parametric.length; i++) {
+                            this._data.parametric.item(i).code.visitArguments(Document._makeVisitor(used_args_1));
+                        }
+                        current_parametric_args.forEach(function (arg_name) {
+                            if (!used_args_1.has(arg_name)) {
+                                _this._removeArgHandle(arg_name);
+                            }
+                        });
                         transaction.commit();
                     }
                     catch (error) {
@@ -7936,10 +10173,11 @@ var Geoma;
                             var new_axes = !axes;
                             axes = axes !== null && axes !== void 0 ? axes : new Tools.AxesLines(_this, _this._data.axes.length, point.x, point.y, 0.02, 0.02, function () { return Tools.CurrentTheme.AxesWidth; }, function () { return Tools.CurrentTheme.AxesBrush; }, function () { return Tools.CurrentTheme.AxesSelectBrush; });
                             var line = new Tools.ParametricLine(_this, function () { return Tools.CurrentTheme.ParametricLineWidth; }, function () { return Tools.CurrentTheme.ParametricLineBrush; }, function () { return Tools.CurrentTheme.ParametricLineSelectBrush; }, axes);
-                            line.code = event.detail;
+                            line.code = event.detail.expression;
                             if (new_axes) {
                                 _this._data.axes.push(axes);
                             }
+                            _this.realizeGraphArguments(line, event.detail.argValues);
                             _this._data.parametric.push(line);
                             transaction.commit();
                         }
@@ -8005,6 +10243,7 @@ var Geoma;
                         var line = lines[0];
                         var intersection = Tools.Intersection.makePoint(point, line);
                         var p = new Tools.ActiveCommonPoint(this, intersection.x, intersection.y, this._groupNo);
+                        assert(line.mouseHit(p));
                         line.addPoint(p);
                         p.addGraphLine(line);
                         p.setName(this.nextPointName());
@@ -8028,6 +10267,8 @@ var Geoma;
                                 var line2 = lines[j];
                                 var intersection = Tools.Intersection.makePoint(point, line1, line2);
                                 var p = new Tools.ActiveCommonPoint(this, intersection.x, intersection.y, this._groupNo);
+                                assert(line1.mouseHit(p));
+                                assert(line2.mouseHit(p));
                                 line1.addPoint(p);
                                 p.addGraphLine(line1);
                                 line2.addPoint(p);
@@ -8048,6 +10289,7 @@ var Geoma;
                 return null;
             };
             Document.prototype.onOffProperties = function () {
+                var _this = this;
                 var property_name = "{5ECB60E4-4092-45AB-86C1-FBA76AD7ECB0}";
                 for (var i = 0; i < this.length; i++) {
                     if (this.item(i).name == property_name) {
@@ -8055,7 +10297,9 @@ var Geoma;
                         return false;
                     }
                 }
-                var properties = new Tools.Properties(this, 10, this._tools.bottom + 20);
+                var properties = new Tools.Properties(this, makeMod(this, function (value) { return value + Tools.CurrentTheme.PropertyLeftMargin + _this.mouseArea.offset.x; }), makeMod(this, function (value) { return value + (_this._data.args.last ?
+                    (_this._data.args.last.bottom + Tools.CurrentTheme.PropertyVerticalPadding) :
+                    (_this.toolsBottom + _this.mouseArea.offset.y)); }));
                 properties.name = property_name;
                 this.push(properties);
                 return true;
@@ -8106,6 +10350,10 @@ var Geoma;
                 for (var i = 0; i < this._data.axes.length; i++) {
                     var axes = this._data.axes.item(i);
                     ret.push("ax" + info_separator + join_data(axes.serialize(context)));
+                }
+                for (var i = 0; i < this._data.args.length; i++) {
+                    var arg = this._data.args.item(i);
+                    ret.push("ar" + info_separator + join_data(arg.serialize(context)));
                 }
                 for (var i = 0; i < this._data.parametric.length; i++) {
                     var line = this._data.parametric.item(i);
@@ -8250,10 +10498,22 @@ var Geoma;
                                     }
                                 }
                                 break;
+                            case "ar":
+                                {
+                                    var arg = Tools.ArgumentHandleButton.deserialize(context, info, 1);
+                                    if (arg) {
+                                        this._data.args.push(arg);
+                                    }
+                                    else {
+                                        throw error;
+                                    }
+                                }
+                                break;
                             default:
                                 throw error;
                         }
                     }
+                    this._arrangeArgHandles();
                 }
                 catch (ex) {
                     this._data.dispose();
@@ -8386,9 +10646,40 @@ var Geoma;
                 this.open(undo_info.snapshot);
                 this.mouseArea.setOffset(undo_info.offset.x, undo_info.offset.y);
             };
-            Document.getTicks = function () {
-                return new Date().getTime();
+            Document.prototype.realizeGraphArguments = function (parametric_line, arg_values) {
+                var _this = this;
+                var current_parametric_args = new Set();
+                parametric_line.code.visitArguments(Document._makeVisitor(current_parametric_args));
+                var used_args = new Set(current_parametric_args);
+                for (var i = 0; i < this._data.parametric.length; i++) {
+                    this._data.parametric.item(i).code.visitArguments(Document._makeVisitor(used_args));
+                }
+                current_parametric_args.forEach((function (arg_name) {
+                    var _a, _b;
+                    if (!parametric_line.hasArg(arg_name)) {
+                        var arg_modifier = (_a = _this.getArgModifier(arg_name, parametric_line)) !== null && _a !== void 0 ? _a : _this._addArgHandle(arg_name, (_b = arg_values === null || arg_values === void 0 ? void 0 : arg_values.get(arg_name)) !== null && _b !== void 0 ? _b : 1);
+                        parametric_line.addArg(arg_name, arg_modifier);
+                    }
+                }).bind(this));
+                var unused_arg_handlers = new Array();
+                for (var i = 0; i < this._data.args.length; i++) {
+                    var arg_handler = this._data.args.item(i);
+                    if (!used_args.has(arg_handler.name)) {
+                        unused_arg_handlers.push(arg_handler.name);
+                    }
+                }
+                for (var _i = 0, unused_arg_handlers_1 = unused_arg_handlers; _i < unused_arg_handlers_1.length; _i++) {
+                    var unused_arg_handler = unused_arg_handlers_1[_i];
+                    this._removeArgHandle(unused_arg_handler);
+                }
             };
+            Object.defineProperty(Document, "ticks", {
+                get: function () {
+                    return new Date().getTime();
+                },
+                enumerable: false,
+                configurable: true
+            });
             Document.forceCloseMenu = function (move_tool) {
                 var _a;
                 assert(move_tool.document.contains(move_tool));
@@ -8719,8 +11010,8 @@ var Geoma;
                     assert(group_no == p.groupNo);
                     groups.push(p);
                 }
-                var _loop_3 = function (i) {
-                    var point = this_3._data.points.item(i);
+                var _loop_6 = function (i) {
+                    var point = this_4._data.points.item(i);
                     if (point instanceof Tools.ActiveCommonPoint) {
                         point.addGroupVisibility(function (value) {
                             for (var _i = 0, groups_1 = groups; _i < groups_1.length; _i++) {
@@ -8738,9 +11029,9 @@ var Geoma;
                         });
                     }
                 };
-                var this_3 = this;
+                var this_4 = this;
                 for (var i = start_index + 1; i < end_index; i++) {
-                    _loop_3(i);
+                    _loop_6(i);
                 }
             };
             Document.prototype.canRemovePoint = function (point) {
@@ -8757,11 +11048,9 @@ var Geoma;
                 return true;
             };
             Document.getName = function (index, pattern) {
+                var name_index = toInt(index / pattern.length);
                 var name = pattern.charAt(index % pattern.length);
-                for (var j = 0; j < toInt(index / pattern.length); j++) {
-                    name += "'";
-                }
-                return name;
+                return name_index ? "" + name + name_index : name;
             };
             Document.prototype.nextPointName = function () {
                 var name;
@@ -8808,6 +11097,96 @@ var Geoma;
                 this._data.lines.push(line);
                 return line;
             };
+            Document.prototype._addArgHandle = function (arg_name, value) {
+                for (var i = 0; i < this._data.args.length; i++) {
+                    assert(this._data.args.item(i).name != arg_name);
+                }
+                var handle = new Tools.ArgumentHandleButton(this, 0, arg_name, value);
+                this._data.args.push(handle);
+                this._arrangeArgHandles();
+                return function () { return handle.value; };
+            };
+            Document.prototype._removeArgHandle = function (arg_name) {
+                for (var i = 0; i < this._data.args.length; i++) {
+                    var arg_handle = this._data.args.item(i);
+                    if (arg_handle.name == arg_name) {
+                        this._data.args.remove(arg_handle);
+                        arg_handle.dispose();
+                        this._arrangeArgHandles();
+                        return;
+                    }
+                }
+                assert(false, "logical error");
+            };
+            Document.prototype._arrangeArgHandles = function () {
+                var args = new Array();
+                for (var i = 0; i < this._data.args.length; i++) {
+                    args.push({ handle: this._data.args.item(i), index: i });
+                }
+                args.sort(function (a, b) { return a.handle.name < b.handle.name ? -1 : 1; });
+                var last_index = -1;
+                for (var _i = 0, args_1 = args; _i < args_1.length; _i++) {
+                    var arg = args_1[_i];
+                    arg.handle.bottomArgIndex = last_index;
+                    last_index = arg.index;
+                }
+            };
+            Document.prototype._tryGetPointProperty = function (arg_name, parametric_line) {
+                var _this = this;
+                var m = arg_name.match(new RegExp("^[" + Document._pointNames + "][1-9]?(_[xy])?"));
+                if (m) {
+                    assert(m.length == 2);
+                    if (m[0] == arg_name && m[1].length) {
+                        var point_coord = m[1];
+                        var point_name_1 = m[0].substring(0, m[0].indexOf(point_coord));
+                        var _loop_7 = function (i) {
+                            var point = this_5.points.item(i);
+                            assert(point instanceof Tools.ActivePointBase);
+                            if (point.name == point_name_1) {
+                                var point_index_1 = i;
+                                var get_point_1 = (function () {
+                                    if (point_index_1 < _this.points.length) {
+                                        var point_2 = _this.points.item(point_index_1);
+                                        if (point_2.name == point_name_1) {
+                                            return point_2;
+                                        }
+                                    }
+                                    return null;
+                                }).bind(this_5);
+                                switch (point_coord) {
+                                    case "_x":
+                                        if (!parametric_line.isRelated(point)) {
+                                            parametric_line.addPoint(point);
+                                        }
+                                        return { value: function () { var _a, _b; return parametric_line.axes.fromScreenX((_b = (_a = get_point_1()) === null || _a === void 0 ? void 0 : _a.x) !== null && _b !== void 0 ? _b : NaN); } };
+                                    case "_y":
+                                        if (!parametric_line.isRelated(point)) {
+                                            parametric_line.addPoint(point);
+                                        }
+                                        return { value: function () { var _a, _b; return parametric_line.axes.fromScreenY((_b = (_a = get_point_1()) === null || _a === void 0 ? void 0 : _a.y) !== null && _b !== void 0 ? _b : NaN); } };
+                                    default:
+                                        throw new Error("Unexpected point parameter: " + arg_name);
+                                }
+                            }
+                        };
+                        var this_5 = this;
+                        for (var i = 0; i < this.points.length; i++) {
+                            var state_2 = _loop_7(i);
+                            if (typeof state_2 === "object")
+                                return state_2.value;
+                        }
+                        throw new Error("Undefined identifier " + arg_name);
+                    }
+                }
+                return null;
+            };
+            Document._makeVisitor = function (set) {
+                return function (arg) {
+                    if (!(arg instanceof Geoma.Syntax.CodeArgumentX)) {
+                        set.add(arg.text);
+                    }
+                };
+            };
             Document.serializationVersion1 = 1;
             Document.actualSerializationVersion = 2;
             Document._pointNames = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -8823,8 +11202,8 @@ var Geoma;
 var playGround;
 var mainDocument;
 var GeomaApplicationVersion = 0;
-var GeomaFeatureVersion = 4;
-var GeomaFixVersion = 1;
+var GeomaFeatureVersion = 5;
+var GeomaFixVersion = 7;
 window.onload = function () {
     document.title = document.title + " v" + GeomaApplicationVersion + "." + GeomaFeatureVersion + "." + GeomaFixVersion;
     var canvas = document.getElementById('playArea');
@@ -8949,13 +11328,6 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
-            Object.defineProperty(AngleIndicator.prototype, "moved", {
-                get: function () {
-                    return this.commonPivot.moved(this.realName) || this._p1.moved(this.realName) || this._p2.moved(this.realName);
-                },
-                enumerable: false,
-                configurable: true
-            });
             Object.defineProperty(AngleIndicator.prototype, "bisector", {
                 get: function () {
                     return this._bisector ? this._bisector : null;
@@ -8963,6 +11335,9 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
+            AngleIndicator.prototype.isMoved = function (receiptor) {
+                return this.commonPivot.isMoved(receiptor) || this._p1.isMoved(receiptor) || this._p2.isMoved(receiptor);
+            };
             AngleIndicator.prototype.isRelated = function (sprite) {
                 if (sprite instanceof Tools.ActivePointBase) {
                     return this.commonPivot == sprite || this._p1 == sprite || this._p2 == sprite;
@@ -9030,7 +11405,7 @@ var Geoma;
                 return anticlockwise ? AngleDirection.anticlockwise : AngleDirection.clockwise;
             };
             AngleIndicator.deserialize = function (context, data, index) {
-                if (data.length < (index + 2)) {
+                if (data.length < (index + 3)) {
                     return null;
                 }
                 else {
@@ -9188,17 +11563,17 @@ var Geoma;
                     }
                     var custom_name = menu.addMenuGroup(Tools.Resources.string("Настраиваемое имя"));
                     var stripe = void 0;
-                    var _loop_4 = function (i) {
+                    var _loop_8 = function (i) {
                         if (i % 6 == 0) {
                             stripe = custom_name.addMenuStrip();
                         }
                         var index = i;
                         var menu_item_1 = stripe.addMenuItem(" " + AngleIndicator._anglesNames.charAt(index) + " ");
-                        menu_item_1.onChecked.bind(this_4, function () { return set_name_1(index); });
+                        menu_item_1.onChecked.bind(this_6, function () { return set_name_1(index); });
                     };
-                    var this_4 = this;
+                    var this_6 = this;
                     for (var i = 0; i < AngleIndicator._anglesNames.length; i++) {
-                        _loop_4(i);
+                        _loop_8(i);
                     }
                     menu_item = menu.addMenuItem(Tools.Resources.string("Удалить индикатор угла {0}", this.name));
                     menu_item.onChecked.bind(this, function () { return _this.document.removeAngle(_this); });
@@ -9241,5 +11616,146 @@ var Geoma;
         }(Geoma.Sprite.Rectangle));
         Tools.Background = Background;
     })(Tools = Geoma.Tools || (Geoma.Tools = {}));
+})(Geoma || (Geoma = {}));
+var Geoma;
+(function (Geoma) {
+    var Test;
+    (function (Test) {
+        var TestUtils = (function () {
+            function TestUtils() {
+            }
+            TestUtils.testCaseName = function (fixture, test_name) {
+                return TestUtils.fixtureName(fixture) + "." + test_name;
+            };
+            TestUtils.printSuccess = function (text) {
+                console.log("%c " + text, 'background: #0a0; color: #fff');
+            };
+            TestUtils.printError = function (text) {
+                console.log("%c " + text, 'background: #a00; color: #fff');
+            };
+            TestUtils.printGlobal = function (text) {
+                TestUtils.printSuccess("[==========] " + text);
+            };
+            TestUtils.printGroup = function (text) {
+                TestUtils.printSuccess("[----------] " + text);
+            };
+            TestUtils.printRun = function (text) {
+                TestUtils.printSuccess("[ RUN      ] " + text);
+            };
+            TestUtils.printOk = function (text) {
+                TestUtils.printSuccess("[       OK ] " + text);
+            };
+            TestUtils.printPassed = function (text) {
+                TestUtils.printSuccess("[  PASSED  ] " + text);
+            };
+            TestUtils.printFailed = function (text) {
+                TestUtils.printError("[  FAILED  ] " + text);
+            };
+            TestUtils.addTest = function (fixture, test_name) {
+                var test_names = TestUtils._tests[TestUtils.fixtureName(fixture)];
+                if (!test_names) {
+                    test_names = TestUtils._tests[TestUtils.fixtureName(fixture)] = new Map();
+                }
+                var test_case_name = TestUtils.testCaseName(fixture, test_name);
+                Geoma.Utils.assert(!test_names.has(test_name), "Duplicate test name: " + test_case_name);
+                test_names.set(test_name, fixture);
+                return test_case_name;
+            };
+            TestUtils.runAll = function () {
+                var tests_count = 0;
+                var test_fixtures_count = 0;
+                for (var fixture_name in TestUtils._tests) {
+                    var fixture = TestUtils._tests[fixture_name];
+                    test_fixtures_count++;
+                    tests_count += fixture.size;
+                }
+                var s_end = function (count) { return count > 1 ? "s" : ""; };
+                TestUtils.printGlobal("Runinig " + tests_count + " test" + s_end(tests_count) + " from " + test_fixtures_count + " test case" + s_end(test_fixtures_count) + ".");
+                var failed_tests = new Array();
+                var _loop_9 = function (fixture_name) {
+                    var fixture = TestUtils._tests[fixture_name];
+                    TestUtils.printGroup(fixture.size + " test" + s_end(fixture.size) + " from " + fixture_name);
+                    var passed = 0;
+                    fixture.forEach(function (fixture, test_name) {
+                        if (fixture.run()) {
+                            passed++;
+                        }
+                        else {
+                            failed_tests.push(TestUtils.testCaseName(fixture, test_name));
+                        }
+                    });
+                    TestUtils.printGroup(passed + " test" + s_end(passed) + " from " + fixture_name + ".");
+                };
+                for (var fixture_name in TestUtils._tests) {
+                    _loop_9(fixture_name);
+                }
+                TestUtils.printGlobal(tests_count + " test" + s_end(tests_count) + " from " + test_fixtures_count + " test case" + s_end(test_fixtures_count) + " ran.");
+                TestUtils.printPassed(tests_count - failed_tests.length + " test" + s_end(tests_count - failed_tests.length));
+                if (failed_tests.length) {
+                    TestUtils.printFailed(failed_tests.length + " test" + s_end(failed_tests.length) + ", listed below.");
+                    for (var _i = 0, failed_tests_1 = failed_tests; _i < failed_tests_1.length; _i++) {
+                        var failed_test = failed_tests_1[_i];
+                        TestUtils.printFailed(failed_test);
+                    }
+                    return false;
+                }
+                else {
+                    return true;
+                }
+            };
+            TestUtils.fixtureName = function (fixture) {
+                return fixture.constructor.name;
+            };
+            TestUtils._tests = {};
+            return TestUtils;
+        }());
+        var TestFixture = (function () {
+            function TestFixture(test_name, test_case) {
+                var _this = this;
+                this._error = false;
+                var test_case_name = TestUtils.addTest(this, test_name);
+                this.run = (function () {
+                    TestUtils.printRun(test_case_name);
+                    try {
+                        test_case();
+                        if (_this._error) {
+                            throw new Error();
+                        }
+                        else {
+                            TestUtils.printOk(test_case_name);
+                            return true;
+                        }
+                    }
+                    catch (error) {
+                        if (error instanceof Error && error.message) {
+                            TestUtils.printError(" " + error.message);
+                        }
+                        else {
+                            TestUtils.printError(" Unexpected error");
+                        }
+                        TestUtils.printFailed(test_case_name);
+                        return false;
+                    }
+                }).bind(this);
+            }
+            return TestFixture;
+        }());
+        Test.TestFixture = TestFixture;
+        var TestFixtureTests = (function (_super) {
+            __extends(TestFixtureTests, _super);
+            function TestFixtureTests() {
+                return _super !== null && _super.apply(this, arguments) || this;
+            }
+            return TestFixtureTests;
+        }(TestFixture));
+        new TestFixtureTests("SuccessPass", function () {
+        });
+        new TestFixtureTests("ThrowError", function () {
+            throw new Error("test fixture test error");
+        });
+        new TestFixtureTests("ThrowNonError", function () {
+            throw "test fixture test error";
+        });
+    })(Test = Geoma.Test || (Geoma.Test = {}));
 })(Geoma || (Geoma = {}));
 //# sourceMappingURL=geoma.js.map

@@ -43,7 +43,7 @@ module Geoma.Tools
         {
             return super.mouseHit(Point.sub(point, this.document.mouseArea.offset));
         }
-        public moved(_receiptor: string): boolean
+        public isMoved(_receiptor: string): boolean
         {
             return false;
         }
@@ -198,8 +198,12 @@ module Geoma.Tools
 
                 const open_group = menu.addMenuGroup(Resources.string("Открыть"));
 
-                menu_item = menu.addMenuItem(Resources.string("Сохранить..."));
+                menu_item = menu.addMenuItem(Resources.string("Сохранить"));
                 menu_item.onChecked.bind(this, this.saveCommand);
+                menu_item.enabled.addModifier(makeMod(this, () => this.document.name != ""));
+
+                menu_item = menu.addMenuItem(Resources.string("Сохранить как..."));
+                menu_item.onChecked.bind(this, this.saveCommandAs);
 
                 menu_item = menu.addMenuItem(Resources.string("Копировать"));
                 menu_item.onChecked.bind(this, this.copyCommand);
@@ -253,11 +257,18 @@ module Geoma.Tools
         }
         protected saveCommand(): void
         {
+            assert(this.document.name);
+            const data = this.document.save();
+            window.localStorage.setItem(this.document.name, data);
+        }
+        protected saveCommandAs(): void
+        {
             const data = this.document.save();
             const save_name = this.document.prompt(Resources.string("Введите имя документа"));
             if (save_name != null)
             {
                 window.localStorage.setItem(save_name, data);
+                this.document.name = save_name;
             }
         }
         protected copyCommand(): void
@@ -490,7 +501,7 @@ module Geoma.Tools
         {
             assert(this._startTicks);
             assert(this._downPoint);
-            const elapsed_time = Document.getTicks() - this._startTicks;
+            const elapsed_time = Document.ticks - this._startTicks;
             const active_time = elapsed_time - this._delayTime.value;
             if (active_time >= 0)
             {
@@ -525,7 +536,7 @@ module Geoma.Tools
                 assert(!this._mouseUpListener);
                 this._mouseUpListener = this.document.mouseArea.onMouseUp.bind(this, this.mouseUp, true);
                 this._downPoint = event;
-                this._startTicks = Document.getTicks();
+                this._startTicks = Document.ticks;
                 this.visible = true;
                 this.selected = true;
             }

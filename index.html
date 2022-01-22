@@ -6,6 +6,11 @@
     <title>The Geoma Project</title>
     <link rel="stylesheet" href="app.css" type="text/css" />
     <script src="script/geoma.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script type="text/javascript" id="MathJax-script" async
+            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+    <script src="ThirdParty/mathjax/mathjax-options.js"></script>
     <noscript style="color:red">Your browser does not support JavaScript!</noscript>
     <meta name="viewport" content="width=device-width, user-scalable=no" />
 </head>
@@ -14,5 +19,6 @@
     <canvas id="playArea" class="playArea">
         Your browser doesn't supported HTML5 canvas
     </canvas>
+    <div style="display:none; font-size:100px" id="mathContainer"></div>
 </body>
 </html>

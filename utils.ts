@@ -195,34 +195,55 @@ module Geoma.Utils
         private _isEmited: boolean = false;
     }
 
+    export class ModuleInteger
+    {
+        constructor(value: number = 0)
+        {
+            this._value = value;
+        }
+
+        public get value(): number
+        {
+            return this._value;
+        }
+        public inc(): number
+        {
+            this._value = toInt(this._value) % ModuleInteger._module + 1;
+            return this._value;
+        }
+
+        private _value: number;
+        private static readonly _module: number = 1000000;
+    }
+
     export class Pulse
     {
         constructor()
         {
-            this._revision = 0;
+            this._revision = new ModuleInteger();
             this._receiptors = {};
         }
 
         public set(): void
         {
-            this._revision = toInt(this._revision + 1) % 1000000;
+            this._revision.inc();
         }
         public get(receiptor: string)
         {
             if (this._receiptors[receiptor] == null)
             {
-                this._receiptors[receiptor] = this._revision;
-                return this._revision != 0;
+                this._receiptors[receiptor] = this._revision.value;
+                return this._revision.value != 0;
             }
             else
             {
-                const ret = this._receiptors[receiptor] != this._revision;
-                this._receiptors[receiptor] = this._revision;
+                const ret = this._receiptors[receiptor] != this._revision.value;
+                this._receiptors[receiptor] = this._revision.value;
                 return ret;
             }
         }
 
-        private _revision: number;
+        private _revision: ModuleInteger;
         private _receiptors: Record<string, number>;
     }
 
@@ -659,9 +680,9 @@ module Geoma.Utils
         return function () { return eval(code); }.call(context) as TRet;
     }
 
-    export function makeEvaluator<TThis>(context: TThis, code: string): Function
+    export function makeEvaluator(context: ICodeEvaluatorContext, code: string): Function
     {
-        return evaluate<TThis, Function>(context, `(function() { "use strict"; return ${code}; }).bind(this)`);
+        return evaluate<ICodeEvaluatorContext, Function>(context, `(function() { "use strict"; return ${code}; }).bind(this)`);
     }
 
     export function formatString(format: string, ...args: string[]): string

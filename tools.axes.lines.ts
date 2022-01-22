@@ -45,6 +45,7 @@ module Geoma.Tools
                 }
             }
             super(document, new stub(x, y));
+
             this.axesId = axes_number;
             this._lineWidth = makeProp(line_width, 1);
             this._brush = makeProp(brush, "Black");
@@ -52,13 +53,13 @@ module Geoma.Tools
             this._kX = makeProp(kx, 1);
             this._kY = makeProp(ky, 1);
             this._showDegrees = makeProp<boolean>(true);
-            this._needsCalc = new Utils.Pulse();
+            this._lines = new Array<ParametricLine>();
             this._dx = this._dy = 0;
             this._moved = new Utils.Pulse();
             this._beforeDrawListener = document.onBeforeDraw.bind(this, this.beforeDraw);
             this._adorners = new Sprite.Container();
             this._adorners.alpha = 0.8;
-            this._adorners.addVisible(makeMod(this, ()=> this._adorners.length > 0 && document.canShowMenu(this)));
+            this._adorners.addVisible(makeMod(this, () => this._adorners.length > 0 && document.canShowMenu(this)));
 
             this.addX(makeMod(this, (value: number) => value + this._dx));
             this.addY(makeMod(this, (value: number) => value + this._dy));
@@ -88,18 +89,20 @@ module Geoma.Tools
         public set kX(value: number)
         {
             this._kX.value = value;
+            this.updateLines();
         }
         public set kY(value: number)
         {
             this._kY.value = value;
+            this.updateLines();
         }
         public get showDegrees(): boolean
         {
             return this._showDegrees.value;
         }
-        public get needsCalc(): Utils.Pulse
+        public get lines(): Array<ParametricLine>
         {
-            return this._needsCalc;
+            return this._lines;
         }
 
         public dispose(): void
@@ -151,9 +154,26 @@ module Geoma.Tools
         {
             this._dx -= dx;
             this._dy -= dy;
+
+            const moved_point = new Set<string>();
+
+            for (const line of this._lines)
+            {
+                if (line.points)
+                {
+                    for (const p of line.points)
+                    {
+                        if (!moved_point.has(p.name) && p instanceof ActivePoint)
+                        {
+                            p.move(dx, dy);
+                            moved_point.add(p.name);
+                        }
+                    }
+                }
+            }
             this._moved.set();
         }
-        public moved(receiptor: string): boolean
+        public isMoved(receiptor: string): boolean
         {
             return this._moved.get(receiptor);
         }
@@ -193,6 +213,16 @@ module Geoma.Tools
             {
                 return false;
             }
+        }
+        public addLine(line: ParametricLine): void
+        {
+            this._lines.push(line);
+        }
+        public removeLine(line: ParametricLine): void
+        {
+            const index = this._lines.indexOf(line);
+            assert(index != -1);
+            this._lines.splice(index, 1);
         }
         public static deserialize(context: DesializationContext, data: Array<string>, index: number): AxesLines | null
         {
@@ -262,7 +292,7 @@ module Geoma.Tools
                 this._lastH = this.document.mouseArea.h;
                 this._lastOffsetX = this.document.mouseArea.offset.x;
                 this._lastOffsetY = this.document.mouseArea.offset.y;
-                this._needsCalc.set();
+                this.updateLines();
             }
         }
         protected innerDraw(play_ground: PlayGround): void
@@ -452,7 +482,7 @@ module Geoma.Tools
                     {
                         can_show_adorners = false;
                         break;
-                    }                    
+                    }
                 }
 
                 if (can_show_adorners)
@@ -539,17 +569,16 @@ module Geoma.Tools
                     menu_item = menu.addMenuItem(Resources.string("Создать функцию..."));
                     menu_item.onChecked.bind(this, () => this.document.addParametricLine(Point.make(x, y), this));
 
-                    const lines = this.document.getParametricLines(this);
-                    if (lines.length == 1)
+                    if (this.lines.length == 1)
                     {
-                        const line = lines[0];
+                        const line = this.lines[0];
                         menu_item = menu.addMenuItem(Resources.string("Редактировать функцию f = {0} ...", line.code.text));
                         menu_item.onChecked.bind(line, line.showExpressionEditor);
                     }
-                    else if (lines.length > 1)
+                    else if (this.lines.length > 1)
                     {
                         const group = menu.addMenuGroup(Resources.string("Редактировать функцию"));
-                        for (const line of lines)
+                        for (const line of this.lines)
                         {
                             menu_item = group.addMenuItem(`f = ${line.code.text} ...`);
                             menu_item.onChecked.bind(line, line.showExpressionEditor);
@@ -564,6 +593,13 @@ module Geoma.Tools
             }
             super.mouseClick(event);
         }
+        protected updateLines(): void
+        {
+            for (const line of this.lines)
+            {
+                line.setModified();
+            }
+        }
 
         private readonly _lineWidth: property<number>;
         private readonly _brush: property<Sprite.Brush>;
@@ -571,10 +607,10 @@ module Geoma.Tools
         private readonly _kX: property<number>;
         private readonly _kY: property<number>;
         private readonly _showDegrees: property<boolean>;
-        private readonly _needsCalc: Utils.Pulse;
         private readonly _beforeDrawListener: IEventListener<BeforeDrawEvent>;
         private readonly _moved: Utils.Pulse;
         private readonly _adorners: Sprite.Container;
+        private readonly _lines: Array<ParametricLine>;
         private _dx: number;
         private _dy: number;
         private _lastX?: number;

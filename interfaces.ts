@@ -48,4 +48,22 @@ module Geoma
         readonly path: Path2D;
         readonly box: Utils.Box;
     }
+
+    export interface ICodeEvaluatorContext
+    {
+        getFunction(name: string): Function | null;
+        addFunction(name: string, code: string): void;
+        arg(name: string): number;
+        hasArg(name: string): boolean;
+        addArg(name: string, arg: Utils.binding<number>): void;
+        setArg(name: string, value: number): void;
+    }
+
+    export interface ISamplesAdapter
+    {
+        getScreenY(screen_x: number): number;
+        lineTo(x: number, y: number, discontinuity: boolean): void;
+        addSample(): void;
+        setSample(screen_x: number, screen_y: number): void;
+    }
 }

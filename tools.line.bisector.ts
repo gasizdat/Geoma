@@ -95,9 +95,9 @@ module Geoma.Tools
             this._angleIndicator = angle_indicator;
         }
 
-        public get moved(): boolean
+        public isMoved(receiptor: string): boolean
         {
-            return this._angleIndicator.moved;
+            return this._angleIndicator.isMoved(receiptor);
         }
 
         protected mouseClick(event: MouseEvent): void

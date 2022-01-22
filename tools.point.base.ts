@@ -89,7 +89,7 @@ module Geoma.Tools
             data.push(`${this._line.y + this.item.first!.w / 2 + this._line.lineWidth.value / 2}`);
             return data;
         }
-        public abstract moved(receiptor: string): boolean;
+        public abstract isMoved(receiptor: string): boolean;
 
         protected get boundingBox(): Box
         {

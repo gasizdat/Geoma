@@ -26,6 +26,9 @@ module Geoma.Tools
     {
         readonly name: string = "DefaultTheme";
 
+        readonly PropertyLeftMargin: number = 20;
+        readonly PropertyVerticalPadding: number = 5;
+
         readonly ButtonBackgroundBrush: Brush = "#117777";
         readonly ButtonSelectedBrush: Sprite.Brush = "#0011EF";
         readonly ButtonItemTextBrush: Sprite.Brush = "#EFFFFF";
@@ -126,9 +129,14 @@ module Geoma.Tools
         readonly AdornerStrokeWidth: number = 0;
 
         readonly FormulaEditorBackgroundBrush: Brush = "#117777";
+        readonly FormulaInputTextBrush: Brush = "#EFFFFF";
+        readonly FormulaInputTextBackgroundBrush: Brush = "#117777";
+        readonly FormulaInputTextStyle: CanvasTextDrawingStyles = {
+            font: "18px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+        };
         readonly FormulaSampleTextBrush: Brush = "SandyBrown";
         readonly FormulaSampleTextStyle: CanvasTextDrawingStyles = {
-            font: "12px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+            font: "18px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
         };
 
         readonly CoordinatesPrecision: number = 2;
@@ -147,6 +155,9 @@ module Geoma.Tools
     class BlueThemeStyle implements IThemeStyle
     {
         readonly name: string = "BlueTheme";
+
+        readonly PropertyLeftMargin: number = 20;
+        readonly PropertyVerticalPadding: number = 5;
 
         readonly ButtonBackgroundBrush: Brush = "LightSkyBlue";
         readonly ButtonSelectedBrush: Sprite.Brush = "SteelBlue";
@@ -247,9 +258,14 @@ module Geoma.Tools
         readonly BisectorLineWidth: number = 1;
 
         readonly FormulaEditorBackgroundBrush: Brush = "PeachPuff";
+        readonly FormulaInputTextBrush: Brush = "DarkSlateGray";
+        readonly FormulaInputTextBackgroundBrush: Brush = "LightSkyBlue";
+        readonly FormulaInputTextStyle: CanvasTextDrawingStyles = {
+            font: "18px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+        };
         readonly FormulaSampleTextBrush: Brush = "Gray";
         readonly FormulaSampleTextStyle: CanvasTextDrawingStyles = {
-            font: "12px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
+            font: "18px Consolas", textBaseline: "hanging", direction: "inherit", textAlign: "left"
         };
 
         readonly CoordinatesPrecision: number = 2;

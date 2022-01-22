@@ -16,7 +16,7 @@ module Geoma.Tools
             this.addY(() => prop_y.value);
         }
 
-        public moved(_receiptor: string): boolean
+        public isMoved(_receiptor: string): boolean
         {
             return false;
         }

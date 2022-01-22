@@ -40,11 +40,6 @@ module Geoma.Tools
             this.addY(makeMod(this, this.dyModifier));
         }
 
-        public moved(receiptor: string): boolean
-        {
-            return this._moved.get(receiptor);
-        }
-
         public dispose()
         {
             if (!this.disposed)
@@ -59,7 +54,11 @@ module Geoma.Tools
         {
             this._dx -= dx;
             this._dy -= dy;
-            this._moved.set();
+            this.setMoved();
+        }
+        public isMoved(receiptor: string): boolean
+        {
+            return this._moved.get(receiptor);
         }
         public serialize(context: SerializationContext): Array<string>
         {
@@ -184,13 +183,17 @@ module Geoma.Tools
                 delete this._dragStart;
             }
         }
+        protected setMoved(): void
+        {
+            this._moved.set();
+        }
 
         private _dx: number;
         private _dy: number;
         private _dragStart?: IPoint;
-        private _moved: Utils.Pulse;
-        private _mouseDownListener: IEventListener<MouseEvent>;
-        private _mouseUpListener: IEventListener<MouseEvent>;
         private _transaction?: UndoTransaction;
+        private readonly _moved: Utils.Pulse;
+        private readonly _mouseDownListener: IEventListener<MouseEvent>;
+        private readonly _mouseUpListener: IEventListener<MouseEvent>;
     }
 }

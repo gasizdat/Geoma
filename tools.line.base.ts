@@ -117,7 +117,6 @@ module Geoma.Tools
         {
             return this._endPoint;
         }
-        public abstract get moved(): boolean;
         public abstract get isPartOf(): ActiveLineBase | null;
         public abstract get points(): Array<ActivePointBase>;
 
@@ -547,7 +546,9 @@ module Geoma.Tools
 
             return ret;
         }
+
         public abstract move(dx: number, dy: number): void;
+        public abstract isMoved(receiptor: string): boolean;
 
         protected innerDraw(play_ground: PlayGround): void
         {

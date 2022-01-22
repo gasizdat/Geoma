@@ -150,13 +150,13 @@ module Geoma.Tools
                 {
                     if (this._subMenuVisible)
                     {
-                        if (this._subMenuAboutToHide && this._subMenuAboutToHide <= Document.getTicks())
+                        if (this._subMenuAboutToHide && this._subMenuAboutToHide <= Document.ticks)
                         {
                             this._subMenuAboutToHide = 0;
                             this._subMenuVisible = this.selected;
                         }
                     }
-                    else if (this._subMenuAboutToShow && this._subMenuAboutToShow <= Document.getTicks())
+                    else if (this._subMenuAboutToShow && this._subMenuAboutToShow <= Document.ticks)
                     {
                         this._subMenuAboutToShow = 0;
                         this._subMenuVisible = this.selected;
@@ -220,7 +220,7 @@ module Geoma.Tools
                         this._subMenuAboutToShow = 0;
                         if (!this._subMenuAboutToHide)
                         {
-                            this._subMenuAboutToHide = Document.getTicks() + MenuGroup._subMenuVisibilityChangeTimeOut;
+                            this._subMenuAboutToHide = Document.ticks + MenuGroup._subMenuVisibilityChangeTimeOut;
                         }
                     }
                     else
@@ -233,7 +233,7 @@ module Geoma.Tools
                     this._subMenuAboutToHide = 0;
                     if (!this._subMenuAboutToShow)
                     {
-                        this._subMenuAboutToShow = Document.getTicks() + MenuGroup._subMenuVisibilityChangeTimeOut;
+                        this._subMenuAboutToShow = Document.ticks + MenuGroup._subMenuVisibilityChangeTimeOut;
                     }
                 }
             }

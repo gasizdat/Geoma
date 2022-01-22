@@ -128,10 +128,6 @@ module Geoma.Tools
         {
             return this._selectionRadius.value;
         }
-        public get moved(): boolean
-        {
-            return this.commonPivot.moved(this.realName) || this._p1.moved(this.realName) || this._p2.moved(this.realName);
-        }
         public get bisector(): ActiveLineBase | null
         {
             return this._bisector ? this._bisector : null;
@@ -139,6 +135,10 @@ module Geoma.Tools
 
         public enabled: boolean;
 
+        public isMoved(receiptor: string): boolean
+        {
+            return this.commonPivot.isMoved(receiptor) || this._p1.isMoved(receiptor) || this._p2.isMoved(receiptor);
+        }
         public isRelated(sprite: Sprite.Sprite): boolean
         {
             if (sprite instanceof ActivePointBase)
@@ -227,7 +227,7 @@ module Geoma.Tools
         }
         public static deserialize(context: DesializationContext, data: Array<string>, index: number): AngleIndicator | null
         {
-            if (data.length < (index + 2))
+            if (data.length < (index + 3))
             {
                 return null;
             }

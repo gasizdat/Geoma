@@ -3,6 +3,7 @@
 /// <reference path="polygons.ts" />
 /// <reference path="interfaces.ts" />
 /// <reference path="play_ground.ts" />
+/// <reference path="syntax.tree.ts" />
 /// <reference path="tools.core.ts" />
 /// <reference path="tools.document.ts" />
 /// <reference path="tools.point.base.ts" />
@@ -10,7 +11,7 @@
 /// <reference path="tools.line.base.ts" />
 /// <reference path="tools.line.segment.ts" />
 /// <reference path="tools.line.circle.ts" />
-/// <reference path="tools.parametric.line.ts" />
+/// <reference path="tools.line.parametric.ts" />
 
 module Geoma.Tools
 {
@@ -31,11 +32,23 @@ module Geoma.Tools
 
         public get dx(): number
         {
-            return this.startPoint.x - this.point.x;
+            const dx = this.startPoint.x - this.point.x;
+            if (this._lastDx != dx)
+            {
+                this._lastDx = dx;
+                this._isMoved.set();
+            }
+            return dx;
         }
         public get dy(): number
         {
-            return this.startPoint.y - this.point.y;
+            const dy = this.startPoint.y - this.point.y;
+            if (this._lastDy != dy)
+            {
+                this._lastDy = dy;
+                this._isMoved.set();
+            }
+            return dy;
         }
         public get disposed(): boolean
         {
@@ -78,6 +91,27 @@ module Geoma.Tools
                         {
                             const intersection = LineCircle.intersection(line1, line2);
                             return LineCircle.preferredIntersection(LineCircle.getPreference(point, intersection), intersection);
+                        }
+                        else if (line2 instanceof ParametricLine)
+                        {
+                            const intersections = LineParametric.intersection(line1, line2);
+                            const index = LineParametric.getPrefferedIndex(point, intersections);
+                            if (index >= 0)
+                            {
+                                return intersections[index];
+                            }
+                        }
+                    }
+                    else if (line1 instanceof ParametricLine)
+                    {
+                        if (line2 instanceof ParametricLine)
+                        {
+                            const intersections = ParametricParametric.intersection(line1, line2);
+                            const index = ParametricParametric.getPrefferedIndex(point, intersections);
+                            if (index >= 0)
+                            {
+                                return intersections[index];
+                            }
                         }
                     }
                     return null;
@@ -130,6 +164,17 @@ module Geoma.Tools
                         {
                             return new LineCircle(point, line1, line2);
                         }
+                        else if (line2 instanceof ParametricLine)
+                        {
+                            return new LineParametric(point, line1, line2);
+                        }
+                    }
+                    else if (line1 instanceof ParametricLine)
+                    {
+                        if (line2 instanceof ParametricLine)
+                        {
+                            return new ParametricParametric(point, line1, line2);
+                        }
                     }
                     return null;
                 };
@@ -155,14 +200,21 @@ module Geoma.Tools
         {
             assert(false, "Not supported");
         }
+        public isMoved(receiptor: string): boolean
+        {
+            return this._isMoved.get(receiptor);
+        }
 
         protected get startPoint(): IPoint
         {
             return this._startPoint;
         }
 
+        private _lastDx: number = NaN;
+        private _lastDy: number = NaN;
         private _disposed: boolean = false;
-        private _startPoint: IPoint;
+        private readonly _startPoint: IPoint;
+        private readonly _isMoved = new Utils.Pulse();
     }
 
     enum LocusType { outerStart = 1, innerStart, innerEnd, outerEnd };
@@ -472,36 +524,73 @@ module Geoma.Tools
             }
         }
 
-        public static intersection(line1: ActiveLineBase, line2: ActiveLineBase): IPoint
-        {
-            const coeff1 = line1.coefficients;
-            const coeff2 = line2.coefficients;
-            if (coeff1 && coeff2)
-            {
-                const dk = coeff1.k - coeff2.k;
-                if (dk)
-                {
-                    const x = (coeff2.b - coeff1.b) / dk;
-                    return Point.make(x, ActiveLineBase.getY(x, coeff1));
-                }
-                else
-                {
-                    assert(false, "todo");
-                }
-            }
-            else if (coeff1)
-            {
-                return Point.make(line2.startPoint.x, ActiveLineBase.getY(line2.startPoint.x, coeff1));
-            }
-            else if (coeff2)
-            {
-                return Point.make(line1.startPoint.x, ActiveLineBase.getY(line1.startPoint.x, coeff2));
-            }
-            else
-            {
-                return Point.make(line1.startPoint.x, line1.startPoint.y);
-            }
-        }
+		public static intersection(line1: ActiveLineBase, line2: ActiveLineBase): IPoint
+		{
+			return LineLine.intersection2(line1.startPoint, line1.endPoint, line2.startPoint, line2.endPoint);
+		}
+		public static intersection2(point11: IPoint, point12: IPoint, point21: IPoint, point22: IPoint): IPoint
+		{
+			let coeff1 = ActiveLineBase.getCoefficients(point11.x, point11.y, point12.x, point12.y);
+			let coeff2 = ActiveLineBase.getCoefficients(point21.x, point21.y, point22.x, point22.y);
+			const maxK = 1000;
+			if (coeff1 && coeff2 && Math.abs(coeff1.k) < maxK && Math.abs(coeff2.k) < maxK)
+			{
+				const dk = coeff1.k - coeff2.k;
+				if (dk)
+				{
+					const x = (coeff2.b - coeff1.b) / dk;
+					return Point.make(x, ActiveLineBase.getY(x, coeff1));
+				}
+				else
+				{
+					return Point.empty;
+				}
+			}
+			else if ((!coeff1 || Math.abs(coeff1.k) > maxK) && coeff2 && Math.abs(coeff2.k) < maxK)
+			{
+				coeff1 = {
+					k: (point12.x - point11.x) / (point12.y - point11.y),
+					b: point12.x - point12.y * ((point12.x - point11.x) / (point12.y - point11.y))
+				}
+
+				const y = (coeff2.k * coeff1.b + coeff2.b) / (1 - coeff1.k * coeff2.k);
+				return Point.make(y * coeff1.k + coeff1.b, y);
+			}
+			else if ((!coeff2 || Math.abs(coeff2.k) > maxK) && coeff1 && Math.abs(coeff1.k) < maxK)
+			{
+				coeff2 = {
+					k: (point22.x - point21.x) / (point22.y - point21.y),
+					b: point22.x - point22.y * ((point22.x - point21.x) / (point22.y - point21.y))
+				}
+
+				const y = (coeff1.k * coeff2.b + coeff1.b) / (1 - coeff1.k * coeff2.k);
+				return Point.make(y * coeff2.k + coeff2.b, y);
+			}
+			else
+			{
+				coeff1 = {
+					k: (point12.x - point11.x) / (point12.y - point11.y),
+					b: point12.x - point12.y * ((point12.x - point11.x) / (point12.y - point11.y))
+				}
+
+				coeff2 = {
+					k: (point22.x - point21.x) / (point22.y - point21.y),
+					b: point22.x - point22.y * ((point22.x - point21.x) / (point22.y - point21.y))
+				}
+
+				const dk = coeff1.k - coeff2.k;
+
+				if (dk)
+				{
+					const y = (coeff2.b - coeff1.b) / dk;
+					return Point.make(y * coeff1.k + coeff1.b, y);
+				}
+				else
+				{
+					return Point.empty;
+				}
+			}
+		}
 
         private _intersection: property<IPoint>;
     }
@@ -753,12 +842,12 @@ module Geoma.Tools
             this._intersection.reset();
             super.dispose();
         }
-        public move(dx: number, dy: number): void
+        public move(_dx: number, _dy: number): void
         {
-            const x = this._line.axes.toScreenX(this._startX) - dx;
+            /*const x = this._line.axes.toScreenX(this._startX) - dx;
             this._startX = this._line.axes.fromScreenX(x);
             const y = this._line.axes.toScreenY(this._startY) - dy;
-            this._startY = this._line.axes.fromScreenY(y);
+            this._startY = this._line.axes.fromScreenY(y);*/
         }
         public static intersection(point: IPoint, line: ParametricLine): IPoint
         {
@@ -825,4 +914,387 @@ module Geoma.Tools
         private _intersection: property<IPoint>;
     }
 
+    export class LineParametric extends Intersection
+    {
+        constructor(point: IPoint, line: ActiveLineBase, parametric: ParametricLine)
+        {
+            super(Point.make(point.x, point.y));
+
+            this._line = line;
+            this._parametric = parametric;
+            this._update(true);
+            this._prefferedIntersection = FunctionFunction.getPrefferedIndex(point, this.intersections);
+        }
+
+        public get point(): IPoint 
+        {
+            if (this.visible)
+            {
+                return this.intersections[this._prefferedIntersection];
+            }
+            else
+            {
+                return Point.empty;
+            }
+        }
+        public get visible(): boolean
+        {
+            return this._prefferedIntersection >= 0 && this._prefferedIntersection < this.intersections.length;
+        }
+        public get intersections(): ParametricLineIntersections
+        {
+            this._update();
+            assert(this._intersections);
+            return this._intersections;
+        }
+
+        public dispose()
+        {
+            super.dispose();
+            this._calculator?.dispose();
+        }
+
+        public static getPrefferedIndex(point: IPoint, intersections: ParametricLineIntersections): number
+        {
+            return FunctionFunction.getPrefferedIndex(point, intersections);
+        }
+        public static intersection(line: ActiveLineBase, parametric: ParametricLine): ParametricLineIntersections
+        {
+            const calculator = new LineParametric(Point.empty, line, parametric);
+            const intersections = calculator.intersections;
+            calculator.dispose();
+            return intersections;
+        }
+
+        private _update(force?: boolean): void
+        {
+            const id = this._id;
+            const update_calc = this._parametric.isMoved(id) || this._parametric.isModified(id) || force;
+            if (update_calc)
+            {
+                const calc = new FunctionFunction(
+                    this._parametric.code,
+                    LineParametric._lineFunction,
+                    this._parametric.axes,
+                    this._parametric
+                );
+                calc.addArg(LineParametric._kName, NaN);
+                calc.addArg(LineParametric._bName, NaN);
+                this._calculator?.dispose();
+                this._calculator = calc;
+            }
+
+            const update_coeff = this._line.isMoved(id) || force || update_calc;
+            if (update_coeff)
+            {
+                assert(this._calculator);
+                const axes = this._calculator.axes;
+                const coeff = ActiveLineBase.getCoefficients(
+                    axes.fromScreenX(this._line.startPoint.x), axes.fromScreenY(this._line.startPoint.y),
+                    axes.fromScreenX(this._line.endPoint.x), axes.fromScreenY(this._line.endPoint.y)
+                )
+                if (coeff)
+                {
+                    this._calculator.setArg(LineParametric._kName, coeff.k);
+                    this._calculator.setArg(LineParametric._bName, coeff.b);
+                }
+                else
+                {
+                    const multiplier = 1e20;
+                    const x = axes.fromScreenX(this._line.x);
+                    this._calculator.setArg(LineParametric._kName, -multiplier);
+                    this._calculator.setArg(LineParametric._bName, x * multiplier);
+                }
+                this._intersections = this._calculator.intersections;
+            }
+        }
+
+        private _calculator?: FunctionFunction;
+        private _intersections?: ParametricLineIntersections;
+        private readonly _line: ActiveLineBase;
+        private readonly _parametric: ParametricLine;
+        private readonly _prefferedIntersection: number;
+        private readonly _id = FunctionFunction.createId();
+
+        private static readonly _kName = "k-{C696237D-E444-468E-A8F7-7C780E599BBB}";
+        private static readonly _bName = "b-{E131A6AE-285A-45E4-AEFC-D88EE4CF1BFC}";
+        private static readonly _lineFunction = LineParametric._makeLineFunction();
+
+        private static _makeLineFunction(): Syntax.CodeElement
+        {
+            const kx = new Syntax.CodeBinary(new Syntax.CodeArgument(LineParametric._kName), "*", new Syntax.CodeArgumentX());
+            return new Syntax.CodeBinary(kx, "+", new Syntax.CodeArgument(LineParametric._bName));
+        }
+    }
+
+    export class ParametricParametric extends Intersection 
+    {
+        constructor(point: IPoint, parametric1: ParametricLine, parametric2: ParametricLine)
+        {
+            super(Point.make(point.x, point.y));
+            assert(parametric1.axes === parametric2.axes); // TODO needs to recalculation
+            this._parametric1 = parametric1;
+            this._parametric2 = parametric2;
+            this._update(true);
+            this._prefferedIntersection = FunctionFunction.getPrefferedIndex(point, this.intersections);
+        }
+
+        public get point(): IPoint 
+        {
+            if (this.visible)
+            {
+                return this.intersections[this._prefferedIntersection];
+            }
+            else
+            {
+                return Point.empty;
+            }
+        }
+        public get visible(): boolean
+        {
+            return this._prefferedIntersection >= 0 && this._prefferedIntersection < this.intersections.length;
+        }
+        public get intersections(): ParametricLineIntersections
+        {
+            this._update();
+            assert(this._intersections);
+            return this._intersections;
+        }
+
+        public dispose()
+        {
+            super.dispose();
+            this._calculator?.dispose();
+        }
+
+        public static getPrefferedIndex(point: IPoint, intersections: ParametricLineIntersections): number
+        {
+            return FunctionFunction.getPrefferedIndex(point, intersections);
+        }
+        public static intersection(parametric1: ParametricLine, parametric2: ParametricLine): ParametricLineIntersections
+        {
+            const calculator = new ParametricParametric(Point.empty, parametric1, parametric2);
+            const intersections = calculator.intersections;
+            calculator.dispose();
+            return intersections;
+        }
+
+        private _update(force?: boolean): void
+        {
+            const id = this._id;
+            const update_calc = this._parametric1.isModified(id) || this._parametric2.isModified(id) || force;
+            if (update_calc)
+            {
+                const calc = new FunctionFunction(
+                    this._parametric1.code,
+                    this._parametric2.code,
+                    this._parametric1.axes,
+                    this._parametric1,
+                    this._parametric2
+                );
+                this._calculator?.dispose();
+                this._calculator = calc;
+            }
+
+            if (update_calc || this._parametric1.isMoved(id) || this._parametric2.isMoved(id))
+            {
+                assert(this._calculator);
+                this._intersections = this._calculator.intersections;
+            }
+        }
+
+        private _calculator?: FunctionFunction;
+        private _intersections?: ParametricLineIntersections;
+        private readonly _parametric1: ParametricLine;
+        private readonly _parametric2: ParametricLine;
+        private readonly _prefferedIntersection: number;
+        private readonly _id = FunctionFunction.createId();
+    }
+
+    class FunctionFunction implements ISamplesAdapter, ICodeEvaluatorContext
+    {
+        constructor(
+            function1: Syntax.CodeElement,
+            function2: Syntax.CodeElement,
+            axes: AxesLines,
+            context1: ICodeEvaluatorContext,
+            context2?: ICodeEvaluatorContext
+        )
+        {
+            this._function1 = Utils.makeEvaluator(this, function1.code);
+            this._function2 = Utils.makeEvaluator(this, function2.code);
+            this._context1 = context1;
+            this._context2 = context2;
+            this._axes = axes;
+
+            const code = new Syntax.CodeBinary(function1, "-", function2);
+            const contains_derivative = code.derivativeLevel > 0;
+
+            this._deltaFunction = Utils.makeEvaluator(this, code.code);
+
+            const samples_calculator = makeMod(this, () =>
+            {
+                const mouse_area = this._axes.document.mouseArea;
+                const screen_box = new Utils.Box(mouse_area.offset.x, mouse_area.offset.y, mouse_area.w, mouse_area.h);
+                this._intersectionsData.splice(0);
+                this._lastPoint = Point.empty;
+                ParametricLine.calcSamples(screen_box, 1, contains_derivative, this);
+                return this._intersectionsData;
+            });
+            this._intersections = makeProp(samples_calculator, []);
+        }
+
+        public point(preffered_intersection: number): IPoint 
+        {
+            if (this.visible(preffered_intersection))
+            {
+                return this.intersections[preffered_intersection];
+            }
+            else
+            {
+                return Point.empty;
+            }
+        }
+        public visible(preffered_intersection: number): boolean
+        {
+            return preffered_intersection >= 0 && preffered_intersection < this.intersections.length;
+        }
+        public get intersections(): ParametricLineIntersections
+        {
+            return this._intersections.value;
+        }
+        public get axes(): AxesLines
+        {
+            return this._axes;
+        }
+
+        public dispose()
+        {
+            for (const key in this._args)
+            {
+                this._args[key].reset();
+            }
+        }
+
+        public static getPrefferedIndex(point: IPoint, intersections: ParametricLineIntersections): number
+        {
+            let last_length = Infinity;
+            let ret = -1;
+            let i = 0;
+            for (const intersection of intersections)
+            {
+                const length = ActiveLineBase.getLength(point, intersection);
+                if (length < last_length)
+                {
+                    ret = i;
+                    last_length = length;
+                }
+                i++;
+            }
+            return ret;
+        }
+        public static intersection(parametric1: ParametricLine, parametric2: ParametricLine): ParametricLineIntersections
+        {
+            return (new ParametricParametric(Point.empty, parametric1, parametric2)).intersections;
+        }
+        public static createId(): string
+        {
+            return `${FunctionFunction._index.inc()}-{4B5D04F4-A028-48D6-BB69-B9E857793D38}`;
+        }
+
+        getFunction(_name: string): Function | null 
+        {
+            throw new Error("Method not implemented.");
+        }
+        addFunction(_name: string, _code: string): void
+        {
+            throw new Error("Method not implemented.");
+        }
+        arg(name: string): number
+        {
+            switch (name)
+            {
+                case "x":
+                    return this._argX;
+                default:
+                    assert(this.hasArg(name));
+                    if (name in this._args)
+                    {
+                        return this._args[name].value;
+                    }
+                    else if (this._context1.hasArg(name))
+                    {
+                        return this._context1.arg(name);
+                    }
+                    else
+                    {
+                        assert(this._context2);
+                        return this._context2.arg(name);
+                    }
+            }
+        }
+        hasArg(name: string): boolean
+        {
+            return name in this._args || this._context1.hasArg(name) || (this._context2?.hasArg(name) ?? false);
+        }
+        addArg(name: string, arg: Utils.binding<number>): void
+        {
+            assert(!this.hasArg(name));
+            this._args[name] = makeProp(arg, NaN);
+        }
+        setArg(name: string, value: number): void
+        {
+            assert(name != "x");
+            assert(name in this._args);
+            this._args[name].value = value;
+        }
+
+        getScreenY(screen_x: number, func?: Function): number 
+        {
+            const axes = this._axes;
+            const x = axes.fromScreenX(screen_x);
+            this._argX = x;
+            const screen_y = axes.toScreenY((func ?? this._deltaFunction)());
+            return screen_y;
+        }
+        lineTo(screen_x: number, screen_y: number, discontinuity: boolean): void
+        {
+            const next_point = Point.make(screen_x, screen_y);
+            if (!discontinuity && !Point.isEmpty(this._lastPoint))
+            {
+                const axes = this._axes;
+                const x_axis_intersection = (this._lastPoint.y <= axes.y && next_point.y >= axes.y) ||
+                    (this._lastPoint.y >= axes.y && next_point.y <= axes.y);
+                if (x_axis_intersection)
+                {
+                    const y1 = this.getScreenY(this._lastPoint.x, this._function1);
+                    const y2 = this.getScreenY(this._lastPoint.x, this._function2);
+                    const y3 = this.getScreenY(next_point.x, this._function1);
+                    const y4 = this.getScreenY(next_point.x, this._function2);
+                    const intersection = LineLine.intersection2(Point.make(this._lastPoint.x, y1), Point.make(next_point.x, y3), Point.make(this._lastPoint.x, y2), Point.make(next_point.x, y4));
+                    this._intersectionsData.push(intersection);
+                }
+            }
+            this._lastPoint = next_point;
+        }
+        addSample(): void 
+        {
+        }
+        setSample(_screen_x: number, _screen_y: number): void 
+        {
+        }
+
+        private _intersectionsData: ParametricLineIntersections = [];
+        private _intersections: property<ParametricLineIntersections>;
+        private _argX: number = NaN;
+        private _lastPoint: IPoint = Point.empty;
+        private readonly _function1: Function;
+        private readonly _function2: Function;
+        private readonly _deltaFunction: Function;
+        private readonly _context1: ICodeEvaluatorContext;
+        private readonly _context2?: ICodeEvaluatorContext
+        private readonly _args: Record<string, property<number>> = {};
+        private readonly _axes: AxesLines;
+        private static _index = new Utils.ModuleInteger();
+    }
 }

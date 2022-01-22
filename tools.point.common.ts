@@ -139,6 +139,10 @@ module Geoma.Tools
                 this._intersection!.move(dx, dy);
             }
         }
+        public isMoved(receiptor: string): boolean
+        {
+            return super.isMoved(receiptor) || (this._intersection?.isMoved(receiptor) ?? false);
+        }
         public addGroupVisibility(visibility_modifier: Utils.modifier<boolean>): void
         {
             if (!this._groupVisibility)
