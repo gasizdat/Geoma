@@ -11218,6 +11218,14 @@ function drawAll(__time) {
     mainDocument.draw(playGround);
     window.requestAnimationFrame(drawAll);
 }
+function updateAllLatexEngines() {
+    Geoma.Utils.assert(mainDocument);
+    mainDocument.latexEngine.mathContainerUpdate();
+}
+function disableAllLatexEngines() {
+    Geoma.Utils.assert(mainDocument);
+    mainDocument.latexEngine.disabled = true;
+}
 var Geoma;
 (function (Geoma) {
     var Tools;

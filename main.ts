@@ -32,3 +32,14 @@ function drawAll(__time: number)
     window.requestAnimationFrame(drawAll);
 }
 
+function updateAllLatexEngines()
+{
+    Geoma.Utils.assert(mainDocument);
+    mainDocument.latexEngine.mathContainerUpdate();
+}
+
+function disableAllLatexEngines()
+{
+    Geoma.Utils.assert(mainDocument);
+    mainDocument.latexEngine.disabled = true;
+}
