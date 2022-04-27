@@ -147,8 +147,6 @@ module Geoma.Tools
         {
             super();
 
-            Utils.InitializeCalcRevision();
-
             this._mouseArea = mouse_area;
             this._tools = new Sprite.Container();
             this._data = new DocumentData();
@@ -1286,7 +1284,7 @@ module Geoma.Tools
             this.open(undo_info.snapshot);
             this.mouseArea.setOffset(undo_info.offset.x, undo_info.offset.y);
         }
-        public realizeGraphArguments(parametric_line: ParametricLine, arg_values: ArgumentValues | undefined): void
+        public realizeGraphArguments(parametric_line: ParametricLine, arg_values: Syntax.ArgumentValues | undefined): void
         {
             //TODO too wide responsibility
             const current_parametric_args = new Set<string>();
@@ -1903,7 +1901,7 @@ module Geoma.Tools
             if (m)
             {
                 assert(m.length == 2);
-                if (m[0] == arg_name && m[1].length)
+                if (m[0] == arg_name && m[1] !== undefined && m[1].length)
                 {
                     const point_coord = m[1];
                     const point_name = m[0].substring(0, m[0].indexOf(point_coord));

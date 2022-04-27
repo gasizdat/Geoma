@@ -756,8 +756,8 @@ module Geoma.Sprite
 
             const parent = play_ground.context2d.canvas;
             const style = this._input.style;
-            style.left = TextInput.toHtmlPixels(this.x + parent.offsetLeft);
-            style.top = TextInput.toHtmlPixels(this.y + parent.offsetTop);
+            style.left = TextInput.toHtmlPixels(this.x + parent.offsetLeft - play_ground.offset.x);
+            style.top = TextInput.toHtmlPixels(this.y + parent.offsetTop - play_ground.offset.y);
             style.width = TextInput.toHtmlPixels(this.w);
             style.height = TextInput.toHtmlPixels(this.h);
             if (this._textBrush)

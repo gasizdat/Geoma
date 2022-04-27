@@ -470,11 +470,9 @@ module Geoma.Tools
         private _codePresenter: CodePresenter;
     }
 
-    export type ArgumentValues = Map<string, number>;
-
     export type ExpressionInfo = {
         expression: CodeElement;
-        argValues?: ArgumentValues;
+        argValues?: Syntax.ArgumentValues;
     }
 
     export class ExpressionDialog extends DocumentSprite<Sprite.Container>
@@ -524,7 +522,7 @@ module Geoma.Tools
                     this._editor._code.visible = !this._editor._code.visible;
                     if (!this._editor._code.visible)
                     {
-                        text_editor.text = this._editor._code.codeElement.text;
+                        text_editor.text = this._editor._code.codeElement.math;
                     }
                     else
                     {
@@ -550,7 +548,7 @@ module Geoma.Tools
                 makeMod(this, () => background.y + this._padding),
                 makeMod(this, () => background.w - 2 * this._padding),
                 30,
-                expression?.text,
+                expression?.math,
                 () => CurrentTheme.FormulaInputTextBrush,
                 () => CurrentTheme.FormulaInputTextStyle,
                 () => CurrentTheme.FormulaInputTextBackgroundBrush
@@ -665,10 +663,10 @@ module Geoma.Tools
         {
             try
             {
-                this._argValues = new Map<string, number>();
                 const operand = MathParser.Parse(text_expression);
-                const expression = this.expressionConverter(operand);
-                this._code.codeElement = expression;
+                const converter = new Syntax.MathParserConverter(operand);
+                this._code.codeElement = converter.expression;
+                this._argValues = converter.argValueIndex;
                 delete this._parseError;
 
                 return true;
@@ -705,7 +703,7 @@ module Geoma.Tools
             try
             {
                 const latex_markup = `{\\color{${CurrentTheme.FormulaSampleTextBrush}} y=` +
-                    MathParser.OperandToLatexFormula(MathParser.Parse(this._code.codeElement.math)) + "}";
+                    MathParser.OperandToText(MathParser.Parse(this._code.codeElement.math), new LatexExpressionVisitor()) + "}";
                 return latex_markup;
             }
             catch (error)
@@ -714,162 +712,7 @@ module Geoma.Tools
             }
         }
 
-        private expressionConverter(operand: Operand): CodeElement
-        {
-            const expression = operand.Value;
-
-            if (expression instanceof Parameter)
-            {
-                if (expression.Name == "x")
-                {
-                    return new CodeArgumentX();
-                }
-                else
-                {
-                    const value = typeof expression.Value == "boolean" ? (expression.Value ? 1 : 0) : expression.Value;
-                    assert(this._argValues);
-                    this._argValues.set(expression.Name, value);
-                    return new CodeArgument(expression.Name);
-                }
-            }
-            else if (expression instanceof UnaryOperation)
-            {
-                const function_type = expression.Func.Type;
-                switch (function_type)
-                {
-                    case "rad":
-                    case "deg":
-                        assert(false, "TODO");
-                    case "cos":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("cos", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "sin":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("sin", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "tan":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("tan", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "cot":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tan", this.expressionConverter(expression.Arguments.Arguments[0])));
-                    case "acos":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("arccos", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "asin":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("arcsin", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "atan":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("arctan", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "acot":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("arctan", new CodeBinary(new CodeLiteral(1), "÷", this.expressionConverter(expression.Arguments.Arguments[0])));
-                    case "sqrt":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("√", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "cbrt":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("∛", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "ln":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "abs":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("abs", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "log":
-                        assert(expression.Arguments.Length == 2);
-                        return new CodeBinary(new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[0])), "÷", new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[1])));
-                    case "root":
-                        assert(expression.Arguments.Length == 2);
-                        return new CodeBinary(this.expressionConverter(expression.Arguments.Arguments[1]), "n√", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "cosh":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("cosh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "sinh":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("sinh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "tanh":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("tanh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "coth":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tanh", this.expressionConverter(expression.Arguments.Arguments[0])));
-                    case "acosh":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("arccosh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "asinh":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("arcsinh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "atanh":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("arctanh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "acoth":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("arctanh", new CodeBinary(new CodeLiteral(1), "÷", this.expressionConverter(expression.Arguments.Arguments[0])));
-                    case "sign":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("sin", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "exp":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("exp", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "floor":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("floor", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "ceil":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("ceil", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "round":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("round", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "fact":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("!", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "f'":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("f'", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "negative":
-                        assert(expression.Arguments.Length == 1);
-                        return new CodeUnary("neg", this.expressionConverter(expression.Arguments.Arguments[0]));
-                    case "!":
-                    case "rand":
-                    default:
-                        throw new Error(Resources.string("Неподдерживаемый тип функции: {0}", function_type));
-                }
-            }
-            else if (expression instanceof BinaryOperation)
-            {
-                const operator_type = expression.Operator.Value;
-                switch (operator_type)
-                {
-                    case "+":
-                        return new CodeBinary(this.expressionConverter(expression.FirstOperand), "+", this.expressionConverter(expression.SecondOperand));
-                    case "-":
-                        return new CodeBinary(this.expressionConverter(expression.FirstOperand), "-", this.expressionConverter(expression.SecondOperand));
-                    case "*":
-                        return new CodeBinary(this.expressionConverter(expression.FirstOperand), "*", this.expressionConverter(expression.SecondOperand));
-                    case "/":
-                        return new CodeBinary(this.expressionConverter(expression.FirstOperand), "÷", this.expressionConverter(expression.SecondOperand));
-                    case "^":
-                        return new CodeBinary(this.expressionConverter(expression.FirstOperand), "pow", this.expressionConverter(expression.SecondOperand));
-                    default:
-                        throw new Error(Resources.string("Неподдерживаемый тип оператора: {0}", operator_type));
-                }
-            }
-            else if (typeof expression == "number")
-            {
-                return new CodeLiteral(expression);
-            }
-            else if (typeof expression == "boolean")
-            {
-                return new CodeLiteral(expression ? 1 : 0);
-            }
-            else
-            {
-                throw new Error(Resources.string("Неподдерживаемый тип операнда: {0}", expression.constructor.name));
-            }
-        }
-
-        private _argValues?: ArgumentValues;
+        private _argValues?: Syntax.ArgumentValues;
         private _parseError?: string;
         private readonly _mouseDownBinder: IEventListener<MouseEvent>;
         private readonly _mouseUpBinder: IEventListener<MouseEvent>;

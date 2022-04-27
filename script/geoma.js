@@ -276,24 +276,12 @@ var Geoma;
             return Point;
         }());
         Utils.Point = Point;
-        var ModifiablePropertyCalcRevision = undefined;
+        var ModifiablePropertyCalcRevision = new ModuleInteger();
         var InitiaizeRevision = -1;
-        var CalcsCount = 0;
-        function InitializeCalcRevision() {
-            ModifiablePropertyCalcRevision = 0;
-        }
-        Utils.InitializeCalcRevision = InitializeCalcRevision;
         function UpdateCalcRevision() {
-            assert(ModifiablePropertyCalcRevision != null);
-            ModifiablePropertyCalcRevision = (ModifiablePropertyCalcRevision + 1) % 1000;
+            ModifiablePropertyCalcRevision.inc();
         }
         Utils.UpdateCalcRevision = UpdateCalcRevision;
-        function GetCaclsCount() {
-            var ret = CalcsCount;
-            CalcsCount = 0;
-            return ret;
-        }
-        Utils.GetCaclsCount = GetCaclsCount;
         var ModifiableProperty = (function () {
             function ModifiableProperty() {
                 var args = [];
@@ -311,13 +299,11 @@ var Geoma;
                     default:
                         assert(false);
                 }
-                if (ModifiablePropertyCalcRevision != undefined) {
-                    this._calcRevision = InitiaizeRevision;
-                }
+                this._calcRevision = InitiaizeRevision;
             }
             Object.defineProperty(ModifiableProperty.prototype, "value", {
                 get: function () {
-                    if (ModifiablePropertyCalcRevision != undefined && this._calcRevision == ModifiablePropertyCalcRevision) {
+                    if (this._calcRevision == ModifiablePropertyCalcRevision.value) {
                         return this._calcValue;
                     }
                     else {
@@ -329,7 +315,7 @@ var Geoma;
                             }
                         }
                         this._calcValue = ret;
-                        this._calcRevision = ModifiablePropertyCalcRevision;
+                        this._calcRevision = ModifiablePropertyCalcRevision.value;
                         return ret;
                     }
                 },
@@ -1654,8 +1640,8 @@ var Geoma;
                 }
                 var parent = play_ground.context2d.canvas;
                 var style = this._input.style;
-                style.left = TextInput.toHtmlPixels(this.x + parent.offsetLeft);
-                style.top = TextInput.toHtmlPixels(this.y + parent.offsetTop);
+                style.left = TextInput.toHtmlPixels(this.x + parent.offsetLeft - play_ground.offset.x);
+                style.top = TextInput.toHtmlPixels(this.y + parent.offsetTop - play_ground.offset.y);
                 style.width = TextInput.toHtmlPixels(this.w);
                 style.height = TextInput.toHtmlPixels(this.h);
                 if (this._textBrush) {
@@ -1943,6 +1929,7 @@ var Geoma;
                 "Неподдерживаемый тип операнда: {0}": "Unsupported operand type: {0}",
                 "Введите выражение": "Enter a math expression",
                 "⌨⇆🖰": "⌨⇆🖰",
+                "Формула производной...": "Show derivative expression..."
             };
             return Resources;
         }());
@@ -1964,33 +1951,6 @@ function factorial(value) {
         return factorialCache[Geoma.Utils.toInt(value)];
     }
     else {
-        return NaN;
-    }
-}
-function derivative(id, context, code) {
-    var f = context.getFunction(id);
-    if (f) {
-        var last_x = context.arg(id + "_x");
-        var last_y = context.arg(id + "_y");
-        var current_x = context.arg("x");
-        var current_y = f(current_x);
-        context.setArg(id + "_x", current_x);
-        context.setArg(id + "_y", current_y);
-        if (last_x < current_x) {
-            return (current_y - last_y) / (current_x - last_x);
-        }
-        else {
-            return NaN;
-        }
-    }
-    else {
-        context.addFunction(id, code);
-        var f_1 = context.getFunction(id);
-        Geoma.Utils.assert(f_1);
-        var current_x = context.arg("x");
-        var current_y = f_1(current_x);
-        context.addArg(id + "_x", current_x);
-        context.addArg(id + "_y", current_y);
         return NaN;
     }
 }
@@ -2277,8 +2237,10 @@ var Geoma;
                             math_function = "factorial";
                             break;
                         case "f'":
-                            var code = this._operand.code.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
-                            return "derivative(" + CodeUnary._functionNo++ + ", this, \"" + code + "\")";
+                            var derivative = MathParser.Preprocess(MathParser.Parse("f'(" + this._operand.math + ")"));
+                            var simplified = AnalyticalMath.Simplify(derivative);
+                            var converter = new MathParserConverter(simplified);
+                            return converter.expression.code;
                         case "round":
                             math_function = "Math.round";
                             break;
@@ -2329,6 +2291,12 @@ var Geoma;
                             return "floor(" + this._operand.math + ")";
                         case "!":
                             return "fact(" + this._operand.math + ")";
+                        case "arcsin":
+                            return "asin(" + this._operand.math + ")";
+                        case "arccos":
+                            return "acos(" + this._operand.math + ")";
+                        case "arctan":
+                            return "atan(" + this._operand.math + ")";
                         default:
                             return this.toText(this._operand.math);
                     }
@@ -2372,7 +2340,6 @@ var Geoma;
                     return this._function + "(" + operand + ")";
                 }
             };
-            CodeUnary._functionNo = 1;
             return CodeUnary;
         }(CodeElement));
         Syntax.CodeUnary = CodeUnary;
@@ -2468,6 +2435,170 @@ var Geoma;
             return CodeBinary;
         }(CodeElement));
         Syntax.CodeBinary = CodeBinary;
+        var MathParserConverter = (function () {
+            function MathParserConverter(operand) {
+                this._argValues = new Map();
+                this._expression = this.convert(operand);
+            }
+            Object.defineProperty(MathParserConverter.prototype, "expression", {
+                get: function () {
+                    return this._expression;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(MathParserConverter.prototype, "argValueIndex", {
+                get: function () {
+                    return this._argValues;
+                },
+                enumerable: false,
+                configurable: true
+            });
+            MathParserConverter.prototype.convert = function (operand) {
+                var expression = operand.Value;
+                if (expression instanceof Parameter) {
+                    if (expression.Name == "x") {
+                        return new CodeArgumentX();
+                    }
+                    else {
+                        var value = typeof expression.Value == "boolean" ? (expression.Value ? 1 : 0) : expression.Value;
+                        assert(this._argValues);
+                        this._argValues.set(expression.Name, value);
+                        return new CodeArgument(expression.Name);
+                    }
+                }
+                else if (expression instanceof UnaryOperation) {
+                    var function_type = expression.Func.Type;
+                    switch (function_type) {
+                        case "rad":
+                        case "deg":
+                            assert(false, "TODO");
+                        case "cos":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("cos", this.convert(expression.Arguments.Arguments[0]));
+                        case "sin":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("sin", this.convert(expression.Arguments.Arguments[0]));
+                        case "tan":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("tan", this.convert(expression.Arguments.Arguments[0]));
+                        case "cot":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tan", this.convert(expression.Arguments.Arguments[0])));
+                        case "acos":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arccos", this.convert(expression.Arguments.Arguments[0]));
+                        case "asin":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arcsin", this.convert(expression.Arguments.Arguments[0]));
+                        case "atan":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arctan", this.convert(expression.Arguments.Arguments[0]));
+                        case "acot":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arctan", new CodeBinary(new CodeLiteral(1), "÷", this.convert(expression.Arguments.Arguments[0])));
+                        case "sqrt":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("√", this.convert(expression.Arguments.Arguments[0]));
+                        case "cbrt":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("∛", this.convert(expression.Arguments.Arguments[0]));
+                        case "ln":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("ln", this.convert(expression.Arguments.Arguments[0]));
+                        case "abs":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("abs", this.convert(expression.Arguments.Arguments[0]));
+                        case "log":
+                            assert(expression.Arguments.Length == 2);
+                            return new CodeBinary(new CodeUnary("ln", this.convert(expression.Arguments.Arguments[0])), "÷", new CodeUnary("ln", this.convert(expression.Arguments.Arguments[1])));
+                        case "root":
+                            assert(expression.Arguments.Length == 2);
+                            return new CodeBinary(this.convert(expression.Arguments.Arguments[1]), "n√", this.convert(expression.Arguments.Arguments[0]));
+                        case "cosh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("cosh", this.convert(expression.Arguments.Arguments[0]));
+                        case "sinh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("sinh", this.convert(expression.Arguments.Arguments[0]));
+                        case "tanh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("tanh", this.convert(expression.Arguments.Arguments[0]));
+                        case "coth":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tanh", this.convert(expression.Arguments.Arguments[0])));
+                        case "acosh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arccosh", this.convert(expression.Arguments.Arguments[0]));
+                        case "asinh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arcsinh", this.convert(expression.Arguments.Arguments[0]));
+                        case "atanh":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arctanh", this.convert(expression.Arguments.Arguments[0]));
+                        case "acoth":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("arctanh", new CodeBinary(new CodeLiteral(1), "÷", this.convert(expression.Arguments.Arguments[0])));
+                        case "sign":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("sign", this.convert(expression.Arguments.Arguments[0]));
+                        case "exp":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("exp", this.convert(expression.Arguments.Arguments[0]));
+                        case "floor":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("floor", this.convert(expression.Arguments.Arguments[0]));
+                        case "ceil":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("ceil", this.convert(expression.Arguments.Arguments[0]));
+                        case "round":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("round", this.convert(expression.Arguments.Arguments[0]));
+                        case "fact":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("!", this.convert(expression.Arguments.Arguments[0]));
+                        case "f'":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("f'", this.convert(expression.Arguments.Arguments[0]));
+                        case "negative":
+                            assert(expression.Arguments.Length == 1);
+                            return new CodeUnary("neg", this.convert(expression.Arguments.Arguments[0]));
+                        case "!":
+                        case "rand":
+                        default:
+                            throw new Error(Geoma.Tools.Resources.string("Неподдерживаемый тип функции: {0}", function_type));
+                    }
+                }
+                else if (expression instanceof BinaryOperation) {
+                    var operator_type = expression.Operator.Value;
+                    switch (operator_type) {
+                        case "+":
+                            return new CodeBinary(this.convert(expression.FirstOperand), "+", this.convert(expression.SecondOperand));
+                        case "-":
+                            return new CodeBinary(this.convert(expression.FirstOperand), "-", this.convert(expression.SecondOperand));
+                        case "*":
+                            return new CodeBinary(this.convert(expression.FirstOperand), "*", this.convert(expression.SecondOperand));
+                        case "/":
+                            return new CodeBinary(this.convert(expression.FirstOperand), "÷", this.convert(expression.SecondOperand));
+                        case "^":
+                            return new CodeBinary(this.convert(expression.FirstOperand), "pow", this.convert(expression.SecondOperand));
+                        default:
+                            throw new Error(Geoma.Tools.Resources.string("Неподдерживаемый тип оператора: {0}", operator_type));
+                    }
+                }
+                else if (typeof expression == "number") {
+                    return new CodeLiteral(expression);
+                }
+                else if (typeof expression == "boolean") {
+                    return new CodeLiteral(expression ? 1 : 0);
+                }
+                else {
+                    throw new Error(Geoma.Tools.Resources.string("Неподдерживаемый тип операнда: {0}", expression.constructor.name));
+                }
+            };
+            return MathParserConverter;
+        }());
+        Syntax.MathParserConverter = MathParserConverter;
     })(Syntax = Geoma.Syntax || (Geoma.Syntax = {}));
 })(Geoma || (Geoma = {}));
 var Geoma;
@@ -6052,7 +6183,7 @@ var Geoma;
                             last_sign = new_sign;
                         }
                         if (!offscreen_break && (needs_move || integer_x)) {
-                            line_to(x, Geoma.Utils.limit(y, offscreen_top, offscreen_bottom));
+                            line_to(x, y);
                         }
                         if (last_is_nan && !contains_derivative) {
                             left_nan.call(this, x);
@@ -6080,15 +6211,18 @@ var Geoma;
             };
             ParametricLine.prototype.updateSamples = function (mouse_area) {
                 var draw_adapter = (function () {
-                    function draw_adapter(owner) {
+                    function draw_adapter(owner, screen_box) {
                         this.drawPath = new Path2D();
                         this.samples = new Array();
                         this.owner = owner;
+                        this.offscreen_top = -(screen_box.h - screen_box.top);
+                        this.offscreen_bottom = (2 * screen_box.h) + screen_box.top;
                     }
                     draw_adapter.prototype.getScreenY = function (screen_x) {
                         return this.owner.axes.toScreenY(this.owner.getY(this.owner.axes.fromScreenX(screen_x)));
                     };
                     draw_adapter.prototype.lineTo = function (x, y, discontinuity) {
+                        y = Geoma.Utils.limit(y, this.offscreen_top, this.offscreen_bottom);
                         if (discontinuity) {
                             this.drawPath.moveTo(x, y);
                         }
@@ -6106,7 +6240,7 @@ var Geoma;
                 }());
                 var screen_box = new Geoma.Utils.Box(mouse_area.offset.x, mouse_area.offset.y, mouse_area.w, mouse_area.h);
                 var contains_derivative = this._derivativeLevel != 0;
-                var adapter = new draw_adapter(this);
+                var adapter = new draw_adapter(this, screen_box);
                 this._suppressModified = true;
                 ParametricLine.calcSamples(screen_box, this.dx, contains_derivative, adapter);
                 this._suppressModified = false;
@@ -6156,6 +6290,14 @@ var Geoma;
                         menu_item.onChecked.bind(this, function () { return doc_6.addPoint(Point.make(x_5, y_5)); });
                         menu_item = menu.addMenuItem(Tools.Resources.string("Удалить график {0}", this.code.text));
                         menu_item.onChecked.bind(this, function () { return doc_6.removeParametricLine(_this); });
+                        menu_item = menu.addMenuItem(Tools.Resources.string("Формула производной..."));
+                        menu_item.enabled.addModifier(makeMod(this, function () { return _this.derivativeLevel > 0; }));
+                        menu_item.onChecked.bind(this, function () {
+                            var derivative = MathParser.Preprocess(MathParser.Parse(_this.code.math));
+                            var simplified = AnalyticalMath.Simplify(derivative);
+                            var converter = new Geoma.Syntax.MathParserConverter(simplified);
+                            doc_6.alert(_this.code.text + " -> " + converter.expression.text);
+                        });
                         menu.show();
                     }
                 }
@@ -7837,6 +7979,273 @@ var MathFunction = (function () {
     }
     return MathFunction;
 }());
+var Preprocessor = (function () {
+    function Preprocessor(type, argsCount, func) {
+        this.Type = type;
+        this.ArgumentsCount = argsCount;
+        this.Func = func;
+    }
+    return Preprocessor;
+}());
+var LatexExpressionVisitor = (function () {
+    function LatexExpressionVisitor() {
+    }
+    LatexExpressionVisitor.prototype.Braces = function (operation, firstOperand, secondOperand) {
+        if (operation.FirstOperand.Value instanceof BinaryOperation) {
+            var firstOperation = operation.FirstOperand.Value;
+            if (firstOperation.Operator.OperatorLevel < operation.Operator.OperatorLevel && operation.Operator.Value != "/") {
+                firstOperand = "(" + firstOperand + ")";
+            }
+        }
+        if (operation.SecondOperand.Value instanceof BinaryOperation) {
+            var secondOperation = operation.SecondOperand.Value;
+            if (secondOperation.Operator.OperatorLevel < operation.Operator.OperatorLevel && operation.Operator.Value != "^" && operation.Operator.Value != "/") {
+                secondOperand = "(" + secondOperand + ")";
+            }
+        }
+        return { firstOperand: firstOperand, secondOperand: secondOperand };
+    };
+    LatexExpressionVisitor.prototype.LiteralToString = function (operand) {
+        return operand.toString();
+    };
+    LatexExpressionVisitor.prototype.ParameterToString = function (operand) {
+        switch (operand.Name) {
+            case "pi":
+                return "\pi";
+            case "infinity":
+                return "\infty";
+            default:
+                return operand.Name;
+        }
+    };
+    LatexExpressionVisitor.prototype.ArgumentsToString = function (args) {
+        var innerFunction = "";
+        for (var index = 0; index < args.Length; index++) {
+            innerFunction += MathParser.OperandToText(args.Arguments[index], this);
+            if (index < args.Length - 1) {
+                innerFunction += MathParser.Enumerator;
+            }
+        }
+        return innerFunction;
+    };
+    LatexExpressionVisitor.prototype.UnaryOperationToString = function (operand) {
+        var innerFunction = this.ArgumentsToString(operand.Arguments);
+        switch (operand.Func.Type) {
+            case "negative":
+                var argumentValue = operand.Arguments.Arguments[0].Value;
+                if (!(argumentValue instanceof BinaryOperation) || (argumentValue instanceof BinaryOperation && argumentValue.Operator.Value == "^")) {
+                    return "-" + innerFunction + "";
+                }
+                else {
+                    return "-(" + innerFunction + ")";
+                }
+            case "sqrt":
+                return "\\sqrt{" + innerFunction + "}";
+            case "cbrt":
+                return "\\sqrt[3]{" + innerFunction + "}";
+            case "rad":
+                return innerFunction;
+            case "deg":
+                return "{" + innerFunction + "}" + "^{\\circ}";
+            case "ln":
+                return "\\log_e{(" + innerFunction + ")}";
+            case "log":
+                return "\\log_{" + MathParser.OperandToText(operand.Arguments.Arguments[1], this) + "}{(" + MathParser.OperandToText(operand.Arguments.Arguments[0], this) + ")}";
+            case "rand":
+                return "rand(" + innerFunction + ")";
+            case "root":
+                return "\\sqrt[" + MathParser.OperandToText(operand.Arguments.Arguments[1], this) + "]{" + MathParser.OperandToText(operand.Arguments.Arguments[0], this) + "}";
+            case "!":
+                return "not \\;(" + innerFunction + ")";
+            case "acos":
+                return "\\arccos{(" + innerFunction + ")}";
+            case "asin":
+                return "\\arcsin{(" + innerFunction + ")}";
+            case "atan":
+                return "\\arctan{(" + innerFunction + ")}";
+            case "acot":
+                return "\\arctan{(\\frac{1}{" + innerFunction + "})}";
+            case "acosh":
+                return "\\cosh^{-1}{(" + innerFunction + ")}";
+            case "asinh":
+                return "\\sinh^{-1}1{(" + innerFunction + ")}";
+            case "atanh":
+                return "\\tanh^{-1}{(" + innerFunction + ")}";
+            case "acoth":
+                return "\\tanh^{-1}{(\\frac{1}{" + innerFunction + "})}";
+            case "exp":
+                return "e^{" + innerFunction + "}";
+            case "floor":
+                return "⌊" + innerFunction + "⌋";
+            case "round":
+                return "round(" + innerFunction + ")";
+            case "ceil":
+                return "⌈" + innerFunction + "⌉";
+            case "abs":
+                return "|" + innerFunction + "|";
+            case "f'":
+                return "\\frac{d}{dx}(" + innerFunction + ")";
+            case "fact":
+                return innerFunction + "!";
+            case "sign":
+                return "sgn(" + innerFunction + ")";
+            default:
+                return "\\" + operand.Func.Type + "{" + innerFunction + "}";
+        }
+    };
+    LatexExpressionVisitor.prototype.BinaryOperationToString = function (operation, firstOperand, secondOperand) {
+        var _this = this;
+        var fixedOperands = this.Braces(operation, firstOperand, secondOperand);
+        firstOperand = fixedOperands.firstOperand;
+        secondOperand = fixedOperands.secondOperand;
+        switch (operation.Operator.Value) {
+            case "*":
+                return firstOperand + " \\cdot " + secondOperand;
+            case "/":
+                return "\\frac{" + firstOperand + "}{" + secondOperand + "}";
+            case ">=":
+                return firstOperand + "\\geq" + secondOperand;
+            case "<=":
+                return firstOperand + "\\leq" + secondOperand;
+            case "==":
+                return firstOperand + "\\equiv" + secondOperand;
+            case "!=":
+                return firstOperand + "\\neq" + secondOperand;
+            case "&":
+                return firstOperand + "\\; and \\;" + secondOperand;
+            case "|":
+                return firstOperand + "\\; or \\;" + secondOperand;
+            case "^":
+                var powerAfrer = function () {
+                    return "{" + firstOperand + "}^{" + secondOperand + "}";
+                };
+                var powerBefore = function () {
+                    var funct = operation.FirstOperand.Value;
+                    return "\\" + funct.Func.Type + "^" + MathParser.OperandToText(operation.SecondOperand, _this) + "{(" + _this.ArgumentsToString(funct.Arguments) + ")}";
+                };
+                if (operation.FirstOperand.Value instanceof UnaryOperation) {
+                    var func = (operation.FirstOperand.Value).Func;
+                    switch (func.Type) {
+                        case "cos":
+                            return powerBefore();
+                        case "sin":
+                            return powerBefore();
+                        case "tan":
+                            return powerBefore();
+                        case "cot":
+                            return powerBefore();
+                        case "cosh":
+                            return powerBefore();
+                        case "sinh":
+                            return powerBefore();
+                        case "tanh":
+                            return powerBefore();
+                        case "coth":
+                            return powerBefore();
+                        case "acos":
+                            return powerBefore();
+                        case "asin":
+                            return powerBefore();
+                        case "atan":
+                            return powerBefore();
+                        case "acot":
+                            return powerBefore();
+                        default:
+                            return powerAfrer();
+                    }
+                }
+                else {
+                    return powerAfrer();
+                }
+            default:
+                return firstOperand + " " + operation.Operator.Value + " " + secondOperand;
+        }
+    };
+    return LatexExpressionVisitor;
+}());
+var PlainTextExpressionVisitor = (function () {
+    function PlainTextExpressionVisitor() {
+    }
+    PlainTextExpressionVisitor.prototype.Braces = function (operation, firstOperand, secondOperand) {
+        if (operation.FirstOperand.Value instanceof BinaryOperation) {
+            var firstOperation = operation.FirstOperand.Value;
+            if (firstOperation.Operator.OperatorLevel < operation.Operator.OperatorLevel || operation.Operator.Value == "/") {
+                firstOperand = "(" + firstOperand + ")";
+            }
+        }
+        if (operation.SecondOperand.Value instanceof BinaryOperation) {
+            var secondOperation = operation.SecondOperand.Value;
+            if (secondOperation.Operator.OperatorLevel < operation.Operator.OperatorLevel || operation.Operator.Value == "/") {
+                secondOperand = "(" + secondOperand + ")";
+            }
+        }
+        return { firstOperand: firstOperand, secondOperand: secondOperand };
+    };
+    PlainTextExpressionVisitor.prototype.LiteralToString = function (operand) {
+        return operand.toString();
+    };
+    PlainTextExpressionVisitor.prototype.ParameterToString = function (operand) {
+        return operand.Name;
+    };
+    PlainTextExpressionVisitor.prototype.ArgumentsToString = function (args) {
+        var innerFunction = "";
+        for (var index = 0; index < args.Length; index++) {
+            innerFunction += MathParser.OperandToText(args.Arguments[index], this);
+            if (index < args.Length - 1) {
+                innerFunction += MathParser.Enumerator;
+            }
+        }
+        return innerFunction;
+    };
+    PlainTextExpressionVisitor.prototype.UnaryOperationToString = function (operand) {
+        var innerFunction = this.ArgumentsToString(operand.Arguments);
+        switch (operand.Func.Type) {
+            case "negative":
+                var argumentValue = operand.Arguments.Arguments[0].Value;
+                if (!(argumentValue instanceof BinaryOperation)) {
+                    return "-" + innerFunction + "";
+                }
+                else {
+                    return "-(" + innerFunction + ")";
+                }
+            case "ln":
+                return "log(" + innerFunction + ";e)";
+            case "log":
+                return "log(" + MathParser.OperandToText(operand.Arguments.Arguments[0], this) + ";" + MathParser.OperandToText(operand.Arguments.Arguments[1], this) + ")";
+            case "rand":
+                return "rand(" + innerFunction + ")";
+            case "root":
+                return "root(" + MathParser.OperandToText(operand.Arguments.Arguments[0], this) + ";" + MathParser.OperandToText(operand.Arguments.Arguments[1], this) + ")";
+            case "!":
+                return "not (" + innerFunction + ")";
+            case "exp":
+                return "e^{" + innerFunction + "}";
+            case "floor":
+                return "⌊" + innerFunction + "⌋";
+            case "round":
+                return "round(" + innerFunction + ")";
+            case "ceil":
+                return "⌈" + innerFunction + "⌉";
+            case "abs":
+                return "|" + innerFunction + "|";
+            case "f'":
+                return "(" + innerFunction + ")`";
+            case "fact":
+                return innerFunction + "!";
+            case "sign":
+                return "sgn(" + innerFunction + ")";
+            default:
+                return operand.Func.Type + "(" + innerFunction + ")";
+        }
+    };
+    PlainTextExpressionVisitor.prototype.BinaryOperationToString = function (operation, firstOperand, secondOperand) {
+        var fixedOperands = this.Braces(operation, firstOperand, secondOperand);
+        firstOperand = fixedOperands.firstOperand;
+        secondOperand = fixedOperands.secondOperand;
+        return firstOperand + " " + operation.Operator.Value + " " + secondOperand;
+    };
+    return PlainTextExpressionVisitor;
+}());
 var MathParser = (function () {
     function MathParser() {
     }
@@ -7854,7 +8263,7 @@ var MathParser = (function () {
         var calculate = function (oper) {
             var sign = 1;
             for (var index = oper.length - 1; !MathParser.IsBasicOperator(oper); index--) {
-                if (oper[index] == '-') {
+                if (oper[index] == '-' && index >= 0) {
                     sign = -sign;
                     oper = oper.substr(0, oper.length - 1);
                 }
@@ -8023,7 +8432,7 @@ var MathParser = (function () {
                     return new Operand(new Parameter(operand, 0));
                 }
                 else {
-                    throw new Error("Function wasn't found");
+                    throw new Error("Function " + operand.split(MathParser.OperandKey)[0] + " wasn't found");
                 }
             }
             var mostSuitableFunction_1 = suitableFunctions_1[0];
@@ -8108,8 +8517,11 @@ var MathParser = (function () {
             }
             expression = Extensions.replaceAll(expressionToReplace, "" + MathParser.OperandKey + (operands.length - 1) + MathParser.OperandKey, expression);
             if (expressionLast == expression) {
-                throw new Error("Can't open braces in: " + expression);
+                throw new Error("Too many open braces");
             }
+        }
+        if (expression.includes(")")) {
+            throw new Error("Too many closing braces");
         }
         return { operands: operands, expression: expression };
     };
@@ -8117,6 +8529,34 @@ var MathParser = (function () {
         expression = expression.replace(/\s/gi, "").replace(/\,/gi, ".");
         var openedBraces = MathParser.OpenBraces(expression, parameters);
         return MathParser.SplitExpression(openedBraces.expression, parameters, openedBraces.operands);
+    };
+    MathParser.Preprocess = function (operand) {
+        if (operand.Value instanceof ArgumentArray) {
+            var array_1 = [];
+            operand.Value.Arguments.forEach(function (operand) { array_1.push(MathParser.Preprocess(operand)); });
+            var result = new ArgumentArray(array_1);
+            return new Operand(result);
+        }
+        else if (operand.Value instanceof UnaryOperation && operand.Value.Func instanceof Preprocessor) {
+            if (operand.Value.Arguments.Length == 1) {
+                var result = operand.Value.Func.Func(MathParser.Preprocess(operand.Value.Arguments.Arguments[0]));
+                return result;
+            }
+            else {
+                throw new Error("Incorrect input");
+            }
+        }
+        else if (operand.Value instanceof UnaryOperation && operand.Value.Func instanceof MathFunction) {
+            var result = ExpressionBuilder.UnaryOperation(operand.Value.Func, MathParser.Preprocess(new Operand(operand.Value.Arguments)).Value.Arguments);
+            return result;
+        }
+        else if (operand.Value instanceof BinaryOperation) {
+            var result = new BinaryOperation(MathParser.Preprocess(operand.Value.FirstOperand), MathParser.Preprocess(operand.Value.SecondOperand), operand.Value.Operator);
+            return new Operand(result);
+        }
+        else {
+            return operand;
+        }
     };
     MathParser.Evaluate = function (operation) {
         var firstOperand = MathParser.EvaluateOperand(operation.FirstOperand);
@@ -8157,13 +8597,14 @@ var MathParser = (function () {
         }
     };
     MathParser.EvaluateOperand = function (operand) {
+        operand = MathParser.Preprocess(operand);
         if (typeof operand.Value == "number" || typeof operand.Value == "boolean") {
             return operand.Value;
         }
         else if (operand.Value instanceof Parameter) {
             return operand.Value.Value;
         }
-        else if (operand.Value instanceof UnaryOperation) {
+        else if (operand.Value instanceof UnaryOperation && operand.Value.Func instanceof MathFunction) {
             var evaluatedArguments = [];
             for (var index = 0; index < operand.Value.Func.ArgumentsCount; index++) {
                 evaluatedArguments.push(MathParser.EvaluateOperand(operand.Value.Arguments.Arguments[index]));
@@ -8179,224 +8620,29 @@ var MathParser = (function () {
             throw new Error("Unknown function");
         }
     };
-    MathParser.ArgumentsToLatex = function (args) {
-        var innerFunction = "";
-        for (var index = 0; index < args.Length; index++) {
-            innerFunction += MathParser.OperandToLatexFormula(args.Arguments[index]);
-            if (index < args.Length - 1) {
-                innerFunction += MathParser.Enumerator;
-            }
-        }
-        return innerFunction;
-    };
-    MathParser.OperandToLatexFormula = function (operand) {
+    MathParser.OperandToText = function (operand, visitor) {
         var output = "";
         if (typeof operand.Value == "number" || typeof operand.Value == "boolean") {
-            output += operand.Value.toString();
+            output += visitor.LiteralToString(operand.Value);
         }
         else if (operand.Value instanceof Parameter) {
-            switch (operand.Value.Name) {
-                case "pi":
-                    output += "\pi";
-                    break;
-                case "infinity":
-                    output += "\infty";
-                    break;
-                default:
-                    output += operand.Value.Name;
-                    break;
-            }
+            output += visitor.ParameterToString(operand.Value);
         }
         else if (operand.Value instanceof UnaryOperation) {
-            var innerFunction = MathParser.ArgumentsToLatex(operand.Value.Arguments);
-            switch (operand.Value.Func.Type) {
-                case "negative":
-                    var argumentValue = operand.Value.Arguments.Arguments[0].Value;
-                    if (typeof argumentValue == "number" || typeof operand.Value == "boolean" || argumentValue instanceof Parameter || argumentValue instanceof UnaryOperation) {
-                        output += "-" + innerFunction + "";
-                    }
-                    else {
-                        output += "-(" + innerFunction + ")";
-                    }
-                    break;
-                case "sqrt":
-                    output += "\\sqrt{" + innerFunction + "}";
-                    break;
-                case "cbrt":
-                    output += "\\sqrt[3]{" + innerFunction + "}";
-                    break;
-                case "rad":
-                    output += innerFunction;
-                    break;
-                case "deg":
-                    output += "{" + innerFunction + "}" + "^{\\circ}";
-                    break;
-                case "ln":
-                    output += "\\log_e{(" + innerFunction + ")}";
-                    break;
-                case "log":
-                    output += "\\log_{" + MathParser.OperandToLatexFormula(operand.Value.Arguments.Arguments[1]) + "}{(" + MathParser.OperandToLatexFormula(operand.Value.Arguments.Arguments[0]) + ")}";
-                    break;
-                case "rand":
-                    output += "rand(" + innerFunction + ")";
-                    break;
-                case "root":
-                    output += "\\sqrt[" + MathParser.OperandToLatexFormula(operand.Value.Arguments.Arguments[1]) + "]{" + MathParser.OperandToLatexFormula(operand.Value.Arguments.Arguments[0]) + "}";
-                    break;
-                case "!":
-                    output += "not \\;(" + innerFunction + ")";
-                    break;
-                case "acos":
-                    output += "\\arccos{(" + innerFunction + ")}";
-                    break;
-                case "asin":
-                    output += "\\arcsin{(" + innerFunction + ")}";
-                    break;
-                case "atan":
-                    output += "\\arctan{(" + innerFunction + ")}";
-                    break;
-                case "acot":
-                    output += "\\arctan{(\\frac{1}{" + innerFunction + "})}";
-                    break;
-                case "acosh":
-                    output += "\\cosh^{-1}{(" + innerFunction + ")}";
-                    break;
-                case "asinh":
-                    output += "\\sinh^{-1}1{(" + innerFunction + ")}";
-                    break;
-                case "atanh":
-                    output += "\\tanh^{-1}{(" + innerFunction + ")}";
-                    break;
-                case "acoth":
-                    output += "\\tanh^{-1}{(\\frac{1}{" + innerFunction + "})}";
-                    break;
-                case "exp":
-                    output += "e^{" + innerFunction + "}";
-                    break;
-                case "floor":
-                    output += "⌊" + innerFunction + "⌋";
-                    break;
-                case "round":
-                    output += "round(" + innerFunction + ")";
-                    break;
-                case "ceil":
-                    output += "⌈" + innerFunction + "⌉";
-                    break;
-                case "abs":
-                    output += "|" + innerFunction + "|";
-                    break;
-                case "f'":
-                    output += "\\frac{d}{dx}(" + innerFunction + ")";
-                    break;
-                case "fact":
-                    output += innerFunction + "!";
-                    break;
-                case "sign":
-                    output += "sgn(" + innerFunction + ")";
-                    break;
-                default:
-                    output += "\\" + operand.Value.Func.Type + "{" + innerFunction + "}";
-                    break;
-            }
+            output += visitor.UnaryOperationToString(operand.Value);
         }
         else if (operand.Value instanceof BinaryOperation) {
-            output += MathParser.BinaryOperationToLatexFormula(operand.Value);
+            output += MathParser.BinaryOperationToLatexFormula(operand.Value, visitor);
         }
         else {
             return "";
         }
         return output;
     };
-    MathParser.BinaryOperationToLatexFormula = function (operation) {
-        var output = "";
-        var firstOperand = MathParser.OperandToLatexFormula(operation.FirstOperand);
-        var secondOperand = MathParser.OperandToLatexFormula(operation.SecondOperand);
-        if (operation.FirstOperand.Value instanceof BinaryOperation) {
-            var firstOperation = operation.FirstOperand.Value;
-            if ((firstOperation.Operator.OperatorLevel < operation.Operator.OperatorLevel || operation.Operator.Value == "-") && operation.Operator.Value != "/") {
-                firstOperand = "(" + firstOperand + ")";
-            }
-        }
-        if (operation.SecondOperand.Value instanceof BinaryOperation) {
-            var secondOperation = operation.SecondOperand.Value;
-            if ((secondOperation.Operator.OperatorLevel < operation.Operator.OperatorLevel || operation.Operator.Value == "-") && operation.Operator.Value != "^" && operation.Operator.Value != "/") {
-                secondOperand = "(" + secondOperand + ")";
-            }
-        }
-        switch (operation.Operator.Value) {
-            case "*":
-                output += firstOperand + " \\cdot " + secondOperand;
-                break;
-            case "/":
-                output += "\\frac{" + firstOperand + "}{" + secondOperand + "}";
-                break;
-            case ">=":
-                output += firstOperand + "\\geq" + secondOperand;
-                break;
-            case "<=":
-                output += firstOperand + "\\leq" + secondOperand;
-                break;
-            case "==":
-                output += firstOperand + "\\equiv" + secondOperand;
-                break;
-            case "!=":
-                output += firstOperand + "\\neq" + secondOperand;
-                break;
-            case "&":
-                output += firstOperand + "\\; and \\;" + secondOperand;
-                break;
-            case "|":
-                output += firstOperand + "\\; or \\;" + secondOperand;
-                break;
-            case "^":
-                var powerAfrer = function () {
-                    output += "{" + firstOperand + "}^{" + secondOperand + "}";
-                };
-                var powerBefore = function () {
-                    var funct = operation.FirstOperand.Value;
-                    output += "\\" + funct.Func.Type + "^" + MathParser.OperandToLatexFormula(operation.SecondOperand) + "{(" + MathParser.ArgumentsToLatex(funct.Arguments) + ")}";
-                };
-                if (operation.FirstOperand.Value instanceof UnaryOperation) {
-                    var func = (operation.FirstOperand.Value).Func;
-                    switch (func.Type) {
-                        case "cos":
-                            powerBefore();
-                            break;
-                        case "sin":
-                            powerBefore();
-                            break;
-                        case "tan":
-                            powerBefore();
-                            break;
-                        case "cot":
-                            powerBefore();
-                            break;
-                        case "acos":
-                            powerBefore();
-                            break;
-                        case "asin":
-                            powerBefore();
-                            break;
-                        case "atan":
-                            powerBefore();
-                            break;
-                        case "acot":
-                            powerBefore();
-                            break;
-                        default:
-                            powerAfrer();
-                            break;
-                    }
-                }
-                else {
-                    powerAfrer();
-                }
-                break;
-            default:
-                output += firstOperand + " " + operation.Operator.Value + " " + secondOperand;
-                break;
-        }
-        return output;
+    MathParser.BinaryOperationToLatexFormula = function (operation, visitor) {
+        var firstOperand = MathParser.OperandToText(operation.FirstOperand, visitor);
+        var secondOperand = MathParser.OperandToText(operation.SecondOperand, visitor);
+        return visitor.BinaryOperationToString(operation, firstOperand, secondOperand);
     };
     MathParser.Operators = [
         new Operator("+", OperatorPrecedence.First),
@@ -8450,12 +8696,383 @@ var MathParser = (function () {
         new MathFunction("fact", 1, function (value) { var result = 1; for (var i = 1; i <= Extensions.asNumber(value[0]); i++) {
             result *= i;
         } return result; }),
-        new MathFunction("f'", 1, function () { throw new Error("Not implemented"); }),
+        new Preprocessor("f'", 1, function (value) { return AnalyticalMath.Derivative(value); }),
         new MathFunction("rand", 2, function (value) { return Math.random() * (Extensions.asNumber(value[1]) - Extensions.asNumber(value[0])) + Extensions.asNumber(value[0]); }),
         new MathFunction("log", 2, function (value) { return Math.log(Extensions.asNumber(value[0])) / Math.log(Extensions.asNumber(value[1])); }),
         new MathFunction("root", 2, function (value) { return Math.pow(Extensions.asNumber(value[0]), 1 / Extensions.asNumber(value[1])); })
     ];
     return MathParser;
+}());
+var ExpressionBuilder = (function () {
+    function ExpressionBuilder() {
+    }
+    ExpressionBuilder.FindFunction = function (name) {
+        var func = MathParser.Functions.find(function (value) {
+            if (value.Type == name) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        });
+        if (!func) {
+            throw new Error("Function " + name + " wasn't found");
+        }
+        else {
+            return func;
+        }
+    };
+    ExpressionBuilder.FindOperator = function (oper) {
+        var operator = MathParser.Operators.find(function (value) {
+            if (value.Value == oper) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        });
+        if (!operator) {
+            throw new Error("Operator " + oper + " wasn't found");
+        }
+        else {
+            return operator;
+        }
+    };
+    ExpressionBuilder.FindConstant = function (constant) {
+        var parameter = MathParser.Constants.find(function (value) {
+            if (value.Name == constant) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        });
+        if (!parameter) {
+            throw new Error("Constant " + constant + " wasn't found");
+        }
+        else {
+            return new Operand(parameter);
+        }
+    };
+    ExpressionBuilder.Literal = function (value) {
+        return new Operand(value);
+    };
+    ExpressionBuilder.Parameter = function (name, value) {
+        return new Operand(new Parameter(name, value));
+    };
+    ExpressionBuilder.UnaryOperation = function (func, argument) {
+        var args = [];
+        for (var _i = 2; _i < arguments.length; _i++) {
+            args[_i - 2] = arguments[_i];
+        }
+        var argsList = argument === null || argument === void 0 ? void 0 : argument.concat(args);
+        return new Operand(new UnaryOperation(new ArgumentArray(argsList ? argsList : args), typeof func == "string" ? ExpressionBuilder.FindFunction(func) : func));
+    };
+    ExpressionBuilder.BinaryOperation = function (firstOperand, secondOperand, operator) {
+        return new Operand(new BinaryOperation(firstOperand, secondOperand, ExpressionBuilder.FindOperator(operator)));
+    };
+    return ExpressionBuilder;
+}());
+var AnalyticalMath = (function () {
+    function AnalyticalMath() {
+    }
+    AnalyticalMath.Derivative = function (value) {
+        if (typeof value.Value == "number" || typeof value.Value == "boolean") {
+            return ExpressionBuilder.Literal(0);
+        }
+        else if (value.Value instanceof Parameter) {
+            if (value.Value.Name == "x") {
+                return ExpressionBuilder.Literal(1);
+            }
+            else {
+                return ExpressionBuilder.Literal(0);
+            }
+        }
+        else if (value.Value instanceof UnaryOperation) {
+            switch (value.Value.Func.Type) {
+                case "cos":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation(MathParser.NegativeFunction, undefined, ExpressionBuilder.UnaryOperation("sin", value.Value.Arguments.Arguments)), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "sin":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("cos", value.Value.Arguments.Arguments), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "tan":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("cos", value.Value.Arguments.Arguments), ExpressionBuilder.Literal(2), "^"), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "cot":
+                    return ExpressionBuilder.UnaryOperation(MathParser.NegativeFunction, undefined, ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("sin", value.Value.Arguments.Arguments), ExpressionBuilder.Literal(2), "^"), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*"));
+                case "acos":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.UnaryOperation(MathParser.NegativeFunction, undefined, ExpressionBuilder.UnaryOperation("sin", undefined, ExpressionBuilder.UnaryOperation("acos", value.Value.Arguments.Arguments))), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "asin":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.UnaryOperation("cos", undefined, ExpressionBuilder.UnaryOperation("asin", value.Value.Arguments.Arguments)), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "atan":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(value.Value.Arguments.Arguments[0], ExpressionBuilder.Literal(2), "^"), "+"), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "acot":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation(MathParser.NegativeFunction, undefined, ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(value.Value.Arguments.Arguments[0], ExpressionBuilder.Literal(2), "^"), "+"), "/")), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "cosh":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("sinh", value.Value.Arguments.Arguments), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "sinh":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("cosh", value.Value.Arguments.Arguments), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "tanh":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("cosh", value.Value.Arguments.Arguments), ExpressionBuilder.Literal(2), "^"), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "coth":
+                    return ExpressionBuilder.UnaryOperation(MathParser.NegativeFunction, undefined, ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("sinh", value.Value.Arguments.Arguments), ExpressionBuilder.Literal(2), "^"), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*"));
+                case "acosh":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.UnaryOperation("sinh", undefined, ExpressionBuilder.UnaryOperation("acosh", value.Value.Arguments.Arguments)), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "asinh":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.UnaryOperation("cosh", undefined, ExpressionBuilder.UnaryOperation("asinh", value.Value.Arguments.Arguments)), "/"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "atanh":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(value.Value.Arguments.Arguments[0], ExpressionBuilder.Literal(2), "^"), "-"), "/");
+                case "acoth":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(ExpressionBuilder.Literal(1), ExpressionBuilder.BinaryOperation(value.Value.Arguments.Arguments[0], ExpressionBuilder.Literal(2), "^"), "-"), "/");
+                case "ln":
+                    return ExpressionBuilder.BinaryOperation(AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), value.Value.Arguments.Arguments[0], "/");
+                case "log":
+                    return AnalyticalMath.Derivative(ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("ln", undefined, value.Value.Arguments.Arguments[0]), ExpressionBuilder.UnaryOperation("ln", undefined, value.Value.Arguments.Arguments[1]), "/"));
+                case "exp":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.FindConstant("e"), value.Value.Arguments.Arguments[0], "^"), AnalyticalMath.Derivative(value.Value.Arguments.Arguments[0]), "*");
+                case "abs":
+                    return ExpressionBuilder.UnaryOperation("sign", undefined, value.Value.Arguments.Arguments[0]);
+                case "sqrt":
+                    return AnalyticalMath.Derivative(ExpressionBuilder.UnaryOperation("root", undefined, value.Value.Arguments.Arguments[0], ExpressionBuilder.Literal(2)));
+                case "cbrt":
+                    return AnalyticalMath.Derivative(ExpressionBuilder.UnaryOperation("root", undefined, value.Value.Arguments.Arguments[0], ExpressionBuilder.Literal(3)));
+                case "root":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("root", undefined, value.Value.Arguments.Arguments[0], value.Value.Arguments.Arguments[1]), AnalyticalMath.Derivative(ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("ln", undefined, value.Value.Arguments.Arguments[0]), value.Value.Arguments.Arguments[1], "/")), "*");
+                case "negative":
+                    return ExpressionBuilder.Literal(-1);
+            }
+        }
+        else if (value.Value instanceof BinaryOperation) {
+            switch (value.Value.Operator.Value) {
+                case "+":
+                    return ExpressionBuilder.BinaryOperation(AnalyticalMath.Derivative(value.Value.FirstOperand), AnalyticalMath.Derivative(value.Value.SecondOperand), "+");
+                case "-":
+                    return ExpressionBuilder.BinaryOperation(AnalyticalMath.Derivative(value.Value.FirstOperand), AnalyticalMath.Derivative(value.Value.SecondOperand), "-");
+                case "*":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(AnalyticalMath.Derivative(value.Value.FirstOperand), value.Value.SecondOperand, "*"), ExpressionBuilder.BinaryOperation(value.Value.FirstOperand, AnalyticalMath.Derivative(value.Value.SecondOperand), "*"), "+");
+                case "/":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(AnalyticalMath.Derivative(value.Value.FirstOperand), value.Value.SecondOperand, "*"), ExpressionBuilder.BinaryOperation(value.Value.FirstOperand, AnalyticalMath.Derivative(value.Value.SecondOperand), "*"), "-"), ExpressionBuilder.BinaryOperation(value.Value.SecondOperand, ExpressionBuilder.Literal(2), "^"), "/");
+                case "^":
+                    return ExpressionBuilder.BinaryOperation(ExpressionBuilder.BinaryOperation(value.Value.FirstOperand, value.Value.SecondOperand, "^"), AnalyticalMath.Derivative(ExpressionBuilder.BinaryOperation(ExpressionBuilder.UnaryOperation("ln", undefined, value.Value.FirstOperand), value.Value.SecondOperand, "*")), "*");
+            }
+        }
+        throw new Error("Can't calc derivative");
+    };
+    AnalyticalMath.Simplify = function (operand) {
+        switch (operand.Value.constructor) {
+            case UnaryOperation:
+                return AnalyticalMath.SimplifyUnaryOperation(operand);
+            case BinaryOperation:
+                return AnalyticalMath.SimplifyBinaryOperation(operand.Value);
+            default:
+                return operand;
+        }
+    };
+    AnalyticalMath.SimplifyUnaryOperation = function (operand) {
+        if (!(operand.Value instanceof UnaryOperation)) {
+            throw new Error(operand.Value + " is not an unary operation");
+        }
+        else if (operand.Value.Arguments.Length == 1) {
+            var argument = AnalyticalMath.Simplify(operand.Value.Arguments.Arguments[0]);
+            var func = operand.Value.Func;
+            switch (func.Type) {
+                case "sin":
+                case "sinh":
+                case "tan":
+                case "tanh":
+                case "asin":
+                case "asinh":
+                case "atan":
+                case "atanh":
+                    if (AnalyticalMath.Is0(argument)) {
+                        return AnalyticalMath.const_0;
+                    }
+                    break;
+                case "sec":
+                case "cos":
+                case "cosh":
+                case "exp":
+                    if (AnalyticalMath.Is0(argument)) {
+                        return AnalyticalMath.const_1;
+                    }
+                    break;
+                case "asec":
+                case "acos":
+                case "acosh":
+                case "ln":
+                    if (AnalyticalMath.Is1(argument)) {
+                        return AnalyticalMath.const_0;
+                    }
+                    break;
+                case "fact":
+                    if (AnalyticalMath.Is0(argument) || AnalyticalMath.Is1(argument)) {
+                        return AnalyticalMath.const_1;
+                    }
+                    break;
+                case "abs":
+                    if (AnalyticalMath.Is0(argument) || AnalyticalMath.Is1(argument)) {
+                        return argument;
+                    }
+                    else if (AnalyticalMath.IsMinus1(argument)) {
+                        return AnalyticalMath.const_1;
+                    }
+                    break;
+                case "sqrt":
+                    if (AnalyticalMath.Is0(argument) || AnalyticalMath.Is1(argument)) {
+                        return argument;
+                    }
+                    break;
+                case "floor":
+                case "ceil":
+                case "round":
+                case "cbrt":
+                    if (AnalyticalMath.Is0(argument) || AnalyticalMath.Is1(argument) || AnalyticalMath.IsMinus1(argument)) {
+                        return argument;
+                    }
+                    break;
+                case "negative":
+                    if (AnalyticalMath.Is0(argument)) {
+                        return AnalyticalMath.const_0;
+                    }
+                    else if (AnalyticalMath.Is1(argument)) {
+                        return new Operand(-1.0);
+                    }
+                    else if (AnalyticalMath.IsMinus1(argument)) {
+                        return AnalyticalMath.const_1;
+                    }
+                    break;
+                default:
+                    return new Operand(new UnaryOperation(new ArgumentArray([AnalyticalMath.Simplify(argument)]), func));
+            }
+            operand.Value.Arguments.Arguments[0] = argument;
+        }
+        else if (operand.Value.Arguments.Length == 2) {
+            var argument = AnalyticalMath.Simplify(operand.Value.Arguments.Arguments[0]);
+            var func = operand.Value.Func;
+            switch (func.Type) {
+                case "log":
+                    if (AnalyticalMath.Is1(argument)) {
+                        return AnalyticalMath.const_0;
+                    }
+                    break;
+            }
+        }
+        if (operand.Value.Arguments.Length > 1) {
+            for (var i = 0; i < operand.Value.Arguments.Length; i++) {
+                var argument = AnalyticalMath.Simplify(operand.Value.Arguments.Arguments[i]);
+                operand.Value.Arguments.Arguments[i] = argument;
+            }
+        }
+        return operand;
+    };
+    AnalyticalMath.SimplifyBinaryOperation = function (binaryOperation) {
+        switch (binaryOperation.Operator.Value) {
+            case "+":
+                return AnalyticalMath.SimplifyAdd(binaryOperation);
+            case "-":
+                return AnalyticalMath.SimplifySub(binaryOperation);
+            case "*":
+                return AnalyticalMath.SimplifyMul(binaryOperation);
+            case "/":
+                return AnalyticalMath.SimplifyDiv(binaryOperation);
+            case "%":
+                return AnalyticalMath.SimplifyMod(binaryOperation);
+            case "^":
+                return AnalyticalMath.SimplifyPower(binaryOperation);
+            default:
+                var first = AnalyticalMath.Simplify(binaryOperation.FirstOperand);
+                var second = AnalyticalMath.Simplify(binaryOperation.SecondOperand);
+                return new Operand(new BinaryOperation(first, second, binaryOperation.Operator));
+        }
+    };
+    AnalyticalMath.Is0 = function (operand) {
+        return typeof operand.Value == "number" && Math.abs(operand.Value) == 0.0;
+    };
+    AnalyticalMath.Is1 = function (operand) {
+        return typeof operand.Value == "number" && operand.Value == 1.0;
+    };
+    AnalyticalMath.IsMinus1 = function (operand) {
+        return typeof operand.Value == "number" && operand.Value == -1.0;
+    };
+    AnalyticalMath.SimplifyAdd = function (binaryOperation) {
+        var first = AnalyticalMath.Simplify(binaryOperation.FirstOperand);
+        var second = AnalyticalMath.Simplify(binaryOperation.SecondOperand);
+        if (AnalyticalMath.Is0(first)) {
+            return second;
+        }
+        else if (AnalyticalMath.Is0(second)) {
+            return first;
+        }
+        else {
+            return new Operand(new BinaryOperation(first, second, binaryOperation.Operator));
+        }
+    };
+    AnalyticalMath.SimplifySub = function (binaryOperation) {
+        var second = AnalyticalMath.Simplify(binaryOperation.SecondOperand);
+        if (AnalyticalMath.Is0(second)) {
+            return AnalyticalMath.Simplify(binaryOperation.FirstOperand);
+        }
+        else {
+            var first = AnalyticalMath.Simplify(binaryOperation.FirstOperand);
+            return new Operand(new BinaryOperation(first, second, binaryOperation.Operator));
+        }
+    };
+    AnalyticalMath.SimplifyMul = function (binaryOperation) {
+        var first = AnalyticalMath.Simplify(binaryOperation.FirstOperand);
+        var second = AnalyticalMath.Simplify(binaryOperation.SecondOperand);
+        if (AnalyticalMath.Is0(first) || AnalyticalMath.Is1(second)) {
+            return first;
+        }
+        else if (AnalyticalMath.Is0(second) || AnalyticalMath.Is1(first)) {
+            return second;
+        }
+        else {
+            return new Operand(new BinaryOperation(first, second, binaryOperation.Operator));
+        }
+    };
+    AnalyticalMath.SimplifyDiv = function (binaryOperation) {
+        var first = AnalyticalMath.Simplify(binaryOperation.FirstOperand);
+        var second = AnalyticalMath.Simplify(binaryOperation.SecondOperand);
+        if ((AnalyticalMath.Is0(first) && !AnalyticalMath.Is0(second)) || AnalyticalMath.Is1(second)) {
+            return first;
+        }
+        else {
+            return new Operand(new BinaryOperation(first, second, binaryOperation.Operator));
+        }
+    };
+    AnalyticalMath.SimplifyMod = function (binaryOperation) {
+        var first = AnalyticalMath.Simplify(binaryOperation.FirstOperand);
+        if (AnalyticalMath.Is0(first)) {
+            return AnalyticalMath.const_0;
+        }
+        else {
+            var second = AnalyticalMath.Simplify(binaryOperation.SecondOperand);
+            return new Operand(new BinaryOperation(first, second, binaryOperation.Operator));
+        }
+    };
+    AnalyticalMath.SimplifyPower = function (binaryOperation) {
+        var first = AnalyticalMath.Simplify(binaryOperation.FirstOperand);
+        if (AnalyticalMath.Is1(first)) {
+            return AnalyticalMath.const_1;
+        }
+        else {
+            var second = AnalyticalMath.Simplify(binaryOperation.SecondOperand);
+            return new Operand(new BinaryOperation(first, second, binaryOperation.Operator));
+        }
+    };
+    Object.defineProperty(AnalyticalMath, "const_0", {
+        get: function () {
+            return new Operand(0.0);
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(AnalyticalMath, "const_1", {
+        get: function () {
+            return new Operand(1.0);
+        },
+        enumerable: false,
+        configurable: true
+    });
+    return AnalyticalMath;
 }());
 var UnitTests = (function () {
     function UnitTests() {
@@ -8506,7 +9123,8 @@ var UnitTests = (function () {
         UnitTests.DisplayResult(expression ? "true" : "false", "true", expression, "\"is true\"");
     };
     UnitTests.EvaluateHelper = function (expression) {
-        var evaluated = MathParser.EvaluateOperand(MathParser.Parse(expression));
+        var parsed = MathParser.Parse(expression);
+        var evaluated = MathParser.EvaluateOperand(parsed);
         return evaluated;
     };
     UnitTests.RunTests = function () {
@@ -8522,11 +9140,198 @@ function Evaluate() {
     var input = document.getElementById('inp');
     var result = document.getElementById('res');
     var expression = document.getElementById('expression');
-    if (input && result && expression) {
-        result.innerHTML = UnitTests.EvaluateHelper(input.value).toString();
-        expression.innerHTML = "$" + MathParser.OperandToLatexFormula(MathParser.Parse(input.value)) + "$";
+    var simplifiedExpression = document.getElementById('simplifiedExpression');
+    var expressionPlain = document.getElementById('expressionPlain');
+    if (input && result && expression && expressionPlain && simplifiedExpression) {
+        var userInput = input.value;
+        var userExpression = MathParser.Preprocess(MathParser.Parse(userInput));
+        result.innerHTML = "result: " + UnitTests.EvaluateHelper(userInput).toString();
+        expression.innerHTML = "$" + MathParser.OperandToText(userExpression, new LatexExpressionVisitor()) + "$";
+        simplifiedExpression.innerHTML = "$" + MathParser.OperandToText(AnalyticalMath.Simplify(userExpression), new LatexExpressionVisitor()) + "$";
+        expressionPlain.innerHTML = MathParser.OperandToText(userExpression, new PlainTextExpressionVisitor());
     }
 }
+UnitTests.DeclareTestCase(function () {
+    var _0_plus_0 = AnalyticalMath.Simplify(MathParser.Parse("0+0"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_plus_0, new PlainTextExpressionVisitor) == "0");
+    var x_plus_0 = AnalyticalMath.Simplify(MathParser.Parse("x+0"));
+    UnitTests.IsTrue(MathParser.OperandToText(x_plus_0, new PlainTextExpressionVisitor) == "x");
+    var _0_plus_x = AnalyticalMath.Simplify(MathParser.Parse("0+x"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_plus_x, new PlainTextExpressionVisitor) == "x");
+});
+UnitTests.DeclareTestCase(function () {
+    var _0_minus_0 = AnalyticalMath.Simplify(MathParser.Parse("0-0"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_minus_0, new PlainTextExpressionVisitor) == "0");
+    var x_minus_0 = AnalyticalMath.Simplify(MathParser.Parse("x-0"));
+    UnitTests.IsTrue(MathParser.OperandToText(x_minus_0, new PlainTextExpressionVisitor) == "x");
+    var _0_minus_x = AnalyticalMath.Simplify(MathParser.Parse("0-x"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_minus_x, new PlainTextExpressionVisitor) == "0 - x");
+});
+UnitTests.DeclareTestCase(function () {
+    var _0_mul_0 = AnalyticalMath.Simplify(MathParser.Parse("0*0"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_mul_0, new PlainTextExpressionVisitor) == "0");
+    var x_mul_0 = AnalyticalMath.Simplify(MathParser.Parse("x*0"));
+    UnitTests.IsTrue(MathParser.OperandToText(x_mul_0, new PlainTextExpressionVisitor) == "0");
+    var _0_mul_x = AnalyticalMath.Simplify(MathParser.Parse("0*x"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_mul_x, new PlainTextExpressionVisitor) == "0");
+});
+UnitTests.DeclareTestCase(function () {
+    var _1_mul_1 = AnalyticalMath.Simplify(MathParser.Parse("1*1"));
+    UnitTests.IsTrue(MathParser.OperandToText(_1_mul_1, new PlainTextExpressionVisitor) == "1");
+    var x_mul_1 = AnalyticalMath.Simplify(MathParser.Parse("x*1"));
+    UnitTests.IsTrue(MathParser.OperandToText(x_mul_1, new PlainTextExpressionVisitor) == "x");
+    var _1_mul_x = AnalyticalMath.Simplify(MathParser.Parse("1*x"));
+    UnitTests.IsTrue(MathParser.OperandToText(_1_mul_x, new PlainTextExpressionVisitor) == "x");
+    var x_mul_1_mul_x = AnalyticalMath.Simplify(MathParser.Parse("x*1*x"));
+    UnitTests.IsTrue(MathParser.OperandToText(x_mul_1_mul_x, new PlainTextExpressionVisitor) == "x * x");
+});
+UnitTests.DeclareTestCase(function () {
+    var _0_div_0 = AnalyticalMath.Simplify(MathParser.Parse("0/0"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_div_0, new PlainTextExpressionVisitor) == "0 / 0");
+    var _0_div_expr = AnalyticalMath.Simplify(MathParser.Parse("0/sqrt(4-5)"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_div_expr, new PlainTextExpressionVisitor) == "0");
+    var _0_div_x = AnalyticalMath.Simplify(MathParser.Parse("0/(x-x)"));
+    UnitTests.IsTrue(MathParser.OperandToText(_0_div_x, new PlainTextExpressionVisitor) == "0");
+    var x_div_0 = AnalyticalMath.Simplify(MathParser.Parse("x/0"));
+    UnitTests.IsTrue(MathParser.OperandToText(x_div_0, new PlainTextExpressionVisitor) == "x / 0");
+});
+UnitTests.DeclareTestCase(function () {
+    var functions = ["sin", "sinh", "tan", "tanh", "asin", "asinh", "atan", "atanh",];
+    for (var _i = 0, functions_1 = functions; _i < functions_1.length; _i++) {
+        var func = functions_1[_i];
+        var expression = AnalyticalMath.Simplify(MathParser.Parse(func + "(0)"));
+        UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "0");
+    }
+    for (var _a = 0, functions_2 = functions; _a < functions_2.length; _a++) {
+        var func = functions_2[_a];
+        var expression = AnalyticalMath.Simplify(MathParser.Parse(func + "(x*2)"));
+        UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == func + "(x * 2)");
+    }
+});
+UnitTests.DeclareTestCase(function () {
+    var functions = ["cos", "cosh", "exp",];
+    for (var _i = 0, functions_3 = functions; _i < functions_3.length; _i++) {
+        var func = functions_3[_i];
+        var expression = AnalyticalMath.Simplify(MathParser.Parse(func + "(0)"));
+        UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "1");
+    }
+    for (var _a = 0, functions_4 = functions; _a < functions_4.length; _a++) {
+        var func = functions_4[_a];
+        var expression = AnalyticalMath.Simplify(MathParser.Parse(func + "(1)"));
+        if (func == "exp") {
+            UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "e^{1}");
+        }
+        else {
+            UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == func + "(1)");
+        }
+    }
+});
+UnitTests.DeclareTestCase(function () {
+    var functions = ["acos", "acosh", "ln",];
+    for (var _i = 0, functions_5 = functions; _i < functions_5.length; _i++) {
+        var func = functions_5[_i];
+        var expression = AnalyticalMath.Simplify(MathParser.Parse(func + "(1)"));
+        UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "0");
+    }
+    for (var _a = 0, functions_6 = functions; _a < functions_6.length; _a++) {
+        var func = functions_6[_a];
+        var expression = AnalyticalMath.Simplify(MathParser.Parse(func + "(x-a)"));
+        if (func == "ln") {
+            UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "log(x - a;e)");
+        }
+        else {
+            UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == func + "(x - a)");
+        }
+    }
+});
+UnitTests.DeclareTestCase(function () {
+    var expression = AnalyticalMath.Simplify(MathParser.Parse("log(1; 2.718)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "0");
+    var expression2 = AnalyticalMath.Simplify(MathParser.Parse("log(b; x)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression2, new PlainTextExpressionVisitor) == "log(b;x)");
+});
+UnitTests.DeclareTestCase(function () {
+    for (var _i = 0, _a = ["0", "1"]; _i < _a.length; _i++) {
+        var argument = _a[_i];
+        var expression_1 = AnalyticalMath.Simplify(MathParser.Parse("fact(" + argument + ")"));
+        UnitTests.IsTrue(MathParser.OperandToText(expression_1, new PlainTextExpressionVisitor) == "1");
+    }
+    var expression = AnalyticalMath.Simplify(MathParser.Parse("fact(x/y)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "x / y!");
+});
+UnitTests.DeclareTestCase(function () {
+    var expression1 = AnalyticalMath.Simplify(MathParser.Parse("abs(0)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression1, new PlainTextExpressionVisitor) == "0");
+    var expression2 = AnalyticalMath.Simplify(MathParser.Parse("abs(1)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression2, new PlainTextExpressionVisitor) == "1");
+    var expression3 = AnalyticalMath.Simplify(MathParser.Parse("abs(-1)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression3, new PlainTextExpressionVisitor) == "1");
+    var expression4 = AnalyticalMath.Simplify(MathParser.Parse("abs(x)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression4, new PlainTextExpressionVisitor) == "|x|");
+});
+UnitTests.DeclareTestCase(function () {
+    var expression1 = AnalyticalMath.Simplify(MathParser.Parse("sqrt(0)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression1, new PlainTextExpressionVisitor) == "0");
+    var expression2 = AnalyticalMath.Simplify(MathParser.Parse("sqrt(1)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression2, new PlainTextExpressionVisitor) == "1");
+    var expression3 = AnalyticalMath.Simplify(MathParser.Parse("sqrt(x^2)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression3, new PlainTextExpressionVisitor) == "sqrt(x ^ 2)");
+});
+UnitTests.DeclareTestCase(function () {
+    var expression1 = AnalyticalMath.Simplify(MathParser.Parse("-0"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression1, new PlainTextExpressionVisitor) == "0");
+    var expression2 = AnalyticalMath.Simplify(MathParser.Parse("-1"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression2, new PlainTextExpressionVisitor) == "-1");
+    var expression3 = AnalyticalMath.Simplify(MathParser.Parse("-(-1)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression3, new PlainTextExpressionVisitor) == "1");
+});
+UnitTests.DeclareTestCase(function () {
+    var functions = ["floor", "ceil", "round", "cbrt",];
+    var values = [-1, 0, 1];
+    for (var _i = 0, functions_7 = functions; _i < functions_7.length; _i++) {
+        var func = functions_7[_i];
+        for (var _a = 0, values_1 = values; _a < values_1.length; _a++) {
+            var value = values_1[_a];
+            var expression = AnalyticalMath.Simplify(MathParser.Parse(func + "(" + value + ")"));
+            UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "" + value);
+        }
+    }
+    var expression1 = AnalyticalMath.Simplify(MathParser.Parse("floor(5*x)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression1, new PlainTextExpressionVisitor) == "⌊5 * x⌋");
+    var expression2 = AnalyticalMath.Simplify(MathParser.Parse("ceil(x/y)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression2, new PlainTextExpressionVisitor) == "⌈x / y⌉");
+    var expression3 = AnalyticalMath.Simplify(MathParser.Parse("round(b^b)"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression3, new PlainTextExpressionVisitor) == "round(b ^ b)");
+    var expression4 = AnalyticalMath.Simplify(MathParser.Parse("cbrt(sin(x))"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression4, new PlainTextExpressionVisitor) == "cbrt(sin(x))");
+});
+UnitTests.DeclareTestCase(function () {
+    var expression1 = AnalyticalMath.Simplify(MathParser.Parse("0%1"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression1, new PlainTextExpressionVisitor) == "0");
+    var expression2 = AnalyticalMath.Simplify(MathParser.Parse("0%0"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression2, new PlainTextExpressionVisitor) == "0");
+    var expression3 = AnalyticalMath.Simplify(MathParser.Parse("0%x"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression3, new PlainTextExpressionVisitor) == "0");
+    var expression4 = AnalyticalMath.Simplify(MathParser.Parse("1%0"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression4, new PlainTextExpressionVisitor) == "1 % 0");
+    var expression5 = AnalyticalMath.Simplify(MathParser.Parse("1%x"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression5, new PlainTextExpressionVisitor) == "1 % x");
+});
+UnitTests.DeclareTestCase(function () {
+    for (var _i = 0, _a = ["1^0", "1^1", "1^-1", "1^x", "1^sin(x)"]; _i < _a.length; _i++) {
+        var text_expression = _a[_i];
+        var expression = AnalyticalMath.Simplify(MathParser.Parse(text_expression));
+        UnitTests.IsTrue(MathParser.OperandToText(expression, new PlainTextExpressionVisitor) == "1");
+    }
+    var expression1 = AnalyticalMath.Simplify(MathParser.Parse("a^x"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression1, new PlainTextExpressionVisitor) == "a ^ x");
+});
+UnitTests.DeclareTestCase(function () {
+    var expression1 = AnalyticalMath.Simplify(MathParser.Parse("((x + (x * (0 / (x * 2)))) * 1) / 1"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression1, new PlainTextExpressionVisitor) == "x");
+    var expression2 = AnalyticalMath.Simplify(MathParser.Parse("(acos((x+sin(k/15))^0)+x)*cos(0*(w + 16 - m^x))*y"));
+    UnitTests.IsTrue(MathParser.OperandToText(expression2, new PlainTextExpressionVisitor) == "x * y");
+});
 UnitTests.DeclareTestCase(function () {
     UnitTests.AreEqual("cos(3550/20)*20+100", Math.cos(3550 / 20.0) * 20 + 100);
 });
@@ -8602,6 +9407,7 @@ UnitTests.DeclareTestCase(function () {
 UnitTests.DeclareTestCase(function () {
     UnitTests.ThrowError("sinhh(10)");
 });
+UnitTests.RunTests();
 var Geoma;
 (function (Geoma) {
     var Tools;
@@ -8823,8 +9629,8 @@ var Geoma;
                             menu.addMenuItem(binary_function).onChecked.bind(this_2, function () { return _this._owner._function = binary_function; });
                         };
                         var this_2 = this;
-                        for (var _i = 0, functions_1 = functions; _i < functions_1.length; _i++) {
-                            var binary_function = functions_1[_i];
+                        for (var _i = 0, functions_8 = functions; _i < functions_8.length; _i++) {
+                            var binary_function = functions_8[_i];
                             _loop_4(binary_function);
                         }
                     };
@@ -9042,7 +9848,7 @@ var Geoma;
                     EditButton.prototype.onClick = function () {
                         this._editor._code.visible = !this._editor._code.visible;
                         if (!this._editor._code.visible) {
-                            text_editor.text = this._editor._code.codeElement.text;
+                            text_editor.text = this._editor._code.codeElement.math;
                         }
                         else {
                             delete this._editor._parseError;
@@ -9054,7 +9860,7 @@ var Geoma;
                 var background = new Geoma.Sprite.Rectangle(x, y, 1, 1, function () { return Tools.CurrentTheme.FormulaEditorBackgroundBrush; });
                 var x_mod = makeMod(_this, function () { return background.x + _this._padding; });
                 var y_mod = makeMod(_this, function () { return (text_editor.visible ? text_editor : visual_editor).bottom + _this._padding; });
-                var text_editor = new Geoma.Sprite.TextInput(x_mod, makeMod(_this, function () { return background.y + _this._padding; }), makeMod(_this, function () { return background.w - 2 * _this._padding; }), 30, expression === null || expression === void 0 ? void 0 : expression.text, function () { return Tools.CurrentTheme.FormulaInputTextBrush; }, function () { return Tools.CurrentTheme.FormulaInputTextStyle; }, function () { return Tools.CurrentTheme.FormulaInputTextBackgroundBrush; });
+                var text_editor = new Geoma.Sprite.TextInput(x_mod, makeMod(_this, function () { return background.y + _this._padding; }), makeMod(_this, function () { return background.w - 2 * _this._padding; }), 30, expression === null || expression === void 0 ? void 0 : expression.math, function () { return Tools.CurrentTheme.FormulaInputTextBrush; }, function () { return Tools.CurrentTheme.FormulaInputTextStyle; }, function () { return Tools.CurrentTheme.FormulaInputTextBackgroundBrush; });
                 var visual_editor = new CodePlaceholder(document, x_mod, makeMod(_this, function () { return background.y + _this._padding; }), true);
                 visual_editor.visible = false;
                 text_editor.addVisible(function () { return !visual_editor.visible; });
@@ -9129,10 +9935,10 @@ var Geoma;
             };
             ExpressionDialog.prototype.parse = function (text_expression) {
                 try {
-                    this._argValues = new Map();
                     var operand = MathParser.Parse(text_expression);
-                    var expression = this.expressionConverter(operand);
-                    this._code.codeElement = expression;
+                    var converter = new Geoma.Syntax.MathParserConverter(operand);
+                    this._code.codeElement = converter.expression;
+                    this._argValues = converter.argValueIndex;
                     delete this._parseError;
                     return true;
                 }
@@ -9165,7 +9971,7 @@ var Geoma;
                 get: function () {
                     try {
                         var latex_markup = "{\\color{" + Tools.CurrentTheme.FormulaSampleTextBrush + "} y=" +
-                            MathParser.OperandToLatexFormula(MathParser.Parse(this._code.codeElement.math)) + "}";
+                            MathParser.OperandToText(MathParser.Parse(this._code.codeElement.math), new LatexExpressionVisitor()) + "}";
                         return latex_markup;
                     }
                     catch (error) {
@@ -9175,148 +9981,6 @@ var Geoma;
                 enumerable: false,
                 configurable: true
             });
-            ExpressionDialog.prototype.expressionConverter = function (operand) {
-                var expression = operand.Value;
-                if (expression instanceof Parameter) {
-                    if (expression.Name == "x") {
-                        return new CodeArgumentX();
-                    }
-                    else {
-                        var value = typeof expression.Value == "boolean" ? (expression.Value ? 1 : 0) : expression.Value;
-                        assert(this._argValues);
-                        this._argValues.set(expression.Name, value);
-                        return new CodeArgument(expression.Name);
-                    }
-                }
-                else if (expression instanceof UnaryOperation) {
-                    var function_type = expression.Func.Type;
-                    switch (function_type) {
-                        case "rad":
-                        case "deg":
-                            assert(false, "TODO");
-                        case "cos":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("cos", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "sin":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("sin", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "tan":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("tan", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "cot":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tan", this.expressionConverter(expression.Arguments.Arguments[0])));
-                        case "acos":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("arccos", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "asin":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("arcsin", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "atan":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("arctan", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "acot":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("arctan", new CodeBinary(new CodeLiteral(1), "÷", this.expressionConverter(expression.Arguments.Arguments[0])));
-                        case "sqrt":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("√", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "cbrt":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("∛", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "ln":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "abs":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("abs", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "log":
-                            assert(expression.Arguments.Length == 2);
-                            return new CodeBinary(new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[0])), "÷", new CodeUnary("ln", this.expressionConverter(expression.Arguments.Arguments[1])));
-                        case "root":
-                            assert(expression.Arguments.Length == 2);
-                            return new CodeBinary(this.expressionConverter(expression.Arguments.Arguments[1]), "n√", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "cosh":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("cosh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "sinh":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("sinh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "tanh":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("tanh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "coth":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tanh", this.expressionConverter(expression.Arguments.Arguments[0])));
-                        case "acosh":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("arccosh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "asinh":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("arcsinh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "atanh":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("arctanh", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "acoth":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("arctanh", new CodeBinary(new CodeLiteral(1), "÷", this.expressionConverter(expression.Arguments.Arguments[0])));
-                        case "sign":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("sin", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "exp":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("exp", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "floor":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("floor", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "ceil":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("ceil", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "round":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("round", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "fact":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("!", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "f'":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("f'", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "negative":
-                            assert(expression.Arguments.Length == 1);
-                            return new CodeUnary("neg", this.expressionConverter(expression.Arguments.Arguments[0]));
-                        case "!":
-                        case "rand":
-                        default:
-                            throw new Error(Tools.Resources.string("Неподдерживаемый тип функции: {0}", function_type));
-                    }
-                }
-                else if (expression instanceof BinaryOperation) {
-                    var operator_type = expression.Operator.Value;
-                    switch (operator_type) {
-                        case "+":
-                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "+", this.expressionConverter(expression.SecondOperand));
-                        case "-":
-                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "-", this.expressionConverter(expression.SecondOperand));
-                        case "*":
-                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "*", this.expressionConverter(expression.SecondOperand));
-                        case "/":
-                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "÷", this.expressionConverter(expression.SecondOperand));
-                        case "^":
-                            return new CodeBinary(this.expressionConverter(expression.FirstOperand), "pow", this.expressionConverter(expression.SecondOperand));
-                        default:
-                            throw new Error(Tools.Resources.string("Неподдерживаемый тип оператора: {0}", operator_type));
-                    }
-                }
-                else if (typeof expression == "number") {
-                    return new CodeLiteral(expression);
-                }
-                else if (typeof expression == "boolean") {
-                    return new CodeLiteral(expression ? 1 : 0);
-                }
-                else {
-                    throw new Error(Tools.Resources.string("Неподдерживаемый тип операнда: {0}", expression.constructor.name));
-                }
-            };
             return ExpressionDialog;
         }(Tools.DocumentSprite));
         Tools.ExpressionDialog = ExpressionDialog;
@@ -9717,7 +10381,6 @@ var Geoma;
                 _this._undoStack = new Array();
                 _this._preventShowMenu = false;
                 _this._currentUndoPosition = 0;
-                Geoma.Utils.InitializeCalcRevision();
                 _this._mouseArea = mouse_area;
                 _this._tools = new Geoma.Sprite.Container();
                 _this._data = new DocumentData();
@@ -11136,7 +11799,7 @@ var Geoma;
                 var m = arg_name.match(new RegExp("^[" + Document._pointNames + "][1-9]?(_[xy])?"));
                 if (m) {
                     assert(m.length == 2);
-                    if (m[0] == arg_name && m[1].length) {
+                    if (m[0] == arg_name && m[1] !== undefined && m[1].length) {
                         var point_coord = m[1];
                         var point_name_1 = m[0].substring(0, m[0].indexOf(point_coord));
                         var _loop_7 = function (i) {
@@ -11202,8 +11865,8 @@ var Geoma;
 var playGround;
 var mainDocument;
 var GeomaApplicationVersion = 0;
-var GeomaFeatureVersion = 5;
-var GeomaFixVersion = 7;
+var GeomaFeatureVersion = 6;
+var GeomaFixVersion = 1;
 window.onload = function () {
     document.title = document.title + " v" + GeomaApplicationVersion + "." + GeomaFeatureVersion + "." + GeomaFixVersion;
     var canvas = document.getElementById('playArea');
@@ -11764,6 +12427,7 @@ var Geoma;
         new TestFixtureTests("ThrowNonError", function () {
             throw "test fixture test error";
         });
+        TestUtils.runAll();
     })(Test = Geoma.Test || (Geoma.Test = {}));
 })(Geoma || (Geoma = {}));
 //# sourceMappingURL=geoma.js.map

@@ -315,24 +315,12 @@ module Geoma.Utils
 
     export type binding<T> = T | modifier<T>;
 
-    let ModifiablePropertyCalcRevision: number | undefined = undefined;
+    const ModifiablePropertyCalcRevision = new ModuleInteger();
     const InitiaizeRevision: number = -1;
-    let CalcsCount: number = 0;
 
-    export function InitializeCalcRevision(): void
-    {
-        ModifiablePropertyCalcRevision = 0;
-    }
     export function UpdateCalcRevision(): void
     {
-        assert(ModifiablePropertyCalcRevision != null);
-        ModifiablePropertyCalcRevision = (ModifiablePropertyCalcRevision + 1) % 1000;
-    }
-    export function GetCaclsCount(): number
-    {
-        const ret = CalcsCount;
-        CalcsCount = 0;
-        return ret;
+        ModifiablePropertyCalcRevision.inc();
     }
 
     export class ModifiableProperty<T>
@@ -354,15 +342,12 @@ module Geoma.Utils
                     assert(false);
             }
 
-            if (ModifiablePropertyCalcRevision != undefined)
-            {
-                this._calcRevision = InitiaizeRevision;
-            }
+            this._calcRevision = InitiaizeRevision;
         }
 
         public get value(): T
         {
-            if (ModifiablePropertyCalcRevision != undefined && this._calcRevision == ModifiablePropertyCalcRevision)
+            if (this._calcRevision == ModifiablePropertyCalcRevision.value)
             {
                 return this._calcValue!;
             }
@@ -377,8 +362,7 @@ module Geoma.Utils
                     }
                 }
                 this._calcValue = ret;
-                this._calcRevision = ModifiablePropertyCalcRevision;
-                //CalcsCount++;
+                this._calcRevision = ModifiablePropertyCalcRevision.value;
                 return ret;
             }
         }

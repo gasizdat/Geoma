@@ -29,39 +29,6 @@ function factorial(value: number): number
 	}
 }
 
-function derivative(id: string, context: Geoma.ICodeEvaluatorContext, code: string): number
-{
-	const f = context.getFunction(id);
-	if (f)
-	{
-		const last_x = context.arg(`${id}_x`);
-		const last_y = context.arg(`${id}_y`);
-		const current_x = context.arg(`x`);
-		const current_y = f(current_x);
-		context.setArg(`${id}_x`, current_x);
-		context.setArg(`${id}_y`, current_y);
-		if (last_x < current_x)
-		{
-			return (current_y - last_y) / (current_x - last_x);
-		}
-		else
-		{
-			return NaN;
-		}
-	}
-	else
-	{
-		context.addFunction(id, code);
-		const f = context.getFunction(id);
-		Geoma.Utils.assert(f);
-		const current_x = context.arg(`x`);
-		const current_y = f(current_x);
-		context.addArg(`${id}_x`, current_x);
-		context.addArg(`${id}_y`, current_y);
-		return NaN;
-	}
-}
-
 function nthRoot(value: number, degree: number): number
 {
 	if (degree > 0 && degree == Math.trunc(degree) && degree % 2)
@@ -368,8 +335,10 @@ module Geoma.Syntax
 					math_function = "factorial";
 					break;
 				case "f'":
-					const code = this._operand.code.replaceAll(`\\`, `\\\\`).replaceAll(`"`, `\\"`);
-					return `derivative(${CodeUnary._functionNo++}, this, "${code}")`;
+					const derivative = MathParser.Preprocess(MathParser.Parse(`f'(${this._operand.math})`));
+					const simplified = AnalyticalMath.Simplify(derivative);
+					const converter = new MathParserConverter(simplified);
+					return converter.expression.code;
 				case "round":
 					math_function = "Math.round";
 					break;
@@ -415,6 +384,12 @@ module Geoma.Syntax
 					return `floor(${this._operand.math})`;
 				case "!":
 					return `fact(${this._operand.math})`;
+				case "arcsin":
+					return `asin(${this._operand.math})`;
+				case "arccos":
+					return `acos(${this._operand.math})`;
+				case "arctan":
+					return `atan(${this._operand.math})`;
 				default:
 					return this.toText(this._operand.math);
 			}
@@ -458,7 +433,6 @@ module Geoma.Syntax
 
 		private readonly _function: UnaryFunctions;
 		private readonly _operand: CodeElement;
-		private static _functionNo: number = 1;
 	}
 
 	export type BinaryFunctions = "pow" | "n√" | "+" | "-" | "*" | "÷";
@@ -544,5 +518,185 @@ module Geoma.Syntax
 		private readonly _function: BinaryFunctions;
 		private readonly _operand1: CodeElement;
 		private readonly _operand2: CodeElement;
+	}
+
+	export type ArgumentValues = Map<string, number>;
+
+	export class MathParserConverter
+	{
+		constructor(operand: Operand)
+		{
+			this._argValues = new Map<string, number>();
+			this._expression = this.convert(operand);
+		}
+
+		public get expression(): CodeElement
+		{
+			return this._expression;
+		}
+
+		public get argValueIndex(): ArgumentValues
+		{
+			return this._argValues;
+		}
+
+		private convert(operand: Operand): CodeElement
+		{
+			const expression = operand.Value;
+
+			if (expression instanceof Parameter)
+			{
+				if (expression.Name == "x")
+				{
+					return new CodeArgumentX();
+				}
+				else
+				{
+					const value = typeof expression.Value == "boolean" ? (expression.Value ? 1 : 0) : expression.Value;
+					assert(this._argValues);
+					this._argValues.set(expression.Name, value);
+					return new CodeArgument(expression.Name);
+				}
+			}
+			else if (expression instanceof UnaryOperation)
+			{
+				const function_type = expression.Func.Type;
+				switch (function_type)
+				{
+					case "rad":
+					case "deg":
+						assert(false, "TODO");
+					case "cos":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("cos", this.convert(expression.Arguments.Arguments[0]));
+					case "sin":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("sin", this.convert(expression.Arguments.Arguments[0]));
+					case "tan":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("tan", this.convert(expression.Arguments.Arguments[0]));
+					case "cot":
+						assert(expression.Arguments.Length == 1);
+						return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tan", this.convert(expression.Arguments.Arguments[0])));
+					case "acos":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("arccos", this.convert(expression.Arguments.Arguments[0]));
+					case "asin":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("arcsin", this.convert(expression.Arguments.Arguments[0]));
+					case "atan":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("arctan", this.convert(expression.Arguments.Arguments[0]));
+					case "acot":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("arctan", new CodeBinary(new CodeLiteral(1), "÷", this.convert(expression.Arguments.Arguments[0])));
+					case "sqrt":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("√", this.convert(expression.Arguments.Arguments[0]));
+					case "cbrt":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("∛", this.convert(expression.Arguments.Arguments[0]));
+					case "ln":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("ln", this.convert(expression.Arguments.Arguments[0]));
+					case "abs":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("abs", this.convert(expression.Arguments.Arguments[0]));
+					case "log":
+						assert(expression.Arguments.Length == 2);
+						return new CodeBinary(new CodeUnary("ln", this.convert(expression.Arguments.Arguments[0])), "÷", new CodeUnary("ln", this.convert(expression.Arguments.Arguments[1])));
+					case "root":
+						assert(expression.Arguments.Length == 2);
+						return new CodeBinary(this.convert(expression.Arguments.Arguments[1]), "n√", this.convert(expression.Arguments.Arguments[0]));
+					case "cosh":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("cosh", this.convert(expression.Arguments.Arguments[0]));
+					case "sinh":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("sinh", this.convert(expression.Arguments.Arguments[0]));
+					case "tanh":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("tanh", this.convert(expression.Arguments.Arguments[0]));
+					case "coth":
+						assert(expression.Arguments.Length == 1);
+						return new CodeBinary(new CodeLiteral(1), "÷", new CodeUnary("tanh", this.convert(expression.Arguments.Arguments[0])));
+					case "acosh":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("arccosh", this.convert(expression.Arguments.Arguments[0]));
+					case "asinh":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("arcsinh", this.convert(expression.Arguments.Arguments[0]));
+					case "atanh":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("arctanh", this.convert(expression.Arguments.Arguments[0]));
+					case "acoth":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("arctanh", new CodeBinary(new CodeLiteral(1), "÷", this.convert(expression.Arguments.Arguments[0])));
+					case "sign":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("sign", this.convert(expression.Arguments.Arguments[0]));
+					case "exp":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("exp", this.convert(expression.Arguments.Arguments[0]));
+					case "floor":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("floor", this.convert(expression.Arguments.Arguments[0]));
+					case "ceil":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("ceil", this.convert(expression.Arguments.Arguments[0]));
+					case "round":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("round", this.convert(expression.Arguments.Arguments[0]));
+					case "fact":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("!", this.convert(expression.Arguments.Arguments[0]));
+					case "f'":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("f'", this.convert(expression.Arguments.Arguments[0]));
+					case "negative":
+						assert(expression.Arguments.Length == 1);
+						return new CodeUnary("neg", this.convert(expression.Arguments.Arguments[0]));
+					case "!":
+					case "rand":
+					default:
+						throw new Error(Tools.Resources.string("Неподдерживаемый тип функции: {0}", function_type));
+				}
+			}
+			else if (expression instanceof BinaryOperation)
+			{
+				const operator_type = expression.Operator.Value;
+				switch (operator_type)
+				{
+					case "+":
+						return new CodeBinary(this.convert(expression.FirstOperand), "+", this.convert(expression.SecondOperand));
+					case "-":
+						return new CodeBinary(this.convert(expression.FirstOperand), "-", this.convert(expression.SecondOperand));
+					case "*":
+						return new CodeBinary(this.convert(expression.FirstOperand), "*", this.convert(expression.SecondOperand));
+					case "/":
+						return new CodeBinary(this.convert(expression.FirstOperand), "÷", this.convert(expression.SecondOperand));
+					case "^":
+						return new CodeBinary(this.convert(expression.FirstOperand), "pow", this.convert(expression.SecondOperand));
+					default:
+						throw new Error(Tools.Resources.string("Неподдерживаемый тип оператора: {0}", operator_type));
+				}
+			}
+			else if (typeof expression == "number")
+			{
+				return new CodeLiteral(expression);
+			}
+			else if (typeof expression == "boolean")
+			{
+				return new CodeLiteral(expression ? 1 : 0);
+			}
+			else
+			{
+				throw new Error(Tools.Resources.string("Неподдерживаемый тип операнда: {0}", expression.constructor.name));
+			}
+		}
+
+		private _expression: CodeElement;
+		private _argValues: ArgumentValues;
+
 	}
 }

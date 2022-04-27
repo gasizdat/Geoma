@@ -561,7 +561,7 @@ module Geoma.Tools
 
                     if (!offscreen_break && (needs_move || integer_x))
                     {
-                        line_to(x, Utils.limit(y, offscreen_top, offscreen_bottom));
+                        line_to(x, y);
                     }
 
                     if (last_is_nan && !contains_derivative)
@@ -598,9 +598,11 @@ module Geoma.Tools
         {
             class draw_adapter implements ISamplesAdapter
             {
-                constructor(owner: ParametricLine)
+                constructor(owner: ParametricLine, screen_box: Utils.Box)
                 {
                     this.owner = owner;
+                    this.offscreen_top = - (screen_box.h - screen_box.top);
+                    this.offscreen_bottom = (2 * screen_box.h) + screen_box.top;
                 }
 
                 getScreenY(screen_x: number): number 
@@ -609,6 +611,7 @@ module Geoma.Tools
                 }
                 lineTo(x: number, y: number, discontinuity: boolean): void 
                 {
+                    y = Utils.limit(y, this.offscreen_top, this.offscreen_bottom);
                     if (discontinuity)
                     {
                         this.drawPath.moveTo(x, y);
@@ -631,11 +634,13 @@ module Geoma.Tools
                 public readonly samples = new Array<number>();
 
                 private readonly owner: ParametricLine;
+                private readonly offscreen_top: number;
+                private readonly offscreen_bottom: number;
             }
 
             const screen_box = new Utils.Box(mouse_area.offset.x, mouse_area.offset.y, mouse_area.w, mouse_area.h);
             const contains_derivative = this._derivativeLevel != 0;
-            const adapter = new draw_adapter(this);
+            const adapter = new draw_adapter(this, screen_box);
 
             this._suppressModified = true;
             ParametricLine.calcSamples(screen_box, this.dx, contains_derivative, adapter);
@@ -710,6 +715,16 @@ module Geoma.Tools
 
                     menu_item = menu.addMenuItem(Resources.string("Удалить график {0}", this.code.text));
                     menu_item.onChecked.bind(this, () => doc.removeParametricLine(this));
+
+                    menu_item = menu.addMenuItem(Resources.string("Формула производной..."));
+                    menu_item.enabled.addModifier(makeMod(this, () => this.derivativeLevel > 0));
+                    menu_item.onChecked.bind(this, () =>
+                    {
+                        const derivative = MathParser.Preprocess(MathParser.Parse(this.code.math));
+                        const simplified = AnalyticalMath.Simplify(derivative);
+                        const converter = new Syntax.MathParserConverter(simplified);
+                        doc.alert(`${this.code.text} -> ${converter.expression.text}`);
+                    });
 
                     menu.show();
                 }

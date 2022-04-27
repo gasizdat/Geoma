@@ -9,8 +9,8 @@ let playGround: Geoma.PlayGround;
 let mainDocument: Geoma.Tools.Document;
 
 const GeomaApplicationVersion: number = 0;
-const GeomaFeatureVersion: number = 5;
-const GeomaFixVersion: number = 7;
+const GeomaFeatureVersion: number = 6;
+const GeomaFixVersion: number = 1;
 
 window.onload = () =>
 {
